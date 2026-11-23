@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
 	Port              string
 	DatabaseURL       string
 	JWTSecret         string
+	JWTTTL            time.Duration
 	CommissionPercent int
 	LowStockThreshold int
 }
@@ -24,6 +26,10 @@ func Load() (Config, error) {
 	}
 
 	var err error
+	ttl := getEnv("JWT_TTL", "24h")
+	if cfg.JWTTTL, err = time.ParseDuration(ttl); err != nil {
+		return Config{}, fmt.Errorf("JWT_TTL must be a duration like 24h: %w", err)
+	}
 	if cfg.CommissionPercent, err = getInt("COMMISSION_PERCENT", cfg.CommissionPercent); err != nil {
 		return Config{}, err
 	}
