@@ -121,14 +121,70 @@ See [`docs/EVALUATION.md`](docs/EVALUATION.md). In short:
 ```bash
 git clone https://github.com/0abdurahmon/seller-panel.git
 cd seller-panel
-# Day 1: decide your stack, then replace the "How to run" section below.
 ```
 
 You will be added as collaborators. Branch protection on `main` requires a PR + 1 approval.
 
 ## How to run
 
-_To be filled in by the team._
+Stack: Go (backend), React + TypeScript + Vite (frontend), PostgreSQL. See [`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+### Prerequisites
+- Docker with Compose v2 (for the one-command run)
+- For local development without Docker: Go 1.24+, Node 20.19+ (or 22.12+) and npm
+
+### One command (Docker)
+
+```bash
+docker compose up --build
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend | http://localhost:8080 (`GET /health`) |
+| PostgreSQL | localhost:5432 |
+
+The frontend page shows `Backend: ok` when everything is connected. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
+
+### Configuration
+
+Every variable has a default, so no `.env` file is needed to start. To override, copy the example and edit it:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `seller`, `change-me`, `seller` | Database credentials |
+| `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
+| `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
+| `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
+| `LOW_STOCK_THRESHOLD` | `5` | Stock level that shows the low-stock warning |
+
+Never commit `.env`. Only `.env.example` is tracked.
+
+### Local development (without Docker for the apps)
+
+```bash
+docker compose up db
+cd backend && go run ./cmd/server
+cd frontend && npm install && npm run dev
+```
+
+The Vite dev server runs on http://localhost:5173 and proxies `/api` to the backend (`VITE_API_URL`, default `http://localhost:8080`).
+
+### Checks (same as CI)
+
+```bash
+cd backend && gofmt -l . && go vet ./... && go test ./... && go build ./...
+cd frontend && npm run lint && npm run build
+```
+
+### Seed data
+
+Not available yet. The seed script and the dev "simulate order" endpoint come with the database and orders issues; this section will be updated then.
 
 ## Live demo
 
