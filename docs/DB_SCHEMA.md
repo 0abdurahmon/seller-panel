@@ -2,6 +2,8 @@
 
 PostgreSQL schema for the Seller Panel as SQL, plus the key queries that enforce the rules. Entities and rules are explained in [`DATA_MODEL.md`](DATA_MODEL.md), conventions in [`ARCHITECTURE.md`](ARCHITECTURE.md). Status: **draft for team review** (issue #31).
 
+**Diagram:** [`schema.dbml`](schema.dbml) is the same schema in DBML. Paste it into [dbdiagram.io](https://dbdiagram.io/d) to see the tables and relations and review them together. The SQL below is the runnable source; the DBML omits what DBML cannot express (partial index, index sort direction, trigram indexes), noted at the top of that file.
+
 **What was verified:** the schema below was applied to PostgreSQL 17 (the version in `docker-compose.yml`), 18 invalid inserts and updates were each rejected by the intended constraint, and the reserve statement in section 3 was run, including 6 concurrent reserves of 2 units against a stock of 10: exactly 5 succeeded and `reserved` never passed 10. The other queries in section 3 are designs and get tested together with the feature that uses them.
 
 ## 1. Conventions
