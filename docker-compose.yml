@@ -44,6 +44,11 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
+    environment:
+      SWAGGER_USER: ${SWAGGER_USER:-alifco}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-alifco26}
+    volumes:
+      - ./api:/usr/share/nginx/html/docs/spec:ro
     ports:
       - "${FRONTEND_PORT:-3000}:8080"
     depends_on:

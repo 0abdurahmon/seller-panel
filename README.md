@@ -161,10 +161,19 @@ cp .env.example .env
 | `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
+| `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `LOW_STOCK_THRESHOLD` | `5` | Stock level that shows the low-stock warning |
 
 Never commit `.env`. Only `.env.example` is tracked.
+
+### API documentation (Swagger)
+
+With the stack running, open http://localhost:3000/docs/ and sign in with `SWAGGER_USER` and `SWAGGER_PASSWORD` (defaults in the table above). It shows `api/openapi.yaml`.
+
+- The `api/` folder is mounted read-only into the frontend container: edit the spec, refresh the browser, no rebuild.
+- The password is hashed when the container starts; it is not stored in the image. Basic auth sends the password with every request, so use HTTPS in front of any shared deployment.
+- Swagger UI is only part of the Docker setup, `npm run dev` does not serve it.
 
 ### Local development (without Docker for the apps)
 
