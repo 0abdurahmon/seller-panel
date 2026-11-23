@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 )
@@ -15,9 +16,21 @@ func main() {
 		log.Fatal(err)
 	}
 
+	tokens, err := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	authSvc, err := auth.NewService(auth.NewMemStore(), tokens)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouter(),
+		Addr: ":" + cfg.Port,
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Auth:   auth.NewHandler(authSvc),
+			Tokens: tokens,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -5,10 +5,26 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 )
 
+func newTestRouter(t *testing.T) http.Handler {
+	t.Helper()
+	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := auth.NewService(auth.NewMemStore(), tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return NewRouter(Deps{Auth: auth.NewHandler(svc), Tokens: tokens})
+}
+
 func TestHealth(t *testing.T) {
-	srv := httptest.NewServer(NewRouter())
+	srv := httptest.NewServer(newTestRouter(t))
 	defer srv.Close()
 
 	res, err := http.Get(srv.URL + "/health")
@@ -31,7 +47,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestUnknownRouteIs404(t *testing.T) {
-	srv := httptest.NewServer(NewRouter())
+	srv := httptest.NewServer(newTestRouter(t))
 	defer srv.Close()
 
 	res, err := http.Get(srv.URL + "/nope")

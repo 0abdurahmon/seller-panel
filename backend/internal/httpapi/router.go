@@ -1,22 +1,27 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"net/http"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
-func NewRouter() http.Handler {
+// Deps are the handlers and services the router is wired with.
+type Deps struct {
+	Auth   *auth.Handler
+	Tokens *auth.TokenIssuer
+}
+
+// NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
+func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("POST /auth/register", d.Auth.Register)
+	mux.HandleFunc("POST /auth/login", d.Auth.Login)
 	return mux
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
