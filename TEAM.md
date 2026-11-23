@@ -3,8 +3,8 @@
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
 | Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Auth, Shop profile |
-| Akbar | @iskanderovv | Go, React, Docker, CI | _TBD_ | Products, Stock, infra (Docker, CI) |
-| _TBD_ | @01110011r | API design (OpenAPI) | _TBD_ | Orders, Dashboard, Balance |
+| Akbar | @iskanderovv | React, Nextjs, postgresql, ci/cd | Go | Products, Stock, infra (Docker, CI) |
+| Samandar | @01110011r | Distributed systems | Go | Seller Dashboard |
 
 ## Working agreement
 - Core hours: 10:00–18:00 (Tashkent, UTC+5)
