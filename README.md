@@ -142,10 +142,10 @@ docker compose up --build
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
-| Backend | http://localhost:8080 (`GET /health`) |
-| PostgreSQL | localhost:5432 |
+| Backend | http://localhost:8080 (`GET /health`, this machine only) |
+| PostgreSQL | localhost:5432 (this machine only) |
 
-The frontend page shows `Backend: ok` when everything is connected. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
+The frontend page shows `Backend: ok` when everything is connected. Every service has a healthcheck: `docker compose ps` shows `healthy`, and `docker compose up --build --wait` returns only when all three are healthy. The backend and the database are published on `127.0.0.1` only; the frontend is the single entry point for other machines. The apps run as non-root users with a read-only filesystem and no extra Linux capabilities. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
 
 ### Configuration
 
