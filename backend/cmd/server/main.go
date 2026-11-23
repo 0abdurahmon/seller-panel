@@ -10,6 +10,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
+	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
 func main() {
@@ -37,12 +38,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	stockSvc, err := stock.NewService(stock.NewPgStore(pool), cfg.LowStockThreshold)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	srv := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Auth:   auth.NewHandler(authSvc),
 			Tokens: tokens,
+			Stock:  stock.NewHandler(stockSvc),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

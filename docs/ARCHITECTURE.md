@@ -34,7 +34,8 @@ backend/
     auth/                 sign up, login, JWT
     shop/                 shop profile
     catalog/              categories (read only)
-    product/              products, stock, photos
+    product/              products, photos
+    stock/                stock change, stock label, reserve / release / commit (D5)
     order/                orders, status machine, simulate order
     dashboard/            summary queries
     balance/              balance entries
@@ -54,7 +55,7 @@ Each feature package has the same files:
 1. `handler` calls `service`. `service` calls `repository`. Never the other way and never skipping a layer.
 2. `service` does not import `net/http`. `repository` does not know about HTTP or rules.
 3. `service` declares the repository interface it needs. Tests pass a fake.
-4. Features do not import each other's concrete types. If `order` needs stock operations, it declares a small interface and `product`'s repository implements it.
+4. Features do not import each other's concrete types. If `order` needs stock operations, it declares a small interface and `stock`'s repository implements it.
 5. Wiring happens only in `cmd/server/main.go`.
 
 ## 3. Database access

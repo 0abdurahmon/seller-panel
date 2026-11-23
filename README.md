@@ -161,7 +161,7 @@ cp .env.example .env
 | `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
-| `LOW_STOCK_THRESHOLD` | `5` | Stock level that shows the low-stock warning |
+| `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
 Never commit `.env`. Only `.env.example` is tracked.
 

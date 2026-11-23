@@ -12,10 +12,18 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0abdurahmon/seller-panel/backend/migrations"
 )
+
+// DBTX is satisfied by both *pgxpool.Pool and pgx.Tx, so a repository method
+// works the same inside or outside a transaction.
+type DBTX interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 // Connect opens a connection pool and checks that the database answers.
 func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
