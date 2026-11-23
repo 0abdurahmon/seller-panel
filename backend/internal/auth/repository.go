@@ -19,9 +19,8 @@ type Credentials struct {
 	PasswordHash string
 }
 
-// store is the persistence the service needs.
-// The PostgreSQL implementation waits for the sellers/shops schema to be
-// approved; memStore is used until then and in tests.
+// store is the persistence the service needs. pgStore is used in production;
+// memStore is used in unit tests.
 type store interface {
 	CreateSellerWithShop(ctx context.Context, email, passwordHash, shopName string) (sellerID, shopID int64, err error)
 	FindCredentials(ctx context.Context, email string) (Credentials, error)
