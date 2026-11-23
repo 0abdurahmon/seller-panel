@@ -23,3 +23,14 @@ Record every important decision here: what you chose, what else you considered, 
 - Stuck for more than about 1 hour: ask a teammate or pair up.
 - Why: small reviewed PRs keep `main` working for three people changing the same repo, and the history shows who did what.
 - Considered: trunk-based direct commits (faster, no review trail), long-lived feature branches (big merges and conflicts).
+
+## D5 — Stock
+- Own package `backend/internal/stock`, separate from `product`, because Stock and Products have different owners (`TEAM.md`). It writes only `stock` and `updated_at` of the `products` table and reads `reserved` and `status`; the table itself comes from the products migration.
+- `available = stock − reserved`. Label: `out_of_stock` when available is 0, `low_stock` when 0 < available ≤ threshold, `in_stock` otherwise. The backend returns the label (`stock_label`), so every screen shows the same one.
+- Low-stock threshold: one global value, `LOW_STOCK_THRESHOLD` (default 5, `0` turns the warning off). Not per shop in the MVP.
+- Manual change: `PATCH /products/{id}/stock` with `{"stock": 12, "expected_stock": 10}`, behind auth. `stock` is the new absolute quantity, not a delta, so a retried request gives the same result. Rules: integer 0–1 000 000; not below `reserved` (`409 stock_below_reserved`, the seller cannot take back goods promised to accepted orders); archived products cannot change (`409 product_archived`); another shop's product is `404 product_not_found`. Response: `{product_id, stock, reserved, available, stock_label, updated_at}`.
+- `expected_stock` (required) is the stock the seller saw before editing. If it no longer matches (another tab, an order), nothing is written and the answer is `409 stock_changed`. Both 409s about stock carry `current` with the real numbers, so the UI can show them without another request.
+- The rules are in one `UPDATE … WHERE` statement, so a concurrent order accept or a second tab cannot slip between a check and the write.
+- Next (separate PR): `Reserve` (accept), `Release` (cancel) and `Commit` (deliver) for orders, run inside the order's transaction. `Reserve` cannot oversell (`stock − reserved >= qty` in the `WHERE`).
+- Why: one owner per feature, one place for stock math, no silent lost updates, and the database `CHECK` constraints stay the last line of defence.
+- Considered: stock inside `product` (one package, but two owners editing it), delta updates `{"change": -2}` (shorter for +/- buttons, but a retried request would apply twice), last write wins without `expected_stock` (simpler, but one tab silently overwrites another), per-shop threshold (more settings UI for little MVP value).
