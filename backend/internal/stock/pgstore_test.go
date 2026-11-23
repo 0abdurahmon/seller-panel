@@ -1,0 +1,184 @@
+package stock
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/database"
+)
+
+// Needs TEST_DATABASE_URL and the products table; uses unique data, never truncates.
+func newPgStore(t *testing.T) (*PgStore, *pgxpool.Pool) {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	if err := database.Migrate(url); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := database.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	var exists bool
+	if err := pool.QueryRow(ctx, `SELECT to_regclass('public.products') IS NOT NULL`).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Skip("products table does not exist yet (products migration not merged)")
+	}
+	return NewPgStore(pool), pool
+}
+
+// seedShop creates a seller and shop with a unique email; returns shop id.
+func seedShop(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+	ctx := context.Background()
+	email := fmt.Sprintf("stock-%d@example.com", time.Now().UnixNano())
+	var sellerID, shopID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO sellers (email, password_hash) VALUES ($1, 'x') RETURNING id`, email,
+	).Scan(&sellerID); err != nil {
+		t.Fatalf("seed seller: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO shops (seller_id, name) VALUES ($1, 'Stock test shop') RETURNING id`, sellerID,
+	).Scan(&shopID); err != nil {
+		t.Fatalf("seed shop: %v", err)
+	}
+	return shopID
+}
+
+// seedProduct creates one product in the shop and returns its id.
+func seedProduct(t *testing.T, pool *pgxpool.Pool, shopID int64, stock, reserved int, status string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	suffix := time.Now().UnixNano()
+	var categoryID, productID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO categories (name) VALUES ($1) RETURNING id`, fmt.Sprintf("Stock test %d", suffix),
+	).Scan(&categoryID); err != nil {
+		t.Fatalf("seed category: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO products (shop_id, category_id, title, price, sku, stock, reserved, status)
+		 VALUES ($1, $2, 'Phone', 100000, $3, $4, $5, $6) RETURNING id`,
+		shopID, categoryID, fmt.Sprintf("SKU-%d", suffix), stock, reserved, status,
+	).Scan(&productID); err != nil {
+		t.Fatalf("seed product: %v", err)
+	}
+	return productID
+}
+
+func readStock(t *testing.T, pool *pgxpool.Pool, productID int64) int {
+	t.Helper()
+	var stock int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT stock FROM products WHERE id = $1`, productID,
+	).Scan(&stock); err != nil {
+		t.Fatal(err)
+	}
+	return stock
+}
+
+func TestPgSetStockRules(t *testing.T) {
+	store, pool := newPgStore(t)
+	ctx := context.Background()
+	shop := seedShop(t, pool)
+	otherShop := seedShop(t, pool)
+	product := seedProduct(t, pool, shop, 10, 4, "active")
+	archived := seedProduct(t, pool, shop, 10, 0, "archived")
+
+	row, err := store.SetStock(ctx, shop, product, 25, 10)
+	if err != nil || row.Stock != 25 || row.Reserved != 4 {
+		t.Fatalf("SetStock = %+v, %v; want stock 25 reserved 4", row, err)
+	}
+	if _, err := store.SetStock(ctx, otherShop, product, 1, 25); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other shop: err = %v, want ErrNotFound", err)
+	}
+	if _, err := store.SetStock(ctx, shop, 1<<40, 1, 0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing: err = %v, want ErrNotFound", err)
+	}
+	if _, err := store.SetStock(ctx, shop, archived, 1, 10); !errors.Is(err, ErrArchived) {
+		t.Fatalf("archived: err = %v, want ErrArchived", err)
+	}
+	cur, err := store.SetStock(ctx, shop, product, 3, 25)
+	if !errors.Is(err, ErrBelowReserved) || cur.Stock != 25 || cur.Reserved != 4 {
+		t.Fatalf("below reserved = %+v, %v; want ErrBelowReserved with current 25 / 4", cur, err)
+	}
+	if row, err := store.SetStock(ctx, shop, product, 4, 25); err != nil || row.Stock != 4 {
+		t.Fatalf("equal to reserved = %+v, %v; want allowed", row, err)
+	}
+	if got := readStock(t, pool, product); got != 4 {
+		t.Fatalf("stored stock %d, want 4", got)
+	}
+	if got := readStock(t, pool, archived); got != 10 {
+		t.Fatalf("archived product's stock changed to %d", got)
+	}
+}
+
+func TestPgSetStockStaleExpected(t *testing.T) {
+	store, pool := newPgStore(t)
+	ctx := context.Background()
+	shop := seedShop(t, pool)
+	product := seedProduct(t, pool, shop, 10, 0, "draft")
+
+	if row, err := store.SetStock(ctx, shop, product, 15, 10); err != nil || row.Stock != 15 {
+		t.Fatalf("matching expected = %+v, %v; want stock 15", row, err)
+	}
+	cur, err := store.SetStock(ctx, shop, product, 20, 10) // still thinks it is 10
+	if !errors.Is(err, ErrStockChanged) || cur.Stock != 15 {
+		t.Fatalf("stale expected = %+v, %v; want ErrStockChanged with current 15", cur, err)
+	}
+	if got := readStock(t, pool, product); got != 15 {
+		t.Fatalf("stored stock %d, want 15 (a refused change must not write)", got)
+	}
+}
+
+// Eight tabs that saw 10 save at once: exactly one wins.
+func TestPgConcurrentEditsDoNotOverwriteEachOther(t *testing.T) {
+	store, pool := newPgStore(t)
+	ctx := context.Background()
+	shop := seedShop(t, pool)
+	product := seedProduct(t, pool, shop, 10, 0, "active")
+
+	const tabs = 8
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var winners []int
+	changed := 0
+	for i := range tabs {
+		wg.Go(func() {
+			_, err := store.SetStock(ctx, shop, product, 100+i, 10)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				winners = append(winners, 100+i)
+			case errors.Is(err, ErrStockChanged):
+				changed++
+			default:
+				t.Errorf("tab %d: unexpected error %v", i, err)
+			}
+		})
+	}
+	wg.Wait()
+
+	if len(winners) != 1 || changed != tabs-1 {
+		t.Fatalf("winners = %v, stock_changed = %d; want exactly 1 winner", winners, changed)
+	}
+	if got := readStock(t, pool, product); got != winners[0] {
+		t.Fatalf("stored stock %d, want the winner's %d", got, winners[0])
+	}
+}
