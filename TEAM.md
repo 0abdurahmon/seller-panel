@@ -1,9 +1,9 @@
-# Team
+﻿# Team
 
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
 | Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Auth |
-| Akbar | @iskanderovv | React, Nextjs, postgresql, ci/cd | Go | Products, Stock, infra (Docker, CI) |
+| Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, Stock, infra (Docker, CI) |
 | Samandar | @01110011r | Distributed systems | Go | Shop profile |
 
 ## Working agreement
