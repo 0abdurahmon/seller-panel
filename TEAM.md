@@ -1,4 +1,4 @@
-﻿# Team
+# Team
 
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
