@@ -1,6 +1,6 @@
 # Data model
 
-Entities, relations and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](DOMAIN.md); every change from it is listed in section 8. Table-level SQL is in `DB_SCHEMA.md` (issue #31). Status: **draft for team review** (issue #30).
+Entities, relations and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](DOMAIN.md); every change from it is listed in section 8. Table-level SQL is written by each feature owner as a migration in `backend/migrations`. Status: **draft for team review** (issue #30).
 
 ## 1. Entity relationship diagram
 
