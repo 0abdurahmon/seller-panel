@@ -2,9 +2,11 @@
 
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
-| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Auth |
+| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Orders |
 | Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, Stock, infra (Docker, CI) |
-| Samandar | @01110011r | Distributed systems | Go | Shop profile |
+| Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile |
+
+Unassigned for now: Dashboard, Balance.
 
 ## Working agreement
 - Core hours: 10:00–18:00 (Tashkent, UTC+5)
