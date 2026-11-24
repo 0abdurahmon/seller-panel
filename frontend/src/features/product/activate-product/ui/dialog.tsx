@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { productKeys, type Product } from "@/entities/product";
-import { getProducts } from "@/shared/api/generated";
-import { getApiErrorMessage } from "@/shared/api/http/error";
+import { getProducts } from "@/shared/api";
+import { getApiErrorMessage } from "@/shared/api";
 import { ConfirmDialog } from "@/shared/ui";
 import { useActivateProduct } from "../model/dialog.store";
 

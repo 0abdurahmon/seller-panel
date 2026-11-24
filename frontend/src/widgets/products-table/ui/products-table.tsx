@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Box, More } from "iconsax-reactjs";
+import { ArrowDown, ArrowUp, Box, More, Sort } from "iconsax-reactjs";
 import { Skeleton } from "skullet/react";
 import { useCategoryName } from "@/entities/category";
 import { ProductStatusBadge, StockLabelBadge } from "@/entities/product";
@@ -16,7 +16,7 @@ import { ActivateProductMenuItem } from "@/features/product/activate-product";
 import { ArchiveProductMenuItem } from "@/features/product/archive-product";
 import { EditProductMenuItem } from "@/features/product/edit-product";
 import { useProductDetails } from "@/features/product/product-details";
-import { formatDateTime, formatPrice } from "@/shared/lib/format";
+import { formatDateTime, formatPrice } from "@/shared/lib";
 import {
   Button,
   DropdownMenu,
@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -35,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/shared/ui";
-import type { Product } from "@/shared/api/model";
+import type { Product } from "@/shared/api";
 
 function ProductsEmptyState({ onResetFilters }: { onResetFilters?: () => void }) {
   // With filters on, "nothing found" is about the filters, not about an empty shop.
@@ -55,9 +56,11 @@ function ProductsEmptyState({ onResetFilters }: { onResetFilters?: () => void })
         </EmptyDescription>
       </EmptyHeader>
       {filtered && (
-        <Button variant="outline" onClick={onResetFilters}>
-          Сбросить фильтры
-        </Button>
+        <EmptyContent>
+          <Button variant="outline" onClick={onResetFilters}>
+            Сбросить фильтры
+          </Button>
+        </EmptyContent>
       )}
     </Empty>
   );
@@ -103,20 +106,21 @@ const columns: ColumnDef<Product, any>[] = [
     header: ({ column }) => {
       const isSorted = column.getIsSorted();
       return (
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 cursor-pointer select-none hover:text-foreground transition-colors"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 text-muted-foreground"
           onClick={() => column.toggleSorting(isSorted === "asc")}
         >
-          <span>Дата создания</span>
+          Дата создания
           {isSorted === "asc" ? (
-            <ArrowUp className="size-3.5 text-primary" />
+            <ArrowUp className="text-primary" />
           ) : isSorted === "desc" ? (
-            <ArrowDown className="size-3.5 text-primary" />
+            <ArrowDown className="text-primary" />
           ) : (
-            <ArrowUp className="size-3.5 opacity-30" />
+            <Sort />
           )}
-        </button>
+        </Button>
       );
     },
     cell: ({ getValue }) => (
@@ -137,13 +141,13 @@ const columns: ColumnDef<Product, any>[] = [
           </div>
           <div className="min-w-48 space-y-0.5">
             {/* A button so the details open from the keyboard too; a mouse click anywhere on the row does the same. */}
-            <button
-              type="button"
+            <Button
+              variant="link"
               onClick={() => useProductDetails.getState().openProduct(product)}
-              className="rounded-md text-left font-medium outline-none hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="h-auto p-0 text-foreground hover:text-primary hover:no-underline"
             >
               {product.title}
-            </button>
+            </Button>
             <p className="text-xs text-muted-foreground">{product.sku}</p>
           </div>
         </div>
@@ -269,13 +273,18 @@ export function ProductsTable({
   /** Set when search or filters are on; the empty state then offers to reset them. */
   onResetFilters?: () => void;
 }) {
+  const isEmpty = !isLoading && products?.length === 0;
+
   return (
     <Skeleton
       id="products-table"
+      // Skullet wraps the content in a pane: when empty, both stretch so the empty state
+      // fills the page; with rows the table keeps its own height.
+      className={isEmpty ? "flex flex-1 flex-col *:flex *:flex-1 *:flex-col" : undefined}
       label="Загрузка товаров"
       data={isLoading ? null : products}
       sample={SAMPLE_PRODUCTS}
-      empty={!isLoading && products?.length === 0}
+      empty={isEmpty}
       emptyMessage={<ProductsEmptyState onResetFilters={onResetFilters} />}
     >
       {(rows) => <ProductsTableView products={rows} />}

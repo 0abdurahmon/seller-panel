@@ -1,6 +1,6 @@
 import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
-import { getProducts } from '@/shared/api/generated';
-import type { GetProductsParams } from '@/shared/api/model';
+import { getProducts } from '@/shared/api';
+import type { GetProductsParams } from '@/shared/api';
 import type { ProductStatusFilter } from './types';
 
 const api = getProducts();

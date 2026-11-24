@@ -6,7 +6,7 @@ import {
   StockLabelBadge,
   type Product,
 } from "@/entities/product";
-import { formatDateTime, formatPrice } from "@/shared/lib/format";
+import { formatDateTime, formatPrice } from "@/shared/lib";
 import {
   Dialog,
   DialogContent,

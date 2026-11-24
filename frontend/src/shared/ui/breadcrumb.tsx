@@ -3,7 +3,7 @@ import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cn } from "cn"
 import { ArrowRight2 } from "iconsax-reactjs"
-import { MoreHorizontalIcon } from "lucide-react"
+import { More } from "iconsax-reactjs"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -107,7 +107,7 @@ function BreadcrumbEllipsis({
       )}
       {...props}
     >
-      <MoreHorizontalIcon
+      <More
       />
       <span className="sr-only">Ещё</span>
     </span>

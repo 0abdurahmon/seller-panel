@@ -1,3 +1,16 @@
+import { Shop } from "iconsax-reactjs";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/ui";
+
 export const ShopPage = () => {
-  return <p className="text-muted-foreground">Раздел в разработке</p>;
+  return (
+    <Empty className="rounded-3xl border border-dashed border-border bg-card">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Shop className="text-primary" />
+        </EmptyMedia>
+        <EmptyTitle>Профиль магазина скоро появится</EmptyTitle>
+        <EmptyDescription>Здесь можно будет изменить название, логотип и контакты магазина.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
 };

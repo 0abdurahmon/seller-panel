@@ -16,7 +16,7 @@ import {
   ProductSearch,
 } from "@/features/product/filter-products";
 import { ProductDetailsModal } from "@/features/product/product-details";
-import { getApiErrorMessage } from "@/shared/api/http/error";
+import { getApiErrorMessage } from "@/shared/api";
 import {
   Alert,
   AlertAction,
@@ -97,7 +97,7 @@ export const ProductsPage = () => {
   const counts = useProductCounts(filters);
 
   return (
-    <div className="flex min-h-full flex-col space-y-6">
+    <div className="flex flex-1 flex-col gap-6">
       <CreateProductModal />
       <ProductDetailsModal />
       <EditProductModal />

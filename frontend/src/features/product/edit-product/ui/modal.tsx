@@ -7,8 +7,8 @@ import {
   type Product,
   type ProductFormValues,
 } from "@/entities/product";
-import { getProducts } from "@/shared/api/generated";
-import { parseApiError } from "@/shared/api/http/error";
+import { getProducts } from "@/shared/api";
+import { parseApiError } from "@/shared/api";
 import {
   Dialog,
   DialogContent,

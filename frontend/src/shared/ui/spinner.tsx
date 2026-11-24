@@ -1,9 +1,9 @@
 import { cn } from "cn"
-import { Loader2Icon } from "lucide-react"
+import { Refresh2 } from "iconsax-reactjs"
 
 function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
   return (
-    <Loader2Icon data-slot="spinner" role="status" aria-label="Загрузка" className={cn("size-4 animate-spin", className)} {...props} />
+    <Refresh2 data-slot="spinner" role="status" aria-label="Загрузка" className={cn("size-4 animate-spin", className)} {...props} />
   )
 }
 

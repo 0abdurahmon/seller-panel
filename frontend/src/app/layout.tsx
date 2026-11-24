@@ -10,7 +10,7 @@ export const AppLayout = () => {
         <Aside />
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-5 pt-3">
           <Header />
-          <main className="flex-1 py-6">
+          <main className="flex flex-1 flex-col py-6">
             <Outlet />
           </main>
         </div>

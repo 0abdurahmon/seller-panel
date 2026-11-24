@@ -77,7 +77,7 @@ Every new or changed endpoint is described in `api/openapi.yaml` in the same PR 
 - Return errors with `fmt.Errorf("what failed: %w", err)`. Compare with `errors.Is`.
 - Do not add libraries without a reason written in the PR. Standard library first.
 - No secrets in code, logs or images. Config comes from environment variables in `internal/config`.
-- Frontend: feature folders under `src/features/<feature>`, server state with TanStack Query, API types generated from `api/openapi.yaml`, every screen has loading, empty and error states.
+- Frontend: feature folders under `src/features/<feature>`, server state with TanStack Query, API types generated from `api/openapi.yaml`, every screen has loading, empty and error states. The full frontend rules are in [`frontend/AGENTS.md`](frontend/AGENTS.md).
 
 ## Tests
 

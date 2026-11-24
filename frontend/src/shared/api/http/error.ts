@@ -59,3 +59,8 @@ export function getApiErrorMessage(error: unknown, fallbackMessage?: string) {
 export function getApiFieldError(error: unknown, field: string) {
   return parseApiError(error).fields[field] ?? null;
 }
+
+/** The HTTP status of a failed request; undefined when there was no answer (network error). */
+export function getErrorStatus(error: unknown) {
+  return Axios.isAxiosError(error) ? error.response?.status : undefined;
+}

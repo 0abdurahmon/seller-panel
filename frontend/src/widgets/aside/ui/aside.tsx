@@ -4,7 +4,15 @@ import { ArrowLeft2, ArrowRight2 } from 'iconsax-reactjs';
 import { cn } from 'cn';
 import { bottomMenuItems, mainMenuItems, type MenuItem } from '@/shared/config';
 import { useSidebarState } from '@/shared/providers';
-import { Logo, LogoMark, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui';
+import {
+  Button,
+  Logo,
+  LogoMark,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/ui';
 
 const SMALL_SCREEN_QUERY = '(max-width: 1020px)';
 
@@ -34,7 +42,7 @@ function MenuLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }) {
         'font-medium text-sm flex items-center justify-start py-3 rounded-xl transition-colors duration-200 overflow-hidden whitespace-nowrap w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/30',
         collapsed ? 'px-3.5' : 'px-3.5 gap-x-3',
         isActive
-          ? 'bg-primary text-primary-foreground dark:bg-white/8 dark:text-foreground'
+          ? 'bg-primary text-primary-foreground dark:bg-sidebar-accent dark:text-sidebar-accent-foreground'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       )}
     >
@@ -107,15 +115,16 @@ export const Aside = () => {
         </aside>
       </TooltipProvider>
       {!isSmallScreen && (
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="icon-xs"
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
           aria-expanded={!collapsed}
-          className="absolute top-1/2 -translate-y-1/2 -right-3 size-6 rounded-full bg-sidebar border border-sidebar-border flex items-center justify-center text-muted-foreground hover:text-foreground opacity-0 group-hover/aside:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-3 focus-visible:ring-ring/30 transition-opacity duration-200 z-10"
+          className="absolute top-1/2 -right-3 z-10 -translate-y-1/2 rounded-full border-sidebar-border bg-sidebar text-muted-foreground opacity-0 transition-opacity duration-200 group-hover/aside:opacity-100 focus-visible:opacity-100"
         >
-          {collapsed ? <ArrowRight2 className="size-4" /> : <ArrowLeft2 className="size-4" />}
-        </button>
+          {collapsed ? <ArrowRight2 /> : <ArrowLeft2 />}
+        </Button>
       )}
     </div>
   );

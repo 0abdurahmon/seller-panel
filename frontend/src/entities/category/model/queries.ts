@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCatalog } from '@/shared/api/generated';
-import type { Category } from '@/shared/api/model';
+import { getCatalog } from '@/shared/api';
+import type { Category } from '@/shared/api';
 
 const api = getCatalog();
 
