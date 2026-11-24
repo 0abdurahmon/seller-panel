@@ -35,7 +35,13 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 ## 3. Tables
 
 ### sellers
-`id`, `email` (unique, lower-case), `password_hash` (bcrypt), `created_at`.
+`id`, `email` (unique, lower-case), `password_hash` (bcrypt), `telegram_chat_id` (nullable, unique: one Telegram chat belongs to one seller), `created_at`.
+
+### telegram_link_tokens (pending Telegram links)
+`token_hash` (primary key, SHA-256 of the link token), `seller_id` (unique: one pending link per seller), `expires_at`. Deleted when used. Expired rows are replaced by the next link request.
+
+### login_codes (sign-in codes)
+`seller_id` (primary key: one active code per seller), `code_hash` (SHA-256 of the 6-digit code), `attempts` (0 or more), `created_at`, `expires_at`. Deleted on success or after too many wrong attempts. The code is never stored in plain text.
 
 ### shops (exactly one per seller)
 `id`, `seller_id` (unique), `name` (required), `logo_url`, `description`, `contact_phone`, `pickup_address`, `created_at`. An empty shop is created together with the seller at sign up, so every authenticated seller has a `shop_id`.
@@ -105,6 +111,7 @@ Each feature owner writes the migration for the tables they own, in the order th
 | `0006_product_photos` | `product_photos`, at most 5 per product (position 0 to 4), no repeated URL | Products | merged |
 | `0004_balance_entries` | `balance_entries` and its enum, constraints and index, without the foreign key to `orders` (that table did not exist yet) | Balance (#84) | merged |
 | `0005_orders` | `orders`, `order_items`, `order_status_history`, `order_number_seq`, and the foreign key `balance_entries.order_id` to `orders` | schema by Balance (#91), Go code by Orders (#70) | merged, written by the order code in this PR |
+| `0007_telegram_otp` | `sellers.telegram_chat_id`, `telegram_link_tokens`, `login_codes` | Auth (#107) | merged |
 
 Reference data (categories) ships as a migration. Demo data (seller, shop, about 15 products, about 30 orders with balance entries) comes from a seed command that only runs when asked and writes through the service code, so the numbers stay consistent (see D11 in [`DECISIONS.md`](../../docs/DECISIONS.md)).
 

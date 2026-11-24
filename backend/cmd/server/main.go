@@ -46,14 +46,15 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	handler, closer, err := app.NewHandler(cfg, pool, logger)
+	application, err := app.NewApp(cfg, pool, logger)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = closer.Close() }()
+	defer func() { _ = application.Close() }()
+	application.Start(ctx)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           handler,
+		Handler:           application.Handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

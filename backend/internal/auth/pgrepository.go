@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,4 +64,106 @@ func (s *PgRepository) FindCredentials(ctx context.Context, email string) (Crede
 		return Credentials{}, fmt.Errorf("find seller: %w", err)
 	}
 	return c, nil
+}
+
+func (s *PgRepository) FindTelegramChat(ctx context.Context, email string) (int64, int64, error) {
+	var sellerID, chatID int64
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, telegram_chat_id FROM sellers
+		  WHERE email = $1 AND telegram_chat_id IS NOT NULL`,
+		email,
+	).Scan(&sellerID, &chatID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("find telegram chat: %w", err)
+	}
+	return sellerID, chatID, nil
+}
+
+func (s *PgRepository) SaveLinkToken(ctx context.Context, sellerID int64, tokenHash string, expiresAt time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO telegram_link_tokens (token_hash, seller_id, expires_at) VALUES ($1, $2, $3)
+		 ON CONFLICT (seller_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at`,
+		tokenHash, sellerID, expiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("save link token: %w", err)
+	}
+	return nil
+}
+
+func (s *PgRepository) LinkTelegram(ctx context.Context, tokenHash string, chatID int64, now time.Time) (int64, error) {
+	var sellerID int64
+	err := database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`DELETE FROM telegram_link_tokens WHERE token_hash = $1 AND expires_at > $2 RETURNING seller_id`,
+			tokenHash, now,
+		).Scan(&sellerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrLinkInvalid
+		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE sellers SET telegram_chat_id = $1 WHERE id = $2`, chatID, sellerID)
+		return err
+	})
+	if errors.Is(err, ErrLinkInvalid) {
+		return 0, ErrLinkInvalid
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+		return 0, ErrTelegramTaken
+	}
+	if err != nil {
+		return 0, fmt.Errorf("link telegram: %w", err)
+	}
+	return sellerID, nil
+}
+
+func (s *PgRepository) FindLoginCode(ctx context.Context, sellerID int64) (LoginCode, error) {
+	var c LoginCode
+	err := s.pool.QueryRow(ctx,
+		`SELECT code_hash, attempts, created_at, expires_at FROM login_codes WHERE seller_id = $1`,
+		sellerID,
+	).Scan(&c.CodeHash, &c.Attempts, &c.CreatedAt, &c.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return LoginCode{}, ErrNotFound
+	}
+	if err != nil {
+		return LoginCode{}, fmt.Errorf("find login code: %w", err)
+	}
+	return c, nil
+}
+
+func (s *PgRepository) SaveLoginCode(ctx context.Context, sellerID int64, c LoginCode) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO login_codes (seller_id, code_hash, attempts, created_at, expires_at) VALUES ($1, $2, 0, $3, $4)
+		 ON CONFLICT (seller_id) DO UPDATE
+		   SET code_hash = EXCLUDED.code_hash, attempts = 0,
+		       created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at`,
+		sellerID, c.CodeHash, c.CreatedAt, c.ExpiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("save login code: %w", err)
+	}
+	return nil
+}
+
+func (s *PgRepository) IncrementLoginAttempts(ctx context.Context, sellerID int64) error {
+	_, err := s.pool.Exec(ctx, `UPDATE login_codes SET attempts = attempts + 1 WHERE seller_id = $1`, sellerID)
+	if err != nil {
+		return fmt.Errorf("count login attempt: %w", err)
+	}
+	return nil
+}
+
+func (s *PgRepository) DeleteLoginCode(ctx context.Context, sellerID int64) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM login_codes WHERE seller_id = $1`, sellerID)
+	if err != nil {
+		return fmt.Errorf("delete login code: %w", err)
+	}
+	return nil
 }

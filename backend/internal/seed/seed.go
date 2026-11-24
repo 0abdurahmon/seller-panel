@@ -131,7 +131,7 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 	if err != nil {
 		return nil, err
 	}
-	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens)
+	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens, nil)
 	if err != nil {
 		return nil, err
 	}

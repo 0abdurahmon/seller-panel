@@ -370,7 +370,7 @@ func TestRunCreatesAConsistentDemoShop(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		svc, err := auth.NewService(auth.NewPgRepository(pool), tokens)
+		svc, err := auth.NewService(auth.NewPgRepository(pool), tokens, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

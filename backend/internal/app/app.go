@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,43 +21,69 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
+	"github.com/0abdurahmon/seller-panel/backend/internal/telegram"
 	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
-// NewHandler wires the API. The returned Closer releases the upload directory and must be closed after the server stops.
-func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (http.Handler, io.Closer, error) {
+// App is the HTTP handler and the background work that runs next to it.
+type App struct {
+	Handler http.Handler
+	poll    func(ctx context.Context)
+	closer  io.Closer
+}
+
+// Start runs the background work until ctx ends. It returns at once.
+func (a *App) Start(ctx context.Context) {
+	if a.poll != nil {
+		go a.poll(ctx)
+	}
+}
+
+// Close releases the upload directory. Call it after the server stops.
+func (a *App) Close() error {
+	return a.closer.Close()
+}
+
+// NewApp wires every feature. Telegram polling only runs when a bot token is set.
+func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, error) {
 	tokens, err := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens)
+	var tg auth.Telegram
+	var bot *telegram.Client
+	if cfg.TelegramBotToken != "" {
+		bot = telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramAPIURL)
+		tg = bot
+	}
+	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens, tg)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	dashboardSvc, err := dashboard.NewService(dashboard.NewPgRepository(pool), cfg.BusinessLocation)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	uploadRepo, err := upload.NewFSRepository(cfg.UploadDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	uploadSvc := upload.NewService(uploadRepo, cfg.UploadPublicURL)
 
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
 		_ = uploadRepo.Close()
-		return nil, nil, err
+		return nil, err
 	}
 	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
 
@@ -83,5 +110,9 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		DevEndpoints:  cfg.Env == config.EnvDevelopment,
 		Spec:          spec,
 	})
-	return httpx.Logging(logger)(router), uploadRepo, nil
+	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo}
+	if bot != nil {
+		application.poll = func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) }
+	}
+	return application, nil
 }
