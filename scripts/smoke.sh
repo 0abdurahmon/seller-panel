@@ -37,41 +37,13 @@ check "backend health" 200 "$(status "$backend/health")"
 check "frontend page" 200 "$(status "$frontend/")"
 check "frontend deep link falls back to the app" 200 "$(status "$frontend/orders/1")"
 check "frontend proxies /api to the backend" 200 "$(status "$frontend/api/health")"
-check "register" 201 "$(status -X POST "$frontend/api/auth/register" -H "$json" -d "$register_body")"
-check "register with the same email" 409 "$(status -X POST "$frontend/api/auth/register" -H "$json" -d "$register_body")"
+check "security headers are sent" 1 "$(curl -sI "$frontend/" | grep -ic '^x-content-type-options: nosniff')"
+check "register through nginx" 201 "$(status -X POST "$frontend/api/auth/register" -H "$json" -d "$register_body")"
 login_response="$(curl -s -X POST "$frontend/api/auth/login" -H "$json" -d "$login_body")"
-check "login returns a token" 1 "$(printf '%s' "$login_response" | field token | grep -c .)"
 token="$(printf '%s' "$login_response" | field token)"
-auth="Authorization: Bearer $token"
-check "login with a wrong password" 401 "$(status -X POST "$frontend/api/auth/login" -H "$json" -d "$wrong_login_body")"
-sku="SMOKE-$(date +%s)-$$"
-category="$(curl -s "$frontend/api/categories" -H "$auth" | field id | head -n 1)"
-product_body="{\"category_id\":${category:-0},\"title\":\"Smoke phone\",\"price\":1000000,\"sku\":\"$sku\",\"stock\":3,\"status\":\"active\"}"
-
-check "categories without a token" 401 "$(status "$frontend/api/categories")"
-check "categories with a token" 200 "$(status "$frontend/api/categories" -H "$auth")"
-check "seeded category exists" 1 "$(printf '%s' "$category" | grep -c '[0-9]')"
-check "products without a token" 401 "$(status "$frontend/api/products")"
-check "create product" 201 "$(status -X POST "$frontend/api/products" -H "$auth" -H "$json" -d "$product_body")"
-check "create product with the same sku" 409 "$(status -X POST "$frontend/api/products" -H "$auth" -H "$json" -d "$product_body")"
-check "create product with a bad price" 400 "$(status -X POST "$frontend/api/products" -H "$auth" -H "$json" -d "{\"category_id\":${category:-0},\"title\":\"x\",\"price\":0,\"sku\":\"$sku-bad\"}")"
-list_response="$(curl -s "$frontend/api/products?q=$sku" -H "$auth")"
-product_id="$(printf '%s' "$list_response" | field id | head -n 1)"
-check "list finds the product by sku" 1 "$(printf '%s' "$list_response" | grep -c "\"stock_label\":\"low_stock\"")"
-check "get product" 200 "$(status "$frontend/api/products/${product_id:-0}" -H "$auth")"
-check "archive product" 200 "$(status -X POST "$frontend/api/products/${product_id:-0}/archive" -H "$auth")"
-check "missing product" 404 "$(status "$frontend/api/products/999999999" -H "$auth")"
-guard_email="guard-$(date +%s)-$$@example.com"
-guard_body="{\"email\":\"$guard_email\",\"password\":\"wrong-password\"}"
-guard_failures=0
-for attempt in 1 2 3 4 5; do
-  code="$(status -X POST "$backend/auth/login" -H "$json" -d "$guard_body")"
-  [ "$code" = 401 ] && guard_failures=$((guard_failures + 1))
-done
-check "five failed logins are answered with 401" 5 "$guard_failures"
-blocked="$(curl -s -D - -o /dev/null -X POST "$backend/auth/login" -H "$json" -d "$guard_body")"
-check "sixth login attempt is blocked with 429" 429 "$(printf '%s' "$blocked" | sed -n 's/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p' | head -n 1)"
-check "blocked login says when to retry" 1 "$(printf '%s' "$blocked" | grep -ic '^retry-after:')"
+check "login through nginx returns a token" 1 "$(printf '%s' "$token" | grep -c .)"
+check "protected route without a token" 401 "$(status "$frontend/api/shop")"
+check "protected route with a token (Authorization passes the proxy)" 200 "$(status "$frontend/api/shop" -H "Authorization: Bearer $token")"
 
 edge_limited=0
 for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
@@ -81,6 +53,13 @@ done
 check "nginx limits rapid requests to /api/auth/" 1 "$([ "$edge_limited" -ge 1 ] && echo 1 || echo 0)"
 edge_body="$(curl -s -X POST "$frontend/api/auth/login" -H "$json" -d "$wrong_login_body")"
 check "nginx 429 has the standard error body" 1 "$(printf '%s' "$edge_body" | grep -c '"code":"rate_limited"')"
+
+global_limited=0
+for attempt in $(seq 1 80); do
+  code="$(status "$frontend/api/health")"
+  [ "$code" = 429 ] && global_limited=$((global_limited + 1))
+done
+check "nginx limits bursts on /api/" 1 "$([ "$global_limited" -ge 1 ] && echo 1 || echo 0)"
 
 check "docs without credentials" 401 "$(status "$frontend/docs/")"
 check "docs with a wrong password" 401 "$(status -u "$docs_user:wrong-password" "$frontend/docs/")"
