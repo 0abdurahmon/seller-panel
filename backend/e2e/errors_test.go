@@ -22,6 +22,9 @@ var protectedRoutes = []struct{ method, path string }{
 	{http.MethodPatch, "/products/1/stock"},
 	{http.MethodGet, "/balance"},
 	{http.MethodGet, "/balance/entries"},
+	{http.MethodGet, "/orders"},
+	{http.MethodGet, "/orders/1"},
+	{http.MethodPost, "/orders/1/transition"},
 }
 
 func TestEveryProtectedRouteRejectsBadTokens(t *testing.T) {

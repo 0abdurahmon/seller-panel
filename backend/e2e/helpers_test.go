@@ -39,6 +39,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 		JWTSecret:         jwtSecret,
 		JWTTTL:            time.Hour,
 		LowStockThreshold: 5,
+		CommissionPercent: 10,
 		ShopRPS:           1000,
 		ShopBurst:         1000,
 		LoginAttempts:     5,
@@ -86,6 +87,14 @@ func (r response) errorCode() string {
 
 func (s *server) do(method, path, token string, body any, headers ...string) response {
 	s.t.Helper()
+	res, err := s.tryDo(method, path, token, body, headers...)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return res
+}
+
+func (s *server) tryDo(method, path, token string, body any, headers ...string) (response, error) {
 	var reader io.Reader
 	switch b := body.(type) {
 	case nil:
@@ -94,13 +103,13 @@ func (s *server) do(method, path, token string, body any, headers ...string) res
 	default:
 		raw, err := json.Marshal(b)
 		if err != nil {
-			s.t.Fatal(err)
+			return response{}, err
 		}
 		reader = bytes.NewBuffer(raw)
 	}
 	req, err := http.NewRequest(method, s.url+path, reader)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -113,14 +122,14 @@ func (s *server) do(method, path, token string, body any, headers ...string) res
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
-	return response{t: s.t, status: res.StatusCode, header: res.Header, body: raw}
+	return response{t: s.t, status: res.StatusCode, header: res.Header, body: raw}, nil
 }
 
 type seller struct {

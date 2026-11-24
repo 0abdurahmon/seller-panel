@@ -9,7 +9,7 @@ import (
 
 const shopA int64 = 1
 
-func newTestService(t *testing.T, repo *MemRepository) *Service {
+func newTestService(t *testing.T, repo *memRepository) *Service {
 	t.Helper()
 	svc, err := NewService(repo, 10)
 	if err != nil {
@@ -49,7 +49,7 @@ func TestServiceEnforcesStatusMachine(t *testing.T) {
 	all := []Status{StatusNew, StatusAccepted, StatusPacked, StatusHandedToCourier, StatusDelivered, StatusCancelled}
 	for _, from := range all {
 		for _, to := range all {
-			repo := NewMemRepository()
+			repo := newMemRepository()
 			repo.AddOrder(order(1, shopA, from, 0))
 			_, err := newTestService(t, repo).Transition(context.Background(), shopA, 1,
 				TransitionRequest{To: to, Reason: "reason"})
@@ -65,7 +65,7 @@ func TestServiceEnforcesStatusMachine(t *testing.T) {
 }
 
 func TestAcceptReservesStock(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddProduct(7, shopA, 10, 2)
 	repo.AddOrder(order(1, shopA, StatusNew, 3000, Item{ProductID: 7, Quantity: 3, Price: 1000}))
 
@@ -82,7 +82,7 @@ func TestAcceptReservesStock(t *testing.T) {
 }
 
 func TestAcceptWithoutEnoughStockChangesNothing(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddProduct(7, shopA, 5, 0)
 	repo.AddProduct(8, shopA, 1, 0)
 	// Product 7 can be reserved, product 8 cannot. The first reserve must be undone.
@@ -105,7 +105,7 @@ func TestAcceptWithoutEnoughStockChangesNothing(t *testing.T) {
 func TestCancelReleasesOnlyWhenStockWasReserved(t *testing.T) {
 	ctx := context.Background()
 
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddProduct(7, shopA, 10, 0)
 	repo.AddOrder(order(1, shopA, StatusNew, 0, Item{ProductID: 7, Quantity: 4}))
 	if _, err := newTestService(t, repo).Transition(ctx, shopA, 1,
@@ -116,7 +116,7 @@ func TestCancelReleasesOnlyWhenStockWasReserved(t *testing.T) {
 		t.Fatalf("new→cancelled changed reserved to %d", reserved)
 	}
 
-	repo = NewMemRepository()
+	repo = newMemRepository()
 	repo.AddProduct(7, shopA, 10, 4)
 	repo.AddOrder(order(2, shopA, StatusAccepted, 0, Item{ProductID: 7, Quantity: 4}))
 	o, err := newTestService(t, repo).Transition(ctx, shopA, 2,
@@ -133,7 +133,7 @@ func TestCancelReleasesOnlyWhenStockWasReserved(t *testing.T) {
 }
 
 func TestCancelNeedsReason(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddOrder(order(1, shopA, StatusNew, 0))
 	_, err := newTestService(t, repo).Transition(context.Background(), shopA, 1,
 		TransitionRequest{To: StatusCancelled, Reason: "   "})
@@ -143,7 +143,7 @@ func TestCancelNeedsReason(t *testing.T) {
 }
 
 func TestDeliveredDeductsStockAndWritesBalance(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddProduct(7, shopA, 10, 3)
 	repo.AddOrder(order(1, shopA, StatusHandedToCourier, 3000, Item{ProductID: 7, Quantity: 3, Price: 1000}))
 
@@ -163,7 +163,7 @@ func TestDeliveredDeductsStockAndWritesBalance(t *testing.T) {
 }
 
 func TestCommissionRoundsDownToWholeSom(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddOrder(order(1, shopA, StatusHandedToCourier, 1005))
 	if _, err := newTestService(t, repo).Transition(context.Background(), shopA, 1,
 		TransitionRequest{To: StatusDelivered}); err != nil {
@@ -176,7 +176,7 @@ func TestCommissionRoundsDownToWholeSom(t *testing.T) {
 
 func TestOrdersAreScopedToShop(t *testing.T) {
 	ctx := context.Background()
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	repo.AddProduct(7, shopA, 10, 0)
 	repo.AddOrder(order(1, shopA, StatusNew, 0, Item{ProductID: 7, Quantity: 1}))
 	svc := newTestService(t, repo)
@@ -198,7 +198,7 @@ func TestOrdersAreScopedToShop(t *testing.T) {
 }
 
 func TestListPaginatesNewestFirstAndFilters(t *testing.T) {
-	repo := NewMemRepository()
+	repo := newMemRepository()
 	base := time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
 	for i := int64(1); i <= 5; i++ {
 		o := order(i, shopA, StatusNew, 0)
@@ -226,13 +226,34 @@ func TestListPaginatesNewestFirstAndFilters(t *testing.T) {
 	}
 }
 
-func TestListValidation(t *testing.T) {
-	svc := newTestService(t, NewMemRepository())
+func TestListClampsPagingLikeProductLists(t *testing.T) {
+	repo := newMemRepository()
+	for i := int64(1); i <= 3; i++ {
+		repo.AddOrder(order(i, shopA, StatusNew, 0))
+	}
+	svc := newTestService(t, repo)
+	ctx := context.Background()
+
+	page, err := svc.List(ctx, shopA, nil, 0, 0)
+	if err != nil || page.Page != 1 || page.PageSize != defaultPageSize {
+		t.Fatalf("page 0, size 0 = %+v, %v; want page 1, size %d", page, err, defaultPageSize)
+	}
+	page, err = svc.List(ctx, shopA, nil, -4, 500)
+	if err != nil || page.Page != 1 || page.PageSize != maxPageSize {
+		t.Fatalf("page -4, size 500 = %+v, %v; want page 1, size %d", page, err, maxPageSize)
+	}
+	empty, err := svc.List(ctx, shopA, nil, 99, 10)
+	if err != nil || empty.Items == nil || len(empty.Items) != 0 || empty.Total != 3 {
+		t.Fatalf("page past the end = %+v, %v; want an empty non-nil slice and total 3", empty, err)
+	}
+}
+
+func TestListRejectsUnknownStatusAndHugePage(t *testing.T) {
+	svc := newTestService(t, newMemRepository())
 	bad := Status("shipped")
 	cases := map[string]func() error{
 		"unknown status": func() error { _, err := svc.List(context.Background(), shopA, &bad, 1, 20); return err },
-		"page zero":      func() error { _, err := svc.List(context.Background(), shopA, nil, 0, 20); return err },
-		"page size big":  func() error { _, err := svc.List(context.Background(), shopA, nil, 1, 101); return err },
+		"huge page":      func() error { _, err := svc.List(context.Background(), shopA, nil, maxPage+1, 20); return err },
 	}
 	for name, call := range cases {
 		if err := call(); !errors.Is(err, ErrValidation) {
@@ -241,8 +262,47 @@ func TestListValidation(t *testing.T) {
 	}
 }
 
+func TestTransitionRecordsHistory(t *testing.T) {
+	repo := newMemRepository()
+	repo.AddProduct(7, shopA, 10, 0)
+	repo.AddOrder(order(1, shopA, StatusNew, 0, Item{ProductID: 7, Quantity: 1}))
+	svc := newTestService(t, repo)
+	ctx := context.Background()
+
+	o, err := svc.Transition(ctx, shopA, 1, TransitionRequest{To: StatusAccepted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.History) != 1 || o.History[0].FromStatus == nil || *o.History[0].FromStatus != StatusNew || o.History[0].ToStatus != StatusAccepted {
+		t.Fatalf("history after accept = %+v", o.History)
+	}
+	o, err = svc.Transition(ctx, shopA, 1, TransitionRequest{To: StatusCancelled, Reason: "no reply"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.History) != 2 || o.History[1].Reason == nil || *o.History[1].Reason != "no reply" {
+		t.Fatalf("history after cancel = %+v", o.History)
+	}
+	got, _ := svc.Get(ctx, shopA, 1)
+	if len(got.History) != 2 {
+		t.Fatalf("Get returns %d history rows, want 2", len(got.History))
+	}
+}
+
+func TestListsInOrderJSONAreNeverNull(t *testing.T) {
+	repo := newMemRepository()
+	repo.AddOrder(order(1, shopA, StatusNew, 0))
+	o, err := newTestService(t, repo).Get(context.Background(), shopA, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Items == nil || o.History == nil {
+		t.Fatalf("items %v, history %v: both must be empty slices, not nil", o.Items, o.History)
+	}
+}
+
 func TestNewServiceRejectsBadCommission(t *testing.T) {
-	if _, err := NewService(NewMemRepository(), 101); err == nil {
+	if _, err := NewService(newMemRepository(), 101); err == nil {
 		t.Fatal("commission 101 accepted")
 	}
 }

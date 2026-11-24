@@ -8,6 +8,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
+	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
@@ -22,6 +23,7 @@ type Deps struct {
 	Tokens  *auth.TokenIssuer
 	Stock   *stock.Handler
 	Balance *balance.Handler
+	Order   *order.Handler
 
 	ShopLimiter *httpx.Limiter
 }
@@ -52,6 +54,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
 	mux.Handle("GET /balance", protected(d.Balance.Summary))
 	mux.Handle("GET /balance/entries", protected(d.Balance.Entries))
+	mux.Handle("GET /orders", protected(d.Order.List))
+	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
+	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
 	return httpx.JSONErrors(mux)
 }
 
