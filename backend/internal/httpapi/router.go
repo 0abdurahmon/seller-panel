@@ -13,6 +13,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
+	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 // Deps are the handlers and services the router is wired with.
@@ -25,12 +26,14 @@ type Deps struct {
 	Stock   *stock.Handler
 	Balance *balance.Handler
 	Order   *order.Handler
+	Upload  *upload.Handler
 
 	Dashboard *dashboard.Handler
 
-	ShopLimiter  *httpx.Limiter
-	DevEndpoints bool
-	Spec         http.Handler
+	ShopLimiter   *httpx.Limiter
+	UploadLimiter *httpx.Limiter
+	DevEndpoints  bool
+	Spec          http.Handler
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -48,6 +51,10 @@ func NewRouter(d Deps) http.Handler {
 	protected := func(h http.HandlerFunc) http.Handler {
 		return requireAuth(limitPerShop(h))
 	}
+	limitUploads := httpx.RateLimit(d.UploadLimiter, func(r *http.Request) (string, bool) {
+		p, ok := auth.PrincipalFrom(r.Context())
+		return strconv.FormatInt(p.ShopID, 10), ok
+	})
 	mux.Handle("GET /shop", protected(d.Shop.Get))
 	mux.Handle("PUT /shop", protected(d.Shop.Update))
 	mux.Handle("GET /categories", protected(d.Catalog.List))
@@ -63,6 +70,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
 	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))
+	mux.Handle("POST /uploads", protected(limitUploads(http.HandlerFunc(d.Upload.Create)).ServeHTTP))
 	if d.Spec != nil {
 		mux.Handle("GET /openapi.json", d.Spec)
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ type api struct {
 	t      *testing.T
 	mux    *http.ServeMux
 	tokens *auth.TokenIssuer
+	svc    *Service
 }
 
 func newAPI(t *testing.T) *api {
@@ -34,7 +36,8 @@ func newAPI(t *testing.T) *api {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(NewService(newMemRepository()), testLabel)
+	svc := NewService(newMemRepository(), newFakePhotos(1))
+	h := NewHandler(svc, testLabel)
 	protect := auth.RequireAuth(tokens)
 	mux := http.NewServeMux()
 	mux.Handle("GET /products", protect(http.HandlerFunc(h.List)))
@@ -42,7 +45,7 @@ func newAPI(t *testing.T) *api {
 	mux.Handle("GET /products/{id}", protect(http.HandlerFunc(h.Get)))
 	mux.Handle("PUT /products/{id}", protect(http.HandlerFunc(h.Update)))
 	mux.Handle("POST /products/{id}/archive", protect(http.HandlerFunc(h.Archive)))
-	return &api{t: t, mux: mux, tokens: tokens}
+	return &api{t: t, mux: mux, tokens: tokens, svc: svc}
 }
 
 func (a *api) token(shopID int64) string {
@@ -276,5 +279,41 @@ func TestHandlerReturnsAvailableAndStockLabel(t *testing.T) {
 	}
 	if len(page.Items) != 3 || page.Items[0].StockLabel != "in_stock" || page.Items[2].StockLabel != "out_of_stock" {
 		t.Fatalf("list labels = %+v", page.Items)
+	}
+}
+
+func TestHandlerPhotosShape(t *testing.T) {
+	a := newAPI(t)
+	tok := a.token(1)
+	photo := "/api/uploads/1/" + strings.Repeat("a", 32) + ".webp"
+	a.svc.photos.(*fakePhotoStore).add(1, photo)
+
+	p := a.create(tok, createBody)
+	rec := a.do(http.MethodGet, "/products/"+strconv.FormatInt(p.ID, 10), tok, "")
+	if !strings.Contains(rec.Body.String(), `"photos":[]`) {
+		t.Fatalf("a product without photos must show \"photos\":[], got %s", rec.Body)
+	}
+
+	withPhoto := strings.Replace(createBody, `"PX-1"`, `"PX-2"`, 1)
+	withPhoto = strings.Replace(withPhoto, `"status":"active"`, `"status":"active","photos":["`+photo+`"]`, 1)
+	got := a.create(tok, withPhoto)
+	if len(got.Photos) != 1 || got.Photos[0] != photo {
+		t.Fatalf("photos = %v", got.Photos)
+	}
+
+	for name, body := range map[string]string{
+		"not a list":     `"photos":"x"`,
+		"foreign url":    `"photos":["https://evil.example.com/a.webp"]`,
+		"another shop":   `"photos":["/api/uploads/2/` + strings.Repeat("b", 32) + `.webp"]`,
+		"too many":       `"photos":["1","2","3","4","5","6"]`,
+		"null item":      `"photos":[null]`,
+		"number in list": `"photos":[1]`,
+	} {
+		b := strings.Replace(createBody, `"PX-1"`, `"PX-`+name+`"`, 1)
+		b = strings.Replace(b, `"status":"active"`, `"status":"active",`+body, 1)
+		rec := a.do(http.MethodPost, "/products", tok, b)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400: %s", name, rec.Code, rec.Body)
+		}
 	}
 }

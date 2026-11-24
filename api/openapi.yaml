@@ -21,7 +21,7 @@ info:
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
-    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
+    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
     `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
     Compose default); otherwise it answers 404 like any unknown route.
 servers:
@@ -519,6 +519,70 @@ paths:
                 code: stock_changed
                 message: stock was changed since you opened it; reload and try again
 
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Upload an image, it is stored as WebP
+      description: |
+        `multipart/form-data` with one image in the field `file`: jpeg, png or webp, at most 5 MB and 20 megapixels.
+        The type is checked from the file content, not from its name or `Content-Type`.
+        The image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,
+        and re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.
+        Use the returned `url` in `photos` of a product (the shop `logo_url` takes it too). Opening the `url` in a
+        browser needs no token: nginx serves the files straight from the uploads volume, the API does not.
+        Limited per shop (20 uploads a minute by default); when the server is processing many images
+        at once the answer is 503 `busy` with `Retry-After`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: The stored image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadedImage'
+        '400':
+          description: No `file` field, empty file, a file that is not a decodable image, or more than 20 megapixels (`validation_error`); a broken multipart body (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: The file is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: The request is not `multipart/form-data`, or the file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -877,6 +941,24 @@ components:
           nullable: true
           maxLength: 300
 
+    UploadedImage:
+      type: object
+      required: [url, content_type, size, width, height]
+      properties:
+        url:
+          type: string
+          example: /api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp
+        content_type:
+          type: string
+          enum: [image/webp]
+        size:
+          type: integer
+          description: Bytes of the stored file
+        width:
+          type: integer
+        height:
+          type: integer
+
     ShopUpdate:
       type: object
       required: [name]
@@ -905,7 +987,7 @@ components:
 
     Product:
       type: object
-      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, created_at, updated_at]
+      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, photos, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -937,12 +1019,26 @@ components:
           $ref: '#/components/schemas/StockLabel'
         status:
           $ref: '#/components/schemas/ProductStatus'
+        photos:
+          $ref: '#/components/schemas/ProductPhotos'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+
+    ProductPhotos:
+      type: array
+      maxItems: 5
+      uniqueItems: true
+      items:
+        type: string
+        maxLength: 2048
+      description: |
+        Photo URLs, the first one is the cover. Each must be the `url` that `POST /uploads` returned for this
+        shop (an external URL, another shop's file or a missing file is `400 validation_error`). `[]` when none.
+      example: ['/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp']
 
     CreateProductRequest:
       type: object
@@ -980,6 +1076,8 @@ components:
           type: string
           enum: [draft, active]
           default: draft
+        photos:
+          $ref: '#/components/schemas/ProductPhotos'
 
     UpdateProductRequest:
       type: object
@@ -1010,6 +1108,11 @@ components:
           type: string
           enum: [draft, active]
           description: Kept as is when omitted
+        photos:
+          allOf:
+            - $ref: '#/components/schemas/ProductPhotos'
+          description: |
+            Replaces the list. Kept as is when omitted, `[]` removes all photos.
 
     ProductPage:
       type: object

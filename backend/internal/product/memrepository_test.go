@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -82,4 +83,25 @@ func (r *memRepository) List(_ context.Context, shopID int64, f ListFilter) ([]P
 		end = total
 	}
 	return all[start:end], total, nil
+}
+
+// fakePhotoStore knows which URLs each shop uploaded.
+type fakePhotoStore struct {
+	owned map[string]bool
+}
+
+func newFakePhotos(shopID int64, urls ...string) *fakePhotoStore {
+	f := &fakePhotoStore{owned: map[string]bool{}}
+	for _, u := range urls {
+		f.add(shopID, u)
+	}
+	return f
+}
+
+func (f *fakePhotoStore) add(shopID int64, url string) {
+	f.owned[fmt.Sprintf("%d|%s", shopID, url)] = true
+}
+
+func (f *fakePhotoStore) Owns(_ context.Context, shopID int64, url string) (bool, error) {
+	return f.owned[fmt.Sprintf("%d|%s", shopID, url)], nil
 }

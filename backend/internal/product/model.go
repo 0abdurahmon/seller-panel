@@ -28,6 +28,7 @@ type Product struct {
 	Stock       int       `json:"stock"`
 	Reserved    int       `json:"reserved"`
 	Status      Status    `json:"status"`
+	Photos      []string  `json:"photos"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -37,22 +38,24 @@ func (p Product) Available() int {
 }
 
 type CreateInput struct {
-	CategoryID  int64  `json:"category_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Price       int64  `json:"price"`
-	SKU         string `json:"sku"`
-	Stock       int    `json:"stock"`
-	Status      Status `json:"status"`
+	CategoryID  int64    `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       int64    `json:"price"`
+	SKU         string   `json:"sku"`
+	Stock       int      `json:"stock"`
+	Status      Status   `json:"status"`
+	Photos      []string `json:"photos"`
 }
 
 type UpdateInput struct {
-	CategoryID  int64  `json:"category_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Price       int64  `json:"price"`
-	SKU         string `json:"sku"`
-	Status      Status `json:"status"`
+	CategoryID  int64    `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       int64    `json:"price"`
+	SKU         string   `json:"sku"`
+	Status      Status   `json:"status"`
+	Photos      []string `json:"photos"`
 }
 
 type ListFilter struct {
@@ -68,6 +71,11 @@ type Page struct {
 	Page     int       `json:"page"`
 	PageSize int       `json:"page_size"`
 	Total    int       `json:"total"`
+}
+
+// PhotoStore tells whether a photo URL is an uploaded file of the shop.
+type PhotoStore interface {
+	Owns(ctx context.Context, shopID int64, url string) (bool, error)
 }
 
 type Repository interface {
