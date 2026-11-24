@@ -4,24 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 )
 
-// Needs TEST_DATABASE_URL and the products table; uses unique data, never truncates.
+// Needs TEST_DATABASE_URL and the products table; runs in its own database.
 func newPgStore(t *testing.T) (*PgStore, *pgxpool.Pool) {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
+	base := os.Getenv("TEST_DATABASE_URL")
+	if base == "" {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
+	url := ownDatabase(t, base)
 	if err := database.Migrate(url); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +45,33 @@ func newPgStore(t *testing.T) (*PgStore, *pgxpool.Pool) {
 		t.Skip("products table does not exist yet (products migration not merged)")
 	}
 	return NewPgStore(pool), pool
+}
+
+// ownDatabase returns a separate "<name>_stock" database; other packages' tests truncate tables.
+func ownDatabase(t *testing.T, base string) string {
+	t.Helper()
+	u, err := url.Parse(base)
+	if err != nil {
+		t.Fatalf("TEST_DATABASE_URL: %v", err)
+	}
+	name := strings.TrimPrefix(u.Path, "/") + "_stock"
+	if !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(name) {
+		t.Fatalf("unexpected database name %q", name)
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	_, err = conn.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize())
+	var pgErr *pgconn.PgError
+	// 42P04: already exists; 23505: created concurrently by another run.
+	if err != nil && !(errors.As(err, &pgErr) && (pgErr.Code == "42P04" || pgErr.Code == "23505")) {
+		t.Fatalf("create test database: %v", err)
+	}
+	u.Path = "/" + name
+	return u.String()
 }
 
 // seedShop creates a seller and shop with a unique email; returns shop id.
