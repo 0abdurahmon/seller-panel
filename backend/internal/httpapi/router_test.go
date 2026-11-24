@@ -27,7 +27,7 @@ func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.H
 	return newTestRouterOptions(t, shopRPS, shopBurst, false)
 }
 
-func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpoints bool) http.Handler {
+func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpoints bool, spec ...http.Handler) http.Handler {
 	t.Helper()
 	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
 	if err != nil {
@@ -52,6 +52,7 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 
 		ShopLimiter:  httpx.NewLimiter(shopRPS, shopBurst),
 		DevEndpoints: devEndpoints,
+		Spec:         firstHandler(spec),
 	})
 }
 
@@ -317,5 +318,35 @@ func TestSimulateOrderRouteExistsOnlyInDevelopment(t *testing.T) {
 	development := newTestRouterOptions(t, 1000, 1000, true)
 	if rec := post(development, ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("development without a token: status %d, want 401", rec.Code)
+	}
+}
+
+func firstHandler(hs []http.Handler) http.Handler {
+	if len(hs) == 0 {
+		return nil
+	}
+	return hs[0]
+}
+
+func TestOpenAPIRouteExistsOnlyWhenConfigured(t *testing.T) {
+	spec := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"openapi":"3.0.3"}`))
+	})
+	get := func(h http.Handler) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
+		return rec
+	}
+
+	off := get(newTestRouterOptions(t, 1000, 1000, false))
+	var e struct{ Code string }
+	if off.Code != http.StatusNotFound || json.NewDecoder(off.Body).Decode(&e) != nil || e.Code != "not_found" {
+		t.Fatalf("without a spec: status %d code %q, want the JSON 404", off.Code, e.Code)
+	}
+
+	on := get(newTestRouterOptions(t, 1000, 1000, false, spec))
+	if on.Code != http.StatusOK || !strings.Contains(on.Body.String(), `"openapi"`) {
+		t.Fatalf("with a spec: status %d body %s", on.Code, on.Body.String())
 	}
 }
