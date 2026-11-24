@@ -1,6 +1,7 @@
 package stock
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,14 +11,19 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
+// Loader returns what the stock endpoint answers with after a change: the product, rendered by the product
+// feature, so every product endpoint has the same shape. The app wires it, stock does not import product.
+type Loader func(ctx context.Context, shopID, productID int64) (any, error)
+
 // Handler serves the stock endpoints. It only parses requests and maps errors.
 type Handler struct {
-	svc *Service
+	svc  *Service
+	load Loader
 }
 
 // NewHandler returns the HTTP handler for stock.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, load Loader) *Handler {
+	return &Handler{svc: svc, load: load}
 }
 
 // Update handles PATCH /products/{id}/stock; the shop comes from the token.
@@ -40,12 +46,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "stock and expected_stock are required")
 		return
 	}
-	level, err := h.svc.SetStock(r.Context(), p.ShopID, productID, *req.Stock, *req.ExpectedStock)
+	if _, err := h.svc.SetStock(r.Context(), p.ShopID, productID, *req.Stock, *req.ExpectedStock); err != nil {
+		writeStockError(w, r, err)
+		return
+	}
+	product, err := h.load(r.Context(), p.ShopID, productID)
 	if err != nil {
 		writeStockError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, level)
+	httpx.WriteJSON(w, http.StatusOK, product)
 }
 
 func writeStockError(w http.ResponseWriter, r *http.Request, err error) {

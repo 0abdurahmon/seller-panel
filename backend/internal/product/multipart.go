@@ -2,34 +2,22 @@ package product
 
 import (
 	"errors"
-	"io"
-	"mime"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
 const (
 	// maxPhotoBytes bounds what is read per photo, the photo store enforces the same limit when it converts.
-	maxPhotoBytes     = 5 << 20
-	maxFormValueBytes = 64 << 10
-	// multipartOverhead leaves room for boundaries, headers and the text fields around the photos.
-	multipartOverhead = 256 << 10
-	maxFormBody       = maxPhotos*maxPhotoBytes + multipartOverhead
+	maxPhotoBytes = 5 << 20
 
 	photosField     = "photos"
 	keepPhotosField = "keep_photos"
 )
 
-var (
-	createFields = map[string]bool{"category_id": true, "title": true, "description": true, "price": true, "sku": true, "stock": true}
-	updateFields = map[string]bool{"category_id": true, "title": true, "description": true, "price": true, "sku": true, "status": true, keepPhotosField: true}
-)
-
-func isMultipart(r *http.Request) bool {
-	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	return err == nil && mt == "multipart/form-data"
-}
+var formFields = []string{"category_id", "title", "description", "price", "sku"}
 
 type form struct {
 	values map[string]string
@@ -37,82 +25,29 @@ type form struct {
 	keep   *[]string
 }
 
-// readForm reads a multipart body: text fields, files in the field "photos", and repeated "keep_photos" values.
-// Unknown fields and repeated fields are refused, like unknown fields in the JSON body.
-func readForm(w http.ResponseWriter, r *http.Request, allowed map[string]bool) (form, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxFormBody)
-	mr, err := r.MultipartReader()
+// readForm reads a multipart body: text fields, files in the field "photos" and, on update, repeated
+// "keep_photos" values. Unknown and repeated fields are refused, like unknown fields in the JSON body.
+func readForm(w http.ResponseWriter, r *http.Request, update bool) (form, error) {
+	spec := httpx.FormSpec{Fields: formFields, FileField: photosField, MaxFiles: maxPhotos, MaxFileBytes: maxPhotoBytes}
+	if update {
+		spec.Lists = []string{keepPhotosField}
+	} else {
+		spec.Fields = append(append([]string{}, formFields...), "stock")
+	}
+	raw, err := httpx.ReadForm(w, r, spec)
 	if err != nil {
-		return form{}, errInvalidBody
-	}
-	f := form{values: map[string]string{}}
-	var keep []string
-	keepSeen := false
-	for {
-		part, err := mr.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			if isTooLarge(err) {
-				return form{}, ErrFileTooLarge
-			}
+		var fe *httpx.FormError
+		switch {
+		case errors.As(err, &fe):
+			return form{}, invalid("%s", fe.Message)
+		case errors.Is(err, httpx.ErrFormTooLarge):
+			return form{}, ErrFileTooLarge
+		default:
 			return form{}, errInvalidBody
 		}
-		name := part.FormName()
-		if part.FileName() != "" {
-			if name != photosField {
-				return form{}, invalid("unexpected file field %q, photos go in the field %q", name, photosField)
-			}
-			if len(f.files) == maxPhotos {
-				return form{}, invalid("a product has at most %d photos", maxPhotos)
-			}
-			data, err := io.ReadAll(io.LimitReader(part, maxPhotoBytes+1))
-			if err != nil {
-				if isTooLarge(err) {
-					return form{}, ErrFileTooLarge
-				}
-				return form{}, errInvalidBody
-			}
-			if len(data) > maxPhotoBytes {
-				return form{}, ErrFileTooLarge
-			}
-			if len(data) == 0 {
-				return form{}, invalid("photos[%d] is empty", len(f.files))
-			}
-			f.files = append(f.files, data)
-			continue
-		}
-		if !allowed[name] {
-			return form{}, invalid("unknown field %q", name)
-		}
-		raw, err := io.ReadAll(io.LimitReader(part, maxFormValueBytes+1))
-		if err != nil {
-			if isTooLarge(err) {
-				return form{}, ErrFileTooLarge
-			}
-			return form{}, errInvalidBody
-		}
-		if len(raw) > maxFormValueBytes {
-			return form{}, invalid("field %q is too long", name)
-		}
-		value := string(raw)
-		if name == keepPhotosField {
-			keepSeen = true
-			if v := strings.TrimSpace(value); v != "" {
-				keep = append(keep, v)
-			}
-			continue
-		}
-		if _, dup := f.values[name]; dup {
-			return form{}, invalid("field %q is sent twice", name)
-		}
-		f.values[name] = value
 	}
-	if keepSeen {
-		if keep == nil {
-			keep = []string{}
-		}
+	f := form{values: raw.Values, files: raw.Files}
+	if keep, sent := raw.Lists[keepPhotosField]; sent {
 		f.keep = &keep
 	}
 	return f, nil

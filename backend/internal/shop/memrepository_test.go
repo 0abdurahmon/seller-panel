@@ -2,12 +2,16 @@ package shop
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"sync"
 )
 
 type memRepository struct {
-	mu    sync.Mutex
-	shops map[int64]Shop
+	mu         sync.Mutex
+	shops      map[int64]Shop
+	failUpdate bool
 }
 
 func newMemRepository() *memRepository {
@@ -33,6 +37,9 @@ func (m *memRepository) Get(_ context.Context, shopID int64) (Shop, error) {
 func (m *memRepository) Update(_ context.Context, shopID int64, p Profile) (Shop, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.failUpdate {
+		return Shop{}, errors.New("database is down")
+	}
 	if _, ok := m.shops[shopID]; !ok {
 		return Shop{}, ErrNotFound
 	}
@@ -52,4 +59,32 @@ func (m *memRepository) Update(_ context.Context, shopID int64, p Profile) (Shop
 	}
 	m.shops[shopID] = s
 	return s, nil
+}
+
+// fakeLogoStore stores nothing real: Save hands out numbered URLs, Remove records what was deleted.
+type fakeLogoStore struct {
+	mu      sync.Mutex
+	next    int
+	saved   []string
+	removed []string
+	failErr error
+}
+
+func (f *fakeLogoStore) Save(_ context.Context, shopID int64, image io.Reader) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failErr != nil {
+		return "", f.failErr
+	}
+	io.Copy(io.Discard, image)
+	f.next++
+	url := fmt.Sprintf("/api/uploads/%d/%032d.webp", shopID, f.next)
+	f.saved = append(f.saved, url)
+	return url, nil
+}
+
+func (f *fakeLogoStore) Remove(_ context.Context, _ int64, urls []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, urls...)
 }

@@ -28,6 +28,11 @@ func photoPart(data []byte) formPart    { return formPart{field: "photos", file:
 
 func (s *server) productForm(method, path, token string, parts ...formPart) response {
 	s.t.Helper()
+	return s.productFormTo(method, path, token, parts...)
+}
+
+func (s *server) productFormTo(method, path, token string, parts ...formPart) response {
+	s.t.Helper()
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
 	for _, p := range parts {

@@ -107,9 +107,9 @@ The contract is `api/openapi.yaml` (D3). These conventions apply to every endpoi
 | `500` | Unexpected. Logged with details, response has no internals |
 | Validation | In the service, before any SQL. The database constraints are a second check, not the first |
 
-Known shape differences, on purpose: `GET /categories` returns `{"items": [...]}` without paging fields (about a dozen rows), `GET /health` returns `{"status": "ok"}`, and `PATCH /products/{id}/stock` returns a stock level (`product_id`, `stock`, `reserved`, `available`, `stock_label`, `updated_at`) instead of the whole product (D5).
+Known shape differences, on purpose: `GET /categories` returns `{"items": [...]}` without paging fields (about a dozen rows), `GET /health` returns `{"status": "ok"}`. Every endpoint that answers with a product (list items, create, get, update, archive, stock change) answers with the same fields (D14).
 
-Photos: a product is saved with its photos in one request (`POST /products` and `PUT /products/{id}` as `multipart/form-data`, up to 5 images of jpeg, png or webp, 5 MB each), converted to WebP and stored as `UPLOAD_DIR/<shop_id>/<random>.webp`; the response has `photos` with their URLs. `POST /uploads` stores a single image and returns its URL (for the shop logo). nginx serves the files itself, read only from the same volume, at `GET /api/uploads/{shop_id}/{name}` (public, no backend call). See D12.
+Images: a product is saved with its photos and the shop with its logo in one request (`POST /products`, `PUT /products/{id}` and `PUT /shop` as `multipart/form-data`; up to 5 photos, or one logo, of jpeg, png or webp, 5 MB each), converted to WebP and stored as `UPLOAD_DIR/<shop_id>/<random>.webp`; the responses have `photos` and `logo_url` with their URLs. `POST /uploads` stores a single image and returns its URL. nginx serves the files itself, read only from the same volume, at `GET /api/uploads/{shop_id}/{name}` (public, no backend call). See D12 and D15.
 
 ## 6. Cross-cutting
 

@@ -398,29 +398,77 @@ paths:
           $ref: '#/components/responses/NotFound'
     put:
       tags: [Shop]
-      summary: Replace the shop profile
+      summary: Replace the shop profile and change the logo
       description: |
         Replaces all editable fields. An empty optional field clears the stored value.
         The shop is taken from the token, never from the request.
+
+        Two request formats:
+        - `application/json`: the fields only, the logo does not change.
+        - `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`
+          (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.
+
+        The profile and the logo are saved together: when anything fails nothing changes and no file stays on
+        the server; the old logo file is deleted once the new one is saved. The logo is converted to WebP and
+        scaled to at most 2048 px, see `POST /uploads`. A request with a logo counts against the same per shop
+        limit as uploads (20 a minute by default); a JSON request does not. `logo_url` is not an input, the
+        server writes it.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ShopUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShopForm'
+            encoding:
+              logo:
+                contentType: image/jpeg, image/png, image/webp
       responses:
         '200':
-          description: The updated shop
+          description: The updated shop, `logo_url` is the URL of the stored logo or `null`
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Shop'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: |
+            Invalid field, an unknown or repeated form field, `logo` together with `remove_logo`, an empty file or a
+            file that is not a decodable image (`validation_error`); a body that is not valid JSON or multipart
+            (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          description: The logo is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: The logo is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /products:
     get:
@@ -668,11 +716,11 @@ paths:
               $ref: '#/components/schemas/StockUpdateRequest'
       responses:
         '200':
-          description: The new stock level
+          description: The product with its new stock, the same shape as every other product endpoint
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StockLevel'
+                $ref: '#/components/schemas/Product'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -699,8 +747,10 @@ paths:
         The type is checked from the file content, not from its name or `Content-Type`.
         The image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,
         and re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.
-        Use the returned `url` in `photos` of a product (the shop `logo_url` takes it too). Opening the `url` in a
-        browser needs no token: nginx serves the files straight from the uploads volume, the API does not.
+        This endpoint only stores one image and returns its URL. Product photos and the shop logo are saved by
+        their own endpoints (`POST /products`, `PUT /products/{id}`, `PUT /shop`); none of them accepts a URL
+        from here. Opening the `url` in a browser needs no token: nginx serves the files straight from the
+        uploads volume, the API does not.
         Limited per shop (20 uploads a minute by default); when the server is processing many images
         at once the answer is 503 `busy` with `Retry-After`.
       requestBody:
@@ -1140,6 +1190,7 @@ components:
           type: string
           nullable: true
           maxLength: 2048
+          description: URL of the stored logo, `null` when there is none. Set with `PUT /shop` (multipart).
         description:
           type: string
           maxLength: 2000
@@ -1178,10 +1229,6 @@ components:
           type: string
           minLength: 1
           maxLength: 120
-        logo_url:
-          type: string
-          maxLength: 2048
-          description: http or https URL. Empty clears it.
         description:
           type: string
           maxLength: 2000
@@ -1191,6 +1238,32 @@ components:
         pickup_address:
           type: string
           maxLength: 300
+
+    ShopForm:
+      type: object
+      required: [name]
+      description: The fields of `ShopUpdate` as form fields, plus the logo.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        contact_phone:
+          type: string
+          description: 7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it.
+        pickup_address:
+          type: string
+          maxLength: 300
+        logo:
+          type: string
+          format: binary
+          description: A new logo image (jpeg, png or webp, 5 MB). It replaces the current one.
+        remove_logo:
+          type: boolean
+          description: "`true` removes the logo. Not together with `logo`."
 
     ProductStatus:
       type: string
@@ -1404,13 +1477,6 @@ components:
         total:
           type: integer
 
-    StockLabel:
-      type: string
-      enum: [in_stock, low_stock, out_of_stock]
-      description: |
-        `out_of_stock` when available is 0, `low_stock` when 0 < available ≤ LOW_STOCK_THRESHOLD (default 5),
-        `in_stock` otherwise.
-
     StockUpdateRequest:
       type: object
       required: [stock, expected_stock]
@@ -1429,35 +1495,6 @@ components:
       example:
         stock: 12
         expected_stock: 10
-
-    StockLevel:
-      type: object
-      required: [product_id, stock, reserved, available, stock_label, updated_at]
-      properties:
-        product_id:
-          type: integer
-          format: int64
-        stock:
-          type: integer
-        reserved:
-          type: integer
-          description: Units promised to accepted orders
-        available:
-          type: integer
-          description: stock − reserved
-        stock_label:
-          $ref: '#/components/schemas/StockLabel'
-        updated_at:
-          type: string
-          format: date-time
-          description: UTC
-      example:
-        product_id: 1
-        stock: 7
-        reserved: 3
-        available: 4
-        stock_label: low_stock
-        updated_at: '2026-11-23T18:55:34Z'
 
     Error:
       type: object

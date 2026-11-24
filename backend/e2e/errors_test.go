@@ -167,13 +167,10 @@ func TestStockRules(t *testing.T) {
 
 	ok := s.do(http.MethodPatch, path, sel.token, map[string]int{"stock": 4, "expected_stock": 10})
 	s.expect(ok, http.StatusOK, "")
-	var level struct {
-		Stock, Reserved, Available int
-		StockLabel                 string `json:"stock_label"`
-	}
+	var level product
 	ok.decode(&level)
-	if level.Stock != 4 || level.Reserved != 4 || level.Available != 0 || level.StockLabel != "out_of_stock" {
-		t.Fatalf("level = %+v, want stock 4, reserved 4, available 0, out_of_stock", level)
+	if level.ID != p.ID || level.Stock != 4 || level.Reserved != 4 {
+		t.Fatalf("answer = %+v, want the product with stock 4 and reserved 4", level)
 	}
 }
 

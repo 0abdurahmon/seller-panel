@@ -21,7 +21,7 @@ func TestHandlerScopesEachSellerToOwnShop(t *testing.T) {
 	repo := newMemRepository()
 	repo.seed(1, "Shop A")
 	repo.seed(2, "Shop B")
-	h := NewHandler(NewService(repo))
+	h := NewHandler(NewService(repo, &fakeLogoStore{}))
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /shop", auth.RequireAuth(tokens)(http.HandlerFunc(h.Get)))
@@ -39,7 +39,7 @@ func TestHandlerScopesEachSellerToOwnShop(t *testing.T) {
 	}
 
 	// Seller B updates their shop. The body has no shop ID field, so only shop 2 can change.
-	body := `{"name":"Hacked","description":"","logo_url":"","contact_phone":"","pickup_address":""}`
+	body := `{"name":"Hacked","description":"","contact_phone":"","pickup_address":""}`
 	if rec := do(http.MethodPut, tokenB, body); rec.Code != http.StatusOK {
 		t.Fatalf("PUT status = %d, want 200", rec.Code)
 	}
@@ -69,7 +69,7 @@ func TestHandlerStatusCodes(t *testing.T) {
 	tokens, _ := auth.NewTokenIssuer("test-secret", time.Hour)
 	repo := newMemRepository()
 	repo.seed(1, "Shop A")
-	h := NewHandler(NewService(repo))
+	h := NewHandler(NewService(repo, &fakeLogoStore{}))
 	mux := http.NewServeMux()
 	mux.Handle("PUT /shop", auth.RequireAuth(tokens)(http.HandlerFunc(h.Update)))
 	token, _, _ := tokens.Issue(10, 1)
@@ -86,6 +86,9 @@ func TestHandlerStatusCodes(t *testing.T) {
 	}
 	if code := send(`{"name":"X","unknown":1}`); code != http.StatusBadRequest {
 		t.Fatalf("unknown field status = %d, want 400", code)
+	}
+	if code := send(`{"name":"X","logo_url":"https://example.com/a.png"}`); code != http.StatusBadRequest {
+		t.Fatalf("logo_url status = %d, want 400: the logo is a file now", code)
 	}
 	if code := send(`{"name":"X"}`); code != http.StatusOK {
 		t.Fatalf("valid status = %d, want 200", code)

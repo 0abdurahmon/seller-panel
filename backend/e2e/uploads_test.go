@@ -95,8 +95,9 @@ func TestUploadJourney(t *testing.T) {
 	}
 	s.expect(s.do(http.MethodGet, strings.TrimPrefix(img.URL, "/api"), "", nil), http.StatusNotFound, "not_found")
 
-	var logo = map[string]string{"name": "Shop", "logo_url": "https://example.com" + img.URL}
-	s.expect(s.do(http.MethodPut, "/shop", a.token, logo), http.StatusOK, "")
+	// The logo is a file in PUT /shop; a URL, even one this API returned, is not accepted.
+	logo := map[string]string{"name": "Shop", "logo_url": "https://example.com" + img.URL}
+	s.expect(s.do(http.MethodPut, "/shop", a.token, logo), http.StatusBadRequest, "invalid_body")
 }
 
 func TestUploadErrors(t *testing.T) {
