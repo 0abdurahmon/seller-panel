@@ -44,7 +44,7 @@ func TestSellerJourney(t *testing.T) {
 	s.expect(created, http.StatusCreated, "")
 	var p product
 	created.decode(&p)
-	if p.ID == 0 || p.Stock != 3 || p.Reserved != 0 || p.Available != 3 || p.StockLabel != "low_stock" || p.Status != "active" {
+	if p.ID == 0 || p.Stock != 3 || p.Reserved != 0 || p.Status != "draft" {
 		t.Fatalf("created product = %+v", p)
 	}
 
@@ -53,18 +53,23 @@ func TestSellerJourney(t *testing.T) {
 	if page.Total != 1 || page.Items[0].ID != p.ID {
 		t.Fatalf("search by sku = %+v", page)
 	}
-	s.do(http.MethodGet, "/products?status=draft", token, nil).decode(&page)
+	s.do(http.MethodGet, "/products?status=active", token, nil).decode(&page)
 	if page.Total != 0 || page.Items == nil {
-		t.Fatalf("draft filter = %+v, want an empty page with items []", page)
+		t.Fatalf("active filter = %+v, want an empty page with items [] (a new product is a draft)", page)
+	}
+	s.do(http.MethodGet, "/products?status=draft", token, nil).decode(&page)
+	if page.Total != 1 || page.Items[0].ID != p.ID {
+		t.Fatalf("draft filter = %+v", page)
 	}
 
 	renamed := productBody(category, sku, 0)
 	delete(renamed, "stock")
 	renamed["title"], renamed["price"] = "Phone Pro", 2_000_000
+	renamed["status"] = "active"
 	res := s.do(http.MethodPut, productPath(p), token, renamed)
 	s.expect(res, http.StatusOK, "")
 	res.decode(&p)
-	if p.Title != "Phone Pro" || p.Price != 2_000_000 || p.Stock != 3 {
+	if p.Title != "Phone Pro" || p.Price != 2_000_000 || p.Stock != 3 || p.Status != "active" {
 		t.Fatalf("after update = %+v, the stock must stay 3", p)
 	}
 
@@ -81,7 +86,7 @@ func TestSellerJourney(t *testing.T) {
 		t.Fatalf("stock level = %+v", level)
 	}
 	s.do(http.MethodGet, productPath(p), token, nil).decode(&p)
-	if p.Stock != 50 || p.StockLabel != "in_stock" {
+	if p.Stock != 50 {
 		t.Fatalf("product after the stock change = %+v", p)
 	}
 
@@ -100,10 +105,48 @@ func TestSellerJourney(t *testing.T) {
 func TestResponsesAreJSON(t *testing.T) {
 	s := newServer(t)
 	sel := s.register()
-	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/products/999999"} {
+	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/dashboard/summary", "/products/999999", "/nope", "/products/1/nope"} {
 		res := s.do(http.MethodGet, path, sel.token, nil)
 		if ct := res.header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 			t.Errorf("GET %s: Content-Type = %q, want JSON (status %d)", path, ct, res.status)
+		}
+	}
+}
+
+func TestUnknownRoutesAndMethodsUseTheSharedErrorShape(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+
+	s.expect(s.do(http.MethodGet, "/nope", sel.token, nil), http.StatusNotFound, "not_found")
+	s.expect(s.do(http.MethodGet, "/nope", "", nil), http.StatusNotFound, "not_found")
+
+	for _, c := range []struct{ method, path string }{
+		{http.MethodPost, "/health"},
+		{http.MethodDelete, "/products"},
+		{http.MethodPut, "/auth/login"},
+		{http.MethodPatch, "/shop"},
+	} {
+		res := s.do(c.method, c.path, sel.token, nil)
+		s.expect(res, http.StatusMethodNotAllowed, "method_not_allowed")
+		if res.header.Get("Allow") == "" {
+			t.Errorf("%s %s: the Allow header is missing", c.method, c.path)
+		}
+	}
+}
+
+func TestTimestampsAreUTC(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+	p := s.createProduct(sel.token, s.categoryID(sel.token), 1)
+
+	var raw struct {
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+	s.do(http.MethodGet, productPath(p), sel.token, nil).decode(&raw)
+	for name, ts := range map[string]string{"created_at": raw.CreatedAt, "updated_at": raw.UpdatedAt} {
+		if !strings.HasSuffix(ts, "Z") {
+			t.Errorf("%s = %q, want a UTC time ending in Z", name, ts)
 		}
 	}
 }

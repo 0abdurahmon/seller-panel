@@ -29,32 +29,47 @@ type server struct {
 	t    *testing.T
 	url  string
 	pool *pgxpool.Pool
+	dir  string
 }
 
 func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	t.Helper()
 	pool := dbtest.NewPool(t, "e2e")
+	zone, err := time.LoadLocation(config.DefaultBusinessTimeZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
 	cfg := config.Config{
+		Env:               config.EnvDevelopment,
+		OpenAPIFile:       "../../api/openapi.yaml",
 		Port:              "0",
 		JWTSecret:         jwtSecret,
 		JWTTTL:            time.Hour,
 		LowStockThreshold: 5,
+		CommissionPercent: 10,
 		ShopRPS:           1000,
 		ShopBurst:         1000,
 		LoginAttempts:     5,
 		LoginWindow:       15 * time.Minute,
 		TrustedProxies:    []string{"127.0.0.1/32", "::1/128"},
+		BusinessLocation:  zone,
+		UploadDir:         dir,
+		UploadPublicURL:   "/api/uploads",
+		UploadsPerMinute:  1000,
 	}
 	for _, m := range mutate {
 		m(&cfg)
 	}
-	handler, err := app.NewHandler(cfg, pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handler, closer, err := app.NewHandler(cfg, pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Cleanups run last in, first out: the server stops, then the upload directory is released, then the temp directory goes.
+	t.Cleanup(func() { _ = closer.Close() })
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return &server{t: t, url: srv.URL, pool: pool}
+	return &server{t: t, url: srv.URL, pool: pool, dir: dir}
 }
 
 type response struct {
@@ -86,6 +101,14 @@ func (r response) errorCode() string {
 
 func (s *server) do(method, path, token string, body any, headers ...string) response {
 	s.t.Helper()
+	res, err := s.tryDo(method, path, token, body, headers...)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return res
+}
+
+func (s *server) tryDo(method, path, token string, body any, headers ...string) (response, error) {
 	var reader io.Reader
 	switch b := body.(type) {
 	case nil:
@@ -94,13 +117,13 @@ func (s *server) do(method, path, token string, body any, headers ...string) res
 	default:
 		raw, err := json.Marshal(b)
 		if err != nil {
-			s.t.Fatal(err)
+			return response{}, err
 		}
 		reader = bytes.NewBuffer(raw)
 	}
 	req, err := http.NewRequest(method, s.url+path, reader)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -113,14 +136,14 @@ func (s *server) do(method, path, token string, body any, headers ...string) res
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(res.Body)
 	if err != nil {
-		s.t.Fatal(err)
+		return response{}, err
 	}
-	return response{t: s.t, status: res.StatusCode, header: res.Header, body: raw}
+	return response{t: s.t, status: res.StatusCode, header: res.Header, body: raw}, nil
 }
 
 type seller struct {
@@ -157,18 +180,17 @@ func (s *server) login(email, password string, headers ...string) response {
 }
 
 type product struct {
-	ID          int64  `json:"id"`
-	ShopID      int64  `json:"shop_id"`
-	CategoryID  int64  `json:"category_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Price       int64  `json:"price"`
-	SKU         string `json:"sku"`
-	Stock       int    `json:"stock"`
-	Reserved    int    `json:"reserved"`
-	Available   int    `json:"available"`
-	StockLabel  string `json:"stock_label"`
-	Status      string `json:"status"`
+	ID          int64    `json:"id"`
+	ShopID      int64    `json:"shop_id"`
+	CategoryID  int64    `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       int64    `json:"price"`
+	SKU         string   `json:"sku"`
+	Stock       int      `json:"stock"`
+	Reserved    int      `json:"reserved"`
+	Status      string   `json:"status"`
+	Photos      []string `json:"photos"`
 }
 
 type productPage struct {
@@ -200,7 +222,7 @@ func (s *server) categoryID(token string) int64 {
 func productBody(category int64, sku string, stock int) map[string]any {
 	return map[string]any{
 		"category_id": category, "title": "Phone " + sku, "description": "Good phone",
-		"price": 1_500_000, "sku": sku, "stock": stock, "status": "active",
+		"price": 1_500_000, "sku": sku, "stock": stock,
 	}
 }
 
@@ -215,6 +237,21 @@ func (s *server) createProduct(token string, category int64, stock int) product 
 		s.t.Fatalf("create product status = %d: %s", res.status, res.body)
 	}
 	var p product
+	res.decode(&p)
+	return s.activate(token, p)
+}
+
+// activate moves a draft product to active: a product is created as a draft, so tests that need one
+// to be sold (simulate-order only picks active products) publish it with an edit.
+func (s *server) activate(token string, p product) product {
+	s.t.Helper()
+	body := productBody(p.CategoryID, p.SKU, 0)
+	delete(body, "stock")
+	body["status"] = "active"
+	res := s.do(http.MethodPut, productPath(p), token, body)
+	if res.status != http.StatusOK {
+		s.t.Fatalf("activate product status = %d: %s", res.status, res.body)
+	}
 	res.decode(&p)
 	return p
 }

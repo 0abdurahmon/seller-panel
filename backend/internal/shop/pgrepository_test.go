@@ -3,28 +3,17 @@ package shop
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
-	"github.com/0abdurahmon/seller-panel/backend/internal/database"
+	"github.com/0abdurahmon/seller-panel/backend/internal/database/dbtest"
 )
 
-// These tests need PostgreSQL. Set TEST_DATABASE_URL to run them.
+// These tests need PostgreSQL. Set TEST_DATABASE_URL (a database named *_test) to run them.
+// They run in their own database, and clear it before each test.
 func newPgRepo(t *testing.T) (*PgRepository, func(sql string, args ...any) int64) {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
 	ctx := context.Background()
-	if err := database.Migrate(url); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := database.Connect(ctx, url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := dbtest.NewPool(t, "shop")
 	if _, err := pool.Exec(ctx, `TRUNCATE shops, sellers RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)
 	}

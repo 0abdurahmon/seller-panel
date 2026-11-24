@@ -49,7 +49,7 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 Derived, not stored: `available = stock - reserved`, and the stock label: `out_of_stock` when `available = 0`, `low_stock` when `available <= LOW_STOCK_THRESHOLD`, `in_stock` otherwise.
 
 ### product_photos
-`id`, `product_id`, `url`, `position` (0 is the cover). A table rather than an array so order and removal are simple.
+`id`, `product_id`, `url`, `position` (0 is the cover, at most 5 photos). A table rather than an array so order and removal are simple. `url` is the public URL of a WebP file the product endpoints stored for the product's shop; the service writes the rows and the files together and never accepts a URL from the client. `(product_id, position)` and `(product_id, url)` are unique, the position key is deferrable.
 
 ### orders
 `id`, `shop_id`, `number` (sequence from 100000, shown as `#100245`), `status`, `buyer_name`, `buyer_phone`, `delivery_address`, `total` (fixed at creation), `cancel_reason`, `created_at`, `status_changed_at`. One order belongs to one shop.
@@ -100,13 +100,13 @@ Each feature owner writes the migration for the tables they own, in the order th
 | Migration | Tables | Owner | Status |
 |-----------|--------|-------|--------|
 | `0001_sellers_shops` | `sellers`, `shops` | Auth, Shop profile | merged |
-| `0002_categories` | `categories` and the seeded tree, read through `GET /categories` (#72) | Products | in progress |
-| `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | in progress |
-| product photos | `product_photos` | Products | planned |
-| orders | `orders`, `order_items`, `order_status_history`, `order_number_seq` | not assigned | planned |
-| balance | `balance_entries` | not assigned | planned |
+| `0002_categories` | `categories` and the seeded tree, read through `GET /categories` (#72) | Products | merged |
+| `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | merged |
+| `0006_product_photos` | `product_photos`, at most 5 per product (position 0 to 4), no repeated URL | Products | merged |
+| `0004_balance_entries` | `balance_entries` and its enum, constraints and index, without the foreign key to `orders` (that table did not exist yet) | Balance (#84) | merged |
+| `0005_orders` | `orders`, `order_items`, `order_status_history`, `order_number_seq`, and the foreign key `balance_entries.order_id` to `orders` | schema by Balance (#91), Go code by Orders (#70) | merged, written by the order code in this PR |
 
-Reference data (categories) ships as a migration. Demo data (seller, shop, about 15 products, about 30 orders with balance entries) comes from a seed command that only runs when asked and writes through the service code, so the numbers stay consistent.
+Reference data (categories) ships as a migration. Demo data (seller, shop, about 15 products, about 30 orders with balance entries) comes from a seed command that only runs when asked and writes through the service code, so the numbers stay consistent (see D11 in [`DECISIONS.md`](../../docs/DECISIONS.md)).
 
 ## 7. Money, stock and status rules
 
@@ -124,7 +124,7 @@ WHERE id = $product_id AND shop_id = $shop_id AND stock - reserved >= $qty;
 
 **Money.** `commission = total * COMMISSION_PERCENT / 100`, integer division, config default 10. A `sale` entry of `+total` and a `commission` entry of `-commission` are written once, when the order becomes `delivered`. Cancelled orders create no entries. Example: `total 12345` gives commission `1234` and net `11111`; the entries sum to exactly `11111`, no so'm is lost or invented.
 
-**Dashboard.** Dates use the business time zone from `ARCHITECTURE.md`. Today's orders: `created_at` today. Waiting for action: orders in `new`, `accepted` or `packed`. Revenue 7 and 30 days: sum of `total` of orders that became `delivered` in the window, by `status_changed_at`. Top 5 products: units sold in orders delivered in the last 30 days.
+**Dashboard.** Dates use the business time zone (`BUSINESS_TIMEZONE`, default `Asia/Tashkent`, see D10). Today's orders: `created_at` from 00:00 to 24:00 today, any status. Waiting for action: orders in `new`, `accepted` or `packed`, any age. Revenue 7 and 30 days: sum of `total` of orders that became `delivered` in the window, by `status_changed_at`; the windows are today plus the 6 and 29 days before it, half open, and cancelled orders never count. Top 5 products: units and `price_snapshot × quantity` of the lines of orders delivered in the last 30 days, ranked by units, then revenue, then `product_id`. No table of its own; it reads `orders`, `order_items` and `products`.
 
 ## 8. Differences from `DOMAIN.md`
 

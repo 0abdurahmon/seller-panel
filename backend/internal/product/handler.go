@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -9,33 +10,20 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
-type StockLabeler func(available int) string
-
-type Response struct {
-	Product
-	Available  int    `json:"available"`
-	StockLabel string `json:"stock_label"`
-}
-
-type PageResponse struct {
-	Items    []Response `json:"items"`
-	Page     int        `json:"page"`
-	PageSize int        `json:"page_size"`
-	Total    int        `json:"total"`
-}
-
 type Handler struct {
-	svc   *Service
-	label StockLabeler
+	svc *Service
 }
 
-func NewHandler(svc *Service, label StockLabeler) *Handler {
-	return &Handler{svc: svc, label: label}
+func NewHandler(svc *Service) *Handler {
+	return &Handler{svc: svc}
 }
 
-func (h *Handler) response(p Product) Response {
-	available := p.Stock - p.Reserved
-	return Response{Product: p, Available: available, StockLabel: h.label(available)}
+// shown makes sure the JSON has "photos": [] and never null.
+func shown(p Product) Product {
+	if p.Photos == nil {
+		p.Photos = []string{}
+	}
+	return p
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -67,11 +55,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	items := make([]Response, len(res.Items))
-	for i, it := range res.Items {
-		items[i] = h.response(it)
+	for i := range res.Items {
+		res.Items[i] = shown(res.Items[i])
 	}
-	httpx.WriteJSON(w, http.StatusOK, PageResponse{Items: items, Page: res.Page, PageSize: res.PageSize, Total: res.Total})
+	httpx.WriteJSON(w, http.StatusOK, res)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -80,16 +67,27 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in CreateInput
-	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+	var add [][]byte
+	if isMultipart(r) {
+		f, err := readForm(w, r, createFields)
+		if err == nil {
+			in, err = f.createInput()
+		}
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		add = f.files
+	} else if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		writeInvalidBody(w)
 		return
 	}
-	res, err := h.svc.Create(r.Context(), p.ShopID, in)
+	res, err := h.svc.Create(r.Context(), p.ShopID, in, add)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, h.response(res))
+	httpx.WriteJSON(w, http.StatusCreated, shown(res))
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +100,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -111,16 +109,27 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in UpdateInput
-	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+	var pc PhotoChange
+	if isMultipart(r) {
+		f, err := readForm(w, r, updateFields)
+		if err == nil {
+			in, err = f.updateInput()
+		}
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		pc = PhotoChange{Keep: f.keep, Add: f.files}
+	} else if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		writeInvalidBody(w)
 		return
 	}
-	res, err := h.svc.Update(r.Context(), p.ShopID, pathID(r), in)
+	res, err := h.svc.Update(r.Context(), p.ShopID, pathID(r), in, pc)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +142,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func pathID(r *http.Request) int64 {
@@ -159,8 +168,24 @@ func writeInvalidBody(w http.ResponseWriter) {
 	httpx.WriteError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 }
 
+var errInvalidBody = errors.New("request body is not valid")
+
+func isTooLarge(err error) bool {
+	var mbe *http.MaxBytesError
+	return errors.As(err, &mbe)
+}
+
 func writeError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, errInvalidBody):
+		writeInvalidBody(w)
+	case errors.Is(err, ErrFileTooLarge):
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large", "a photo is larger than 5 MB")
+	case errors.Is(err, ErrUnsupportedMedia):
+		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", err.Error())
+	case errors.Is(err, ErrBusy):
+		w.Header().Set("Retry-After", "2")
+		httpx.WriteError(w, http.StatusServiceUnavailable, "busy", "server is busy processing images, try again shortly")
 	case errors.Is(err, ErrValidation):
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, ErrNotFound):
@@ -170,6 +195,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrArchived):
 		httpx.WriteError(w, http.StatusConflict, "product_archived", "archived products cannot be edited")
 	default:
+		slog.Error("product request failed", "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "something went wrong")
 	}
 }

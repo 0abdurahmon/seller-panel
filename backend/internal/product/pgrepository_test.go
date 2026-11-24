@@ -66,6 +66,14 @@ func TestPgCreateAndGetAreScopedByShop(t *testing.T) {
 	if err != nil || got.Title != "Phone X" {
 		t.Fatalf("get = %+v, %v", got, err)
 	}
+	for name, ts := range map[string]time.Time{
+		"created.CreatedAt": created.CreatedAt, "created.UpdatedAt": created.UpdatedAt,
+		"got.CreatedAt": got.CreatedAt, "got.UpdatedAt": got.UpdatedAt,
+	} {
+		if ts.Location() != time.UTC {
+			t.Errorf("%s is in %v, want UTC so the JSON never carries a local offset", name, ts.Location())
+		}
+	}
 	if _, err := repo.Get(ctx, shopB, created.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other shop get err = %v, want ErrNotFound", err)
 	}
@@ -240,5 +248,114 @@ func TestPgConstraintsRejectBadRows(t *testing.T) {
 			`UPDATE products SET `+override+` WHERE sku = $1`, sku); err == nil {
 			t.Errorf("%s: database accepted the row", name)
 		}
+	}
+}
+
+func TestPgPhotos(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop, other, cat := seedShop(t, pool), seedShop(t, pool), seedCategory(t, pool)
+	u := func(n int) string { return fmt.Sprintf("/api/uploads/%d/%032d.webp", shop, n) }
+
+	p := newProduct(cat, "PH-1")
+	p.Photos = []string{u(3), u(1), u(2)}
+	created, err := repo.Create(ctx, shop, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(created.Photos) != fmt.Sprint(p.Photos) {
+		t.Fatalf("created photos = %v, want %v", created.Photos, p.Photos)
+	}
+	got, err := repo.Get(ctx, shop, created.ID)
+	if err != nil || fmt.Sprint(got.Photos) != fmt.Sprint(p.Photos) {
+		t.Fatalf("get photos = %v, err = %v: the order of the cover and the rest must be kept", got.Photos, err)
+	}
+
+	plain, err := repo.Create(ctx, shop, newProduct(cat, "PH-2"))
+	if err != nil || plain.Photos == nil || len(plain.Photos) != 0 {
+		t.Fatalf("a product without photos has %#v, want an empty non-nil list (err %v)", plain.Photos, err)
+	}
+
+	items, total, err := repo.List(ctx, shop, ListFilter{Page: 1, PageSize: 10})
+	if err != nil || total != 2 {
+		t.Fatalf("list total = %d, err = %v", total, err)
+	}
+	byID := map[int64]Product{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	if len(byID[created.ID].Photos) != 3 || byID[plain.ID].Photos == nil || len(byID[plain.ID].Photos) != 0 {
+		t.Fatalf("list photos wrong: %+v", byID)
+	}
+
+	created.Photos = []string{u(2), u(5)}
+	updated, err := repo.Update(ctx, shop, created)
+	if err != nil || fmt.Sprint(updated.Photos) != fmt.Sprint(created.Photos) {
+		t.Fatalf("update photos = %v, err = %v", updated.Photos, err)
+	}
+	if got, _ = repo.Get(ctx, shop, created.ID); fmt.Sprint(got.Photos) != fmt.Sprint(created.Photos) {
+		t.Fatalf("after update = %v", got.Photos)
+	}
+
+	created.Photos = nil
+	if updated, err = repo.Update(ctx, shop, created); err != nil || len(updated.Photos) != 0 {
+		t.Fatalf("clear = %v, err = %v", updated.Photos, err)
+	}
+
+	foreign := created
+	foreign.Photos = []string{u(1)}
+	if _, err := repo.Update(ctx, other, foreign); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another shop's update err = %v, want ErrNotFound", err)
+	}
+	if got, _ = repo.Get(ctx, shop, created.ID); len(got.Photos) != 0 {
+		t.Fatalf("another shop's update changed photos: %v", got.Photos)
+	}
+}
+
+func TestPgPhotoConstraintsAndRollback(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop, cat := seedShop(t, pool), seedCategory(t, pool)
+
+	six := newProduct(cat, "PH-6")
+	for i := 0; i < 6; i++ {
+		six.Photos = append(six.Photos, fmt.Sprintf("/u/%d", i))
+	}
+	if _, err := repo.Create(ctx, shop, six); err == nil {
+		t.Fatal("six photos must violate the position check")
+	}
+	dup := newProduct(cat, "PH-D")
+	dup.Photos = []string{"/u/a", "/u/a"}
+	if _, err := repo.Create(ctx, shop, dup); err == nil {
+		t.Fatal("the same url twice must violate the unique key")
+	}
+	blank := newProduct(cat, "PH-B")
+	blank.Photos = []string{" "}
+	if _, err := repo.Create(ctx, shop, blank); err == nil {
+		t.Fatal("a blank url must violate the check")
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM products WHERE shop_id = $1`, shop).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("%d products left after failed creates (err %v), the transaction must roll back", n, err)
+	}
+}
+
+func TestPgPhotosAreDeletedWithTheProduct(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop, cat := seedShop(t, pool), seedCategory(t, pool)
+	p := newProduct(cat, "PH-C")
+	p.Photos = []string{"/u/1"}
+	created, err := repo.Create(ctx, shop, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM products WHERE id = $1`, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM product_photos WHERE product_id = $1`, created.ID).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("%d photo rows left, want 0 (err %v)", n, err)
 	}
 }

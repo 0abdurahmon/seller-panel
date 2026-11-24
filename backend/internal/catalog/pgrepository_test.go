@@ -2,29 +2,16 @@ package catalog
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/0abdurahmon/seller-panel/backend/internal/database"
+	"github.com/0abdurahmon/seller-panel/backend/internal/database/dbtest"
 )
 
 func newPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
-	if err := database.Migrate(url); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := database.Connect(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return dbtest.NewPool(t, "catalog")
 }
 
 func TestPgListReturnsSeedTreeParentsFirst(t *testing.T) {

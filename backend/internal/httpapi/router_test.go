@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,11 @@ func newTestRouter(t *testing.T) http.Handler {
 
 func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.Handler {
 	t.Helper()
+	return newTestRouterOptions(t, shopRPS, shopBurst, false)
+}
+
+func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpoints bool, spec ...http.Handler) http.Handler {
+	t.Helper()
 	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -41,11 +47,13 @@ func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.H
 		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),
 		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
-		Product: product.NewHandler(product.NewService(fakeProductRepository{}), func(int) string { return "in_stock" }),
+		Product: product.NewHandler(product.NewService(fakeProductRepository{}, fakePhotoStore{})),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 
-		ShopLimiter: httpx.NewLimiter(shopRPS, shopBurst),
+		ShopLimiter:  httpx.NewLimiter(shopRPS, shopBurst),
+		DevEndpoints: devEndpoints,
+		Spec:         firstHandler(spec),
 	})
 }
 
@@ -91,7 +99,7 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestUnknownRouteIs404(t *testing.T) {
+func TestUnknownRouteIsJSON404(t *testing.T) {
 	srv := httptest.NewServer(newTestRouter(t))
 	defer srv.Close()
 
@@ -103,6 +111,33 @@ func TestUnknownRouteIs404(t *testing.T) {
 
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNotFound)
+	}
+	var e struct{ Code, Message string }
+	if err := json.NewDecoder(res.Body).Decode(&e); err != nil || e.Code != "not_found" || e.Message == "" {
+		t.Fatalf("body is not the shared error shape: %+v, %v", e, err)
+	}
+}
+
+func TestWrongMethodIsJSON405(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter(t))
+	defer srv.Close()
+
+	for _, path := range []string{"/health", "/auth/login", "/products"} {
+		method := http.MethodDelete
+		req, err := http.NewRequest(method, srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e struct{ Code, Message string }
+		decodeErr := json.NewDecoder(res.Body).Decode(&e)
+		res.Body.Close()
+		if res.StatusCode != http.StatusMethodNotAllowed || res.Header.Get("Allow") == "" || decodeErr != nil || e.Code != "method_not_allowed" {
+			t.Errorf("%s %s: status %d, Allow %q, error %+v (%v)", method, path, res.StatusCode, res.Header.Get("Allow"), e, decodeErr)
+		}
 	}
 }
 
@@ -119,6 +154,9 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		{http.MethodGet, "/products/1"},
 		{http.MethodPut, "/products/1"},
 		{http.MethodPost, "/products/1/archive"},
+		{http.MethodGet, "/orders"},
+		{http.MethodGet, "/orders/1"},
+		{http.MethodPost, "/orders/1/transition"},
 	} {
 		req, err := http.NewRequest(c.method, srv.URL+c.path, nil)
 		if err != nil {
@@ -193,6 +231,12 @@ func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (
 	return stock.Row{Stock: qty}, nil
 }
 
+type fakePhotoStore struct{}
+
+func (fakePhotoStore) Save(context.Context, int64, io.Reader) (string, error) { return "", nil }
+
+func (fakePhotoStore) Remove(context.Context, int64, []string) {}
+
 type fakeProductRepository struct{}
 
 func (fakeProductRepository) Create(context.Context, int64, product.Product) (product.Product, error) {
@@ -249,5 +293,67 @@ func TestProtectedRoutesAreLimitedPerShop(t *testing.T) {
 	}
 	if bad.Code != http.StatusUnauthorized {
 		t.Fatalf("requests without a token got %d, want 401 and no limiter bucket", bad.Code)
+	}
+}
+
+func TestSimulateOrderRouteExistsOnlyInDevelopment(t *testing.T) {
+	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := tokens.Issue(10, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(h http.Handler, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/dev/simulate-order", nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	production := newTestRouterOptions(t, 1000, 1000, false)
+	rec := post(production, token)
+	var e struct{ Code string }
+	if rec.Code != http.StatusNotFound || json.NewDecoder(rec.Body).Decode(&e) != nil || e.Code != "not_found" {
+		t.Fatalf("production: status %d code %q, want the JSON 404", rec.Code, e.Code)
+	}
+
+	development := newTestRouterOptions(t, 1000, 1000, true)
+	if rec := post(development, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("development without a token: status %d, want 401", rec.Code)
+	}
+}
+
+func firstHandler(hs []http.Handler) http.Handler {
+	if len(hs) == 0 {
+		return nil
+	}
+	return hs[0]
+}
+
+func TestOpenAPIRouteExistsOnlyWhenConfigured(t *testing.T) {
+	spec := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"openapi":"3.0.3"}`))
+	})
+	get := func(h http.Handler) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
+		return rec
+	}
+
+	off := get(newTestRouterOptions(t, 1000, 1000, false))
+	var e struct{ Code string }
+	if off.Code != http.StatusNotFound || json.NewDecoder(off.Body).Decode(&e) != nil || e.Code != "not_found" {
+		t.Fatalf("without a spec: status %d code %q, want the JSON 404", off.Code, e.Code)
+	}
+
+	on := get(newTestRouterOptions(t, 1000, 1000, false, spec))
+	if on.Code != http.StatusOK || !strings.Contains(on.Body.String(), `"openapi"`) {
+		t.Fatalf("with a spec: status %d body %s", on.Code, on.Body.String())
 	}
 }

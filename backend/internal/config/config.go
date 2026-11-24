@@ -6,12 +6,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // zone names must resolve on any machine, including Windows without a zone database
 )
+
+const (
+	EnvProduction  = "production"
+	EnvDevelopment = "development"
+)
+
+// DefaultBusinessTimeZone defines "today" on the dashboard (see D10).
+const DefaultBusinessTimeZone = "Asia/Tashkent"
 
 const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 type Config struct {
+	Env               string
 	Port              string
+	OpenAPIFile       string
 	DatabaseURL       string
 	JWTSecret         string
 	JWTTTL            time.Duration
@@ -22,11 +33,17 @@ type Config struct {
 	LoginAttempts     int
 	LoginWindow       time.Duration
 	TrustedProxies    []string
+	BusinessLocation  *time.Location
+	UploadDir         string
+	UploadPublicURL   string
+	UploadsPerMinute  int
 }
 
 func Load() (Config, error) {
 	cfg := Config{
+		Env:               getEnv("APP_ENV", EnvProduction),
 		Port:              getEnv("BACKEND_PORT", "8080"),
+		OpenAPIFile:       os.Getenv("OPENAPI_FILE"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		CommissionPercent: 10,
@@ -34,7 +51,14 @@ func Load() (Config, error) {
 		ShopRPS:           20,
 		ShopBurst:         40,
 		LoginAttempts:     5,
+		UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),
+		UploadPublicURL:   getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
+		UploadsPerMinute:  20,
 		TrustedProxies:    strings.Split(getEnv("TRUSTED_PROXIES", defaultTrustedProxies), ","),
+	}
+
+	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
+		return Config{}, fmt.Errorf("APP_ENV must be %q or %q, got %q", EnvProduction, EnvDevelopment, cfg.Env)
 	}
 
 	var err error
@@ -57,12 +81,19 @@ func Load() (Config, error) {
 	if cfg.LoginAttempts, err = getInt("RATE_LIMIT_LOGIN_ATTEMPTS", cfg.LoginAttempts); err != nil {
 		return Config{}, err
 	}
+	if cfg.UploadsPerMinute, err = getInt("RATE_LIMIT_UPLOADS_PER_MINUTE", cfg.UploadsPerMinute); err != nil {
+		return Config{}, err
+	}
 	window := getEnv("RATE_LIMIT_LOGIN_WINDOW", "15m")
 	if cfg.LoginWindow, err = time.ParseDuration(window); err != nil {
 		return Config{}, fmt.Errorf("RATE_LIMIT_LOGIN_WINDOW must be a duration like 15m: %w", err)
 	}
-	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 {
+	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.UploadsPerMinute < 1 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive")
+	}
+	zone := getEnv("BUSINESS_TIMEZONE", DefaultBusinessTimeZone)
+	if cfg.BusinessLocation, err = time.LoadLocation(zone); err != nil {
+		return Config{}, fmt.Errorf("BUSINESS_TIMEZONE must be a zone name like %s: %w", DefaultBusinessTimeZone, err)
 	}
 	return cfg, nil
 }

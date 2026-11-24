@@ -20,6 +20,13 @@ var protectedRoutes = []struct{ method, path string }{
 	{http.MethodPut, "/products/1"},
 	{http.MethodPost, "/products/1/archive"},
 	{http.MethodPatch, "/products/1/stock"},
+	{http.MethodGet, "/balance"},
+	{http.MethodGet, "/balance/entries"},
+	{http.MethodGet, "/orders"},
+	{http.MethodGet, "/orders/1"},
+	{http.MethodPost, "/orders/1/transition"},
+	{http.MethodGet, "/dashboard/summary"},
+	{http.MethodPost, "/dev/simulate-order"},
 }
 
 func TestEveryProtectedRouteRejectsBadTokens(t *testing.T) {
@@ -110,7 +117,6 @@ func TestProductValidationAndConflicts(t *testing.T) {
 		"no category":      {"category_id": 0},
 		"negative stock":   {"stock": -1},
 		"huge stock":       {"stock": 1_000_001},
-		"bad status":       {"status": "archived"},
 	}
 	for name, override := range bad {
 		body := productBody(category, uniqueSKU(), 1)
@@ -128,6 +134,10 @@ func TestProductValidationAndConflicts(t *testing.T) {
 	update := productBody(category, p.SKU, 0)
 	delete(update, "stock")
 	s.expect(s.do(http.MethodPut, productPath(other), sel.token, update), http.StatusConflict, "sku_taken")
+
+	withStatus := productBody(category, uniqueSKU(), 1)
+	withStatus["status"] = "active"
+	s.expect(s.do(http.MethodPost, "/products", sel.token, withStatus), http.StatusBadRequest, "invalid_body")
 
 	withStock := productBody(category, p.SKU, 99)
 	s.expect(s.do(http.MethodPut, productPath(p), sel.token, withStock), http.StatusBadRequest, "invalid_body")

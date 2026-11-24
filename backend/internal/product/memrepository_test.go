@@ -2,8 +2,11 @@ package product
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -82,4 +85,53 @@ func (r *memRepository) List(_ context.Context, shopID int64, f ListFilter) ([]P
 		end = total
 	}
 	return all[start:end], total, nil
+}
+
+// fakePhotoStore stores nothing real: Save hands out numbered URLs, Remove records what was deleted.
+type fakePhotoStore struct {
+	mu      sync.Mutex
+	next    int
+	saved   []string
+	removed []string
+	failAt  int
+	failErr error
+}
+
+func newFakePhotos() *fakePhotoStore { return &fakePhotoStore{} }
+
+func (f *fakePhotoStore) Save(_ context.Context, shopID int64, image io.Reader) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	data, _ := io.ReadAll(image)
+	f.next++
+	if f.failAt != 0 && f.next == f.failAt {
+		return "", f.failErr
+	}
+	url := fmt.Sprintf("/api/uploads/%d/%032d.webp", shopID, f.next)
+	if len(data) > 0 {
+		f.saved = append(f.saved, url)
+	}
+	return url, nil
+}
+
+func (f *fakePhotoStore) Remove(_ context.Context, _ int64, urls []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, urls...)
+}
+
+func (f *fakePhotoStore) live() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	gone := map[string]bool{}
+	for _, u := range f.removed {
+		gone[u] = true
+	}
+	var out []string
+	for _, u := range f.saved {
+		if !gone[u] {
+			out = append(out, u)
+		}
+	}
+	return out
 }

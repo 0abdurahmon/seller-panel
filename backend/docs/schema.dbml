@@ -112,11 +112,12 @@ Table product_photos {
 
   indexes {
     (product_id, position) [unique, name: 'product_photos_position_key']
+    (product_id, url) [unique, name: 'product_photos_url_key']
   }
 
   checks {
-    `url <> ''` [name: 'product_photos_url_check']
-    `position >= 0` [name: 'product_photos_position_check']
+    `btrim(url) <> ''` [name: 'product_photos_url_check']
+    `position >= 0 AND position < 5` [name: 'product_photos_position_check']
   }
 }
 
@@ -198,7 +199,7 @@ Table balance_entries {
     `(type = 'payout') = (order_id IS NULL)` [name: 'balance_entries_order_matches_type']
   }
 
-  Note: 'Append only. Balance = sum(amount) per shop. One sale and one commission entry per order.'
+  Note: 'Append only. Balance = sum(amount) per shop. One sale and one commission entry per order. Migration 0004 creates the table, migration 0005 adds the foreign key to orders.'
 }
 
 Ref: shops.seller_id - sellers.id

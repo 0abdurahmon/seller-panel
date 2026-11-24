@@ -13,7 +13,7 @@ Go backend, React + TypeScript + Vite frontend, PostgreSQL, Docker Compose.
 | Run everything | `docker compose up --build --wait` |
 | Backend checks | `cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./...` |
 | End-to-end tests | `cd backend && go test -race -tags e2e ./e2e/...` (needs `TEST_DATABASE_URL`) |
-| Database tests | need `DATABASE_URL`, CI runs them against PostgreSQL |
+| Database tests | need `TEST_DATABASE_URL` and CI runs them against PostgreSQL. It must name a throwaway database ending in `_test` (`seller_test`), never the one the app uses: the tests truncate tables and refuse other names. New database tests use `dbtest.NewPool(t, "<feature>")`, not the URL directly |
 | Smoke test | `scripts/smoke.sh` |
 | Frontend | `cd frontend && npm ci && npm run build` |
 
@@ -44,7 +44,8 @@ Rules:
 ## HTTP conventions
 
 - JSON, `snake_case`. Create returns 201, other success 200.
-- Errors are always `httpx.WriteError(w, status, code, message)`, body `{"code","message"}`.
+- Errors are always `httpx.WriteError(w, status, code, message)`, body `{"code","message"}`. Unknown routes and wrong methods get the same shape from `httpx.JSONErrors`, so never write a plain-text error.
+- Unset optional values follow the column: nullable column is `null`, `NOT NULL DEFAULT ''` text is `""`, lists are `[]`. Times are UTC, call `.UTC()` after scanning a `timestamptz`.
 - Handler error mapping, one `write<Feature>Error` function per handler:
 
 | Error | Status | `code` |
@@ -54,7 +55,10 @@ Rules:
 | missing or bad token | 401 | `unauthorized` |
 | `ErrNotFound` (also other shop's row) | 404 | `not_found` |
 | duplicate or state conflict | 409 | feature code, for example `sku_taken`, `email_taken`, `insufficient_stock` |
+| file over the size limit | 413 | `file_too_large` |
+| wrong media type | 415 | `unsupported_media_type` |
 | rate limit hit (`httpx.WriteRateLimited`) | 429 | `rate_limited`, with `Retry-After` |
+| server busy, retry soon | 503 | `busy`, with `Retry-After` |
 | anything else | 500 | `internal`, message never leaks details |
 
 - Lists: `?page=1&page_size=20`, default 20, max 100. Response `{"items": [], "page", "page_size", "total"}`, `items` is `[]`, never `null`.

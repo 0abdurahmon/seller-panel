@@ -53,3 +53,79 @@ func TestLoadRejectsBadRateLimitSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAppEnv(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.Env != EnvProduction {
+		t.Fatalf("default env = %q, %v; want production so dev endpoints stay off", cfg.Env, err)
+	}
+	t.Setenv("APP_ENV", "development")
+	cfg, err = Load()
+	if err != nil || cfg.Env != EnvDevelopment {
+		t.Fatalf("env = %q, %v; want development", cfg.Env, err)
+	}
+	t.Setenv("APP_ENV", "staging")
+	if _, err := Load(); err == nil {
+		t.Fatal("an unknown APP_ENV was accepted")
+	}
+}
+
+func TestLoadBusinessTimeZone(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.BusinessLocation == nil || cfg.BusinessLocation.String() != "Asia/Tashkent" {
+		t.Fatalf("default zone = %v, %v; want Asia/Tashkent", cfg.BusinessLocation, err)
+	}
+	_, offset := time.Date(2026, 11, 24, 12, 0, 0, 0, cfg.BusinessLocation).Zone()
+	if offset != 5*60*60 {
+		t.Fatalf("Tashkent offset = %d seconds, want UTC+5", offset)
+	}
+
+	t.Setenv("BUSINESS_TIMEZONE", "Europe/Moscow")
+	cfg, err = Load()
+	if err != nil || cfg.BusinessLocation.String() != "Europe/Moscow" {
+		t.Fatalf("zone from the environment = %v, %v; want Europe/Moscow", cfg.BusinessLocation, err)
+	}
+
+	t.Setenv("BUSINESS_TIMEZONE", "Mars/Olympus")
+	if _, err := Load(); err == nil {
+		t.Fatal("an unknown time zone was accepted")
+	}
+}
+
+func TestLoadOpenAPIFile(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.OpenAPIFile != "" {
+		t.Fatalf("default = %q, %v; want empty so the endpoint is off", cfg.OpenAPIFile, err)
+	}
+	t.Setenv("OPENAPI_FILE", "/app/api/openapi.yaml")
+	cfg, err = Load()
+	if err != nil || cfg.OpenAPIFile != "/app/api/openapi.yaml" {
+		t.Fatalf("OpenAPIFile = %q, %v", cfg.OpenAPIFile, err)
+	}
+}
+
+func TestLoadUploadSettings(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UploadDir != "./uploads" || cfg.UploadPublicURL != "/api/uploads" || cfg.UploadsPerMinute != 20 {
+		t.Fatalf("defaults = %+v", cfg)
+	}
+
+	t.Setenv("UPLOAD_DIR", "/data/files")
+	t.Setenv("UPLOAD_PUBLIC_URL", "https://cdn.example.com/u")
+	t.Setenv("RATE_LIMIT_UPLOADS_PER_MINUTE", "5")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UploadDir != "/data/files" || cfg.UploadPublicURL != "https://cdn.example.com/u" || cfg.UploadsPerMinute != 5 {
+		t.Fatalf("config = %+v", cfg)
+	}
+
+	t.Setenv("RATE_LIMIT_UPLOADS_PER_MINUTE", "0")
+	if _, err := Load(); err == nil {
+		t.Fatal("zero uploads per minute must be rejected")
+	}
+}
