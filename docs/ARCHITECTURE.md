@@ -24,13 +24,12 @@ Packages are grouped by **feature**, not by technical layer, so one person can o
 backend/
   cmd/
     server/main.go        wiring: config, db, migrations, router, graceful shutdown
-    seed/main.go          dev seed (categories, demo products, ~30 orders)
+    seed/main.go          dev seed (categories, demo products, ~30 orders), not written yet
   migrations/             NNNN_name.up.sql / NNNN_name.down.sql (golang-migrate)
   internal/
     config/               env loading
-    platform/
-      database/           pgx pool, InTx helper, migration runner
-      httpx/              JSON helpers, error type, auth middleware, pagination
+    database/             pgx pool, DBTX, InTx helper, migration runner
+    httpx/                JSON helpers, error type, request logging
     auth/                 sign up, login, JWT
     shop/                 shop profile
     catalog/              categories (read only)
@@ -45,10 +44,15 @@ Each feature package has the same files:
 
 | File | Responsibility |
 |------|----------------|
-| `handler.go` | HTTP only: parse request, call service, write response |
+| `handler.go` | HTTP only: parse request, call service, map errors to status codes |
 | `service.go` | Business rules: validation, status machine, stock, commission |
-| `repository.go` | SQL only: queries and mapping, no business decisions |
+| `repository.go` | The `Repository` interface (declared by the feature) |
+| `pgrepository.go` | `PgRepository`, the PostgreSQL implementation: SQL and mapping, no business decisions |
+| `errors.go` | The feature's sentinel errors (`ErrNotFound`, `ErrValidation`, ...) |
 | `model.go` | Types used by the feature |
+| `memrepository_test.go` | `memRepository`, the in-memory fake used by service tests, never in production code |
+
+Authentication helpers live in `auth`: `RequireAuth` for routes, `MustPrincipal` in handlers (answers 401 itself when the principal is missing).
 
 ### Layer rules
 
@@ -61,7 +65,7 @@ Each feature package has the same files:
 ## 3. Database access
 
 - Driver: **pgx** (`pgxpool`) with **hand-written SQL**. No ORM, no query generator.
-- Repositories take a `DBTX` interface (satisfied by both the pool and a transaction), so the same method works inside or outside a transaction.
+- Repositories take `database.DBTX` (satisfied by both the pool and a transaction), so the same method works inside or outside a transaction. Repositories that need to open a transaction themselves (auth sign up) take the pool and call `database.InTx`.
 - `database.InTx(ctx, func(tx pgx.Tx) error)` starts a transaction, commits on `nil`, rolls back on error or panic. Services use it for anything that changes more than one row.
 - IDs: `bigint generated always as identity`. Money: `bigint` in so'm. Time: `timestamptz`, stored in UTC.
 - Migrations: **golang-migrate**, SQL files in `backend/migrations`, embedded into the binary and applied on backend start (guarded by an advisory lock so two instances cannot race). Never edit a migration that is merged; add a new one.
@@ -89,8 +93,8 @@ The contract is `api/openapi.yaml` (D3). These conventions apply to every endpoi
 |-------|------|
 | Format | JSON, `snake_case` fields, money as integer so'm |
 | Lists | `?page=1&page_size=20` (default 20, max 100). Response: `{ "items": [...], "page": 1, "page_size": 20, "total": 134 }` |
-| Errors | `{ "error": { "code": "insufficient_stock", "message": "...", "fields": { "qty": "must be positive" } } }`, `fields` only for validation |
-| `400` | Invalid input (`code: validation_failed`) |
+| Errors | `{ "code": "insufficient_stock", "message": "..." }`, the shape of `httpx.Error`. The validation message says which field is wrong |
+| `400` | Invalid JSON (`code: invalid_body`) or invalid input (`code: validation_error`) |
 | `401` | Missing or invalid token |
 | `404` | Not found, or belongs to another shop |
 | `409` | State conflict: invalid status transition, insufficient stock, duplicate SKU, email taken |
