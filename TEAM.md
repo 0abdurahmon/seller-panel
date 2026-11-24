@@ -16,3 +16,22 @@ The frontend (`frontend/`) is Abdukhalil's. Everyone else owns the backend of th
 - Where we talk (chat / call): Telegram group
 - PR review response time: within 1 hour (during core hours)
 - Merge captain rotation: Day 1 @iskanderovv, Day 2 @Nuriddin1999, Day 3 @01110011r, Day 4 @iskanderovv, Day 5 @Nuriddin1999
+
+## Progress
+Merged work per owner, so the team can see what is done without reading the history. Update it in the PR that merges a feature.
+
+**Auth and shop profile (Samandar)**
+- Email and password sign-up and login with JWT, sellers and shops in PostgreSQL (#40, #41).
+- Shop profile: `GET` and `PUT /shop` (#65). The logo became a file in `PUT /shop` (#121, Akbar).
+- Sign-in by a one-time code sent to the seller's Telegram chat (#108, issue #107): `POST /auth/telegram/link`, `POST /auth/request-code`, `POST /auth/verify`. Needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME`; without them the code endpoints answer `503`. Decision D10 in `docs/DECISIONS.md`.
+- Repair: #108 merged with a broken `internal/app/app.go`, so `main` did not compile. Fixed in #120.
+
+**Orders (Samandar)**
+- Order domain: status machine, stock reservation and release, sale and commission entries on delivery (#71).
+- The PostgreSQL side and routes were built by Akbar (#97, #99).
+
+**Open, not decided**
+- Real-time order changes: SSE or polling, with the choice still to make. README lists it as in scope; see the options discussed in #107's thread and `README.md`.
+- Telegram alerts for new orders: not started.
+- Frontend sign-in against the Telegram code flow: not started (Abdukhalil).
+- Running more than one backend instance: blocked by the bot polling in D10.
