@@ -16,12 +16,11 @@ import (
 func decodeStored(t *testing.T, repo *memRepository, shopID int64, url string) image.Image {
 	t.Helper()
 	name := url[strings.LastIndex(url, "/")+1:]
-	f, err := repo.Open(context.Background(), shopID, name)
-	if err != nil {
-		t.Fatal(err)
+	data, ok := repo.files[key(shopID, name)]
+	if !ok {
+		t.Fatalf("no stored file %s for shop %d", name, shopID)
 	}
-	defer f.Close()
-	img, err := webp.Decode(f)
+	img, err := webp.Decode(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("stored file is not webp: %v", err)
 	}
@@ -72,7 +71,7 @@ func TestUploadConvertsToWebP(t *testing.T) {
 			if got.Width != tc.wantW || got.Height != tc.wantH {
 				t.Fatalf("size = %dx%d, want %dx%d", got.Width, got.Height, tc.wantW, tc.wantH)
 			}
-			if !strings.HasPrefix(got.URL, "/api/uploads/7/") || !strings.HasSuffix(got.URL, ".webp") || got.ContentType != ContentType {
+			if !strings.HasPrefix(got.URL, "/api/uploads/7/") || !strings.HasSuffix(got.URL, ".webp") {
 				t.Fatalf("unexpected result %+v", got)
 			}
 			img := decodeStored(t, repo, 7, got.URL)
@@ -105,36 +104,6 @@ func TestUploadNamesAreUnique(t *testing.T) {
 	b, _ := svc.Upload(context.Background(), 1, bytes.NewReader(data))
 	if a.URL == b.URL || repo.count() != 2 {
 		t.Fatalf("same image twice must give two files: %q %q", a.URL, b.URL)
-	}
-}
-
-func TestOpenOtherShopsFileIsNotFound(t *testing.T) {
-	repo := newMemRepository()
-	svc := NewService(repo, "/u")
-	got, err := svc.Upload(context.Background(), 1, bytes.NewReader(pngBytes(t, 10, 10)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	name := got.URL[strings.LastIndex(got.URL, "/")+1:]
-	if _, err := svc.Open(context.Background(), 2, name); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("other shop: err = %v, want ErrNotFound", err)
-	}
-	f, err := svc.Open(context.Background(), 1, name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-}
-
-func TestOpenRejectsForeignNames(t *testing.T) {
-	svc := NewService(newMemRepository(), "/u")
-	for _, name := range []string{"", "../1/a.webp", "..%2f", "a.webp", strings.Repeat("a", 32) + ".png", strings.Repeat("A", 32) + ".webp", ".tmp-0011223344556677"} {
-		if _, err := svc.Open(context.Background(), 1, name); !errors.Is(err, ErrNotFound) {
-			t.Errorf("name %q: err = %v, want ErrNotFound", name, err)
-		}
-	}
-	if _, err := svc.Open(context.Background(), 0, strings.Repeat("a", 32)+".webp"); !errors.Is(err, ErrNotFound) {
-		t.Error("shop 0 must be not found")
 	}
 }
 

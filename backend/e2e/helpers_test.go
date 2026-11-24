@@ -47,7 +47,6 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 		Port:              "0",
 		JWTSecret:         jwtSecret,
 		JWTTTL:            time.Hour,
-		LowStockThreshold: 5,
 		CommissionPercent: 10,
 		ShopRPS:           1000,
 		ShopBurst:         1000,

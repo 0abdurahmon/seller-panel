@@ -60,10 +60,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	if err != nil {
 		return nil, err
 	}
-	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
-	if err != nil {
-		return nil, err
-	}
+	stockSvc := stock.NewService(stock.NewPgRepository(pool))
 
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
 	if err != nil {
@@ -103,7 +100,6 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		Stock:   stock.NewHandler(stockSvc, productHandler.Load),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
-		Upload:  upload.NewHandler(uploadSvc),
 
 		Dashboard: dashboard.NewHandler(dashboardSvc),
 

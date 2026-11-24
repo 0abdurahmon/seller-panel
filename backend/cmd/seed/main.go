@@ -50,7 +50,6 @@ func run() error {
 		Now:               time.Now(),
 		Loc:               cfg.BusinessLocation,
 		CommissionPercent: cfg.CommissionPercent,
-		LowStockThreshold: cfg.LowStockThreshold,
 	})
 	if err != nil {
 		return fmt.Errorf("%w\nThe database may hold half of the demo data. Start over with an empty database (docker compose down -v)", err)

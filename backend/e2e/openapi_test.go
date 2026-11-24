@@ -35,12 +35,15 @@ func TestOpenAPIJSONDescribesTheImplementedAPI(t *testing.T) {
 		{"/orders", "get"}, {"/orders/{id}/transition", "post"}, {"/balance", "get"}, {"/balance/entries", "get"},
 		{"/dev/simulate-order", "post"}, {"/auth/request-code", "post"}, {"/auth/verify", "post"},
 		{"/auth/telegram/link", "post"},
-		{"/dev/simulate-order", "post"}, {"/uploads", "post"},
+		{"/dev/simulate-order", "post"},
 		{"/auth/request-code", "post"}, {"/auth/verify", "post"}, {"/auth/telegram/link", "post"},
 	} {
 		if _, ok := doc.Paths[op.path][op.method]; !ok {
 			t.Errorf("the spec has no %s %s", strings.ToUpper(op.method), op.path)
 		}
+	}
+	if _, ok := doc.Paths["/uploads"]; ok {
+		t.Error("the spec still has /uploads, images are saved by the product and shop endpoints")
 	}
 	for _, name := range []string{"Product", "Order", "OrderHistoryEntry", "Error", "TokenResponse"} {
 		if _, ok := doc.Comp.Schemas[name]; !ok {

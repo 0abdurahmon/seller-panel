@@ -173,7 +173,8 @@ cp .env.example .env
 | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
 | `BUSINESS_TIMEZONE` | `Asia/Tashkent` | Time zone that defines "today", "last 7 days" and "last 30 days" on the dashboard (see D10) |
 | `TRUSTED_PROXIES` | private ranges and loopback | Networks whose `X-Real-IP` header the backend trusts (the nginx container) |
-| `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
+| `UPLOAD_DIR`, `UPLOAD_PUBLIC_URL` | `./uploads`, `/api/uploads` | Where converted images are stored (the `uploads` volume in Docker Compose, which nginx serves read only) and the URL prefix returned in `photos` and `logo_url` (see D12) |
+| `RATE_LIMIT_UPLOADS_PER_MINUTE` | `20` | Requests per minute and shop that save an image: a multipart `POST /products`, `PUT /products/{id}` or `PUT /shop` |
 
 Never commit `.env`. Only `.env.example` is tracked.
 

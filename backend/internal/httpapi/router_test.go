@@ -38,10 +38,7 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 	if err != nil {
 		t.Fatal(err)
 	}
-	stockSvc, err := stock.NewService(fakeStockRepository{}, 5)
-	if err != nil {
-		t.Fatal(err)
-	}
+	stockSvc := stock.NewService(fakeStockRepository{})
 	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
 		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),

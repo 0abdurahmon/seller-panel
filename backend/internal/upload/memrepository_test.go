@@ -1,10 +1,8 @@
 package upload
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"sync"
 )
 
@@ -24,16 +22,6 @@ func (m *memRepository) Save(_ context.Context, shopID int64, name string, data 
 	defer m.mu.Unlock()
 	m.files[key(shopID, name)] = data
 	return nil
-}
-
-func (m *memRepository) Open(_ context.Context, shopID int64, name string) (io.ReadCloser, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	data, ok := m.files[key(shopID, name)]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
 func (m *memRepository) Delete(_ context.Context, shopID int64, name string) error {

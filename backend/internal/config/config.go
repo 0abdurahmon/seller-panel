@@ -27,7 +27,6 @@ type Config struct {
 	JWTSecret           string
 	JWTTTL              time.Duration
 	CommissionPercent   int
-	LowStockThreshold   int
 	ShopRPS             float64
 	ShopBurst           int
 	LoginAttempts       int
@@ -50,7 +49,6 @@ func Load() (Config, error) {
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		JWTSecret:           os.Getenv("JWT_SECRET"),
 		CommissionPercent:   10,
-		LowStockThreshold:   5,
 		ShopRPS:             20,
 		ShopBurst:           40,
 		LoginAttempts:       5,
@@ -73,9 +71,6 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("JWT_TTL must be a duration like 24h: %w", err)
 	}
 	if cfg.CommissionPercent, err = getInt("COMMISSION_PERCENT", cfg.CommissionPercent); err != nil {
-		return Config{}, err
-	}
-	if cfg.LowStockThreshold, err = getInt("LOW_STOCK_THRESHOLD", cfg.LowStockThreshold); err != nil {
 		return Config{}, err
 	}
 	if cfg.ShopRPS, err = getFloat("RATE_LIMIT_SHOP_RPS", cfg.ShopRPS); err != nil {

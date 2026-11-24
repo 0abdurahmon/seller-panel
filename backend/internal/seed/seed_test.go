@@ -169,7 +169,7 @@ func scalar[T any](t *testing.T, pool *pgxpool.Pool, sql string, args ...any) T 
 func runSeed(t *testing.T, pool *pgxpool.Pool, email string) Result {
 	t.Helper()
 	res, err := Run(context.Background(), pool, Options{
-		Email: email, Now: seedNow, Loc: tashkent(t), CommissionPercent: 10, LowStockThreshold: 5,
+		Email: email, Now: seedNow, Loc: tashkent(t), CommissionPercent: 10,
 	})
 	if err != nil {
 		t.Fatal(err)

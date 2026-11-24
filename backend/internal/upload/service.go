@@ -64,20 +64,11 @@ func (s *Service) Upload(ctx context.Context, shopID int64, r io.Reader) (Image,
 		return Image{}, fmt.Errorf("save image: %w", err)
 	}
 	return Image{
-		URL:         s.publicURL + "/" + strconv.FormatInt(shopID, 10) + "/" + name,
-		ContentType: ContentType,
-		Size:        len(out.data),
-		Width:       out.width,
-		Height:      out.height,
+		URL:    s.publicURL + "/" + strconv.FormatInt(shopID, 10) + "/" + name,
+		Size:   len(out.data),
+		Width:  out.width,
+		Height: out.height,
 	}, nil
-}
-
-// Open returns a stored file of the shop. A name that is not one we generate is ErrNotFound without touching the disk.
-func (s *Service) Open(ctx context.Context, shopID int64, name string) (io.ReadCloser, error) {
-	if shopID < 1 || !fileName.MatchString(name) {
-		return nil, ErrNotFound
-	}
-	return s.repo.Open(ctx, shopID, name)
 }
 
 // Delete removes a file of the shop. Another shop's file is ErrNotFound.

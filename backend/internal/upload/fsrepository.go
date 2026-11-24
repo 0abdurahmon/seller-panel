@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"strconv"
@@ -61,25 +60,6 @@ func (r *FSRepository) Save(_ context.Context, shopID int64, name string, data [
 		return fmt.Errorf("publish file: %w", err)
 	}
 	return nil
-}
-
-func (r *FSRepository) Open(_ context.Context, shopID int64, name string) (io.ReadCloser, error) {
-	f, err := r.root.Open(strconv.FormatInt(shopID, 10) + "/" + name)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("open file: %w", err)
-	}
-	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		_ = f.Close()
-		if err == nil {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("stat file: %w", err)
-	}
-	return f, nil
 }
 
 func (r *FSRepository) Delete(_ context.Context, shopID int64, name string) error {
