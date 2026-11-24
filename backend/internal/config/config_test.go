@@ -109,22 +109,22 @@ func TestLoadUploadSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.UploadDir != "./uploads" || cfg.UploadPublicURL != "/api/uploads" || cfg.UploadsPerMinute != 20 {
+	if cfg.UploadDir != "./uploads" || cfg.UploadPublicURL != "/api/uploads" || cfg.ImagesPerMinute != 20 {
 		t.Fatalf("defaults = %+v", cfg)
 	}
 
 	t.Setenv("UPLOAD_DIR", "/data/files")
 	t.Setenv("UPLOAD_PUBLIC_URL", "https://cdn.example.com/u")
-	t.Setenv("RATE_LIMIT_UPLOADS_PER_MINUTE", "5")
+	t.Setenv("RATE_LIMIT_IMAGES_PER_MINUTE", "5")
 	cfg, err = Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.UploadDir != "/data/files" || cfg.UploadPublicURL != "https://cdn.example.com/u" || cfg.UploadsPerMinute != 5 {
+	if cfg.UploadDir != "/data/files" || cfg.UploadPublicURL != "https://cdn.example.com/u" || cfg.ImagesPerMinute != 5 {
 		t.Fatalf("config = %+v", cfg)
 	}
 
-	t.Setenv("RATE_LIMIT_UPLOADS_PER_MINUTE", "0")
+	t.Setenv("RATE_LIMIT_IMAGES_PER_MINUTE", "0")
 	if _, err := Load(); err == nil {
 		t.Fatal("zero uploads per minute must be rejected")
 	}

@@ -56,7 +56,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 		BusinessLocation:  zone,
 		UploadDir:         dir,
 		UploadPublicURL:   "/api/uploads",
-		UploadsPerMinute:  1000,
+		ImagesPerMinute:   1000,
 	}
 	for _, m := range mutate {
 		m(&cfg)

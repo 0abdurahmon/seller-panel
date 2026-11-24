@@ -46,6 +46,17 @@ func (r *memRepository) FindCredentials(_ context.Context, email string) (Creden
 	return c, nil
 }
 
+func (r *memRepository) ShopOwnedBy(_ context.Context, sellerID, shopID int64) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.byMail {
+		if c.SellerID == sellerID && c.ShopID == shopID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 type linkToken struct {
 	sellerID  int64
 	expiresAt time.Time

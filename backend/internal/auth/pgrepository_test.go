@@ -154,3 +154,34 @@ func sellerIDOf(t *testing.T, svc *Service, email string) int64 {
 	}
 	return c.SellerID
 }
+
+func TestPgOwnsShop(t *testing.T) {
+	svc, tokens := newPgService(t)
+	ctx := context.Background()
+	a, err := svc.Register(ctx, RegisterRequest{Email: "owns-a@example.com", Password: "correct-horse", ShopName: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.Register(ctx, RegisterRequest{Email: "owns-b@example.com", Password: "correct-horse", ShopName: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, _ := tokens.Parse(a.Token)
+	cb, _ := tokens.Parse(b.Token)
+
+	for name, c := range map[string]struct {
+		seller, shop int64
+		want         bool
+	}{
+		"own shop":                     {ca.SellerID, ca.ShopID, true},
+		"the other seller's own shop":  {cb.SellerID, cb.ShopID, true},
+		"a shop of another seller":     {ca.SellerID, cb.ShopID, false},
+		"a shop that does not exist":   {ca.SellerID, ca.ShopID + 1000, false},
+		"a seller that does not exist": {ca.SellerID + 1000, ca.ShopID, false},
+	} {
+		got, err := svc.OwnsShop(ctx, c.seller, c.shop)
+		if err != nil || got != c.want {
+			t.Errorf("%s: %v, %v; want %v", name, got, err, c.want)
+		}
+	}
+}

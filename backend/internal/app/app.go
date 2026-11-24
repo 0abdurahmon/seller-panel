@@ -30,6 +30,9 @@ type App struct {
 	Handler http.Handler
 	poll    func(ctx context.Context)
 	closer  io.Closer
+	images  *upload.Service
+	pool    *pgxpool.Pool
+	logger  *slog.Logger
 }
 
 // Start runs the background work until ctx ends. It returns at once.
@@ -37,6 +40,7 @@ func (a *App) Start(ctx context.Context) {
 	if a.poll != nil {
 		go a.poll(ctx)
 	}
+	go a.sweepLoop(ctx)
 }
 
 // Close releases the upload directory. Call it after the server stops.
@@ -103,12 +107,13 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 
 		Dashboard: dashboard.NewHandler(dashboardSvc),
 
-		ShopLimiter:   httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
-		UploadLimiter: httpx.NewLimiterPer(cfg.UploadsPerMinute, time.Minute),
-		DevEndpoints:  cfg.Env == config.EnvDevelopment,
-		Spec:          spec,
+		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
+		ImageLimiter: httpx.NewLimiterPer(cfg.ImagesPerMinute, time.Minute),
+		ShopChecker:  authSvc.OwnsShop,
+		DevEndpoints: cfg.Env == config.EnvDevelopment,
+		Spec:         spec,
 	})
-	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo}
+	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo, images: uploadSvc, pool: pool, logger: logger}
 	if bot != nil {
 		application.poll = func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) }
 	}

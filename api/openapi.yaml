@@ -413,7 +413,7 @@ paths:
         content, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most
         2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:
         the `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.
-        A request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_UPLOADS_PER_MINUTE`);
+        A request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_IMAGES_PER_MINUTE`);
         a JSON request does not. `logo_url` is not an input, the server writes it.
       requestBody:
         required: true
@@ -525,7 +525,7 @@ paths:
         scaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.
         The files are public: a photo URL opens in a browser without a token, nginx serves it straight from the
         uploads volume. A request with images counts against a per shop limit of 20 a minute by default
-        (`RATE_LIMIT_UPLOADS_PER_MINUTE`); a JSON request does not.
+        (`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.
       requestBody:
         required: true
         content:
@@ -1440,7 +1440,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Unauthorized:
-      description: Missing or invalid token
+      description: Missing, invalid or expired token, or the seller and shop in it no longer exist (sign in again)
       content:
         application/json:
           schema:
