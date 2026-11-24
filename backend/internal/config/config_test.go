@@ -70,6 +70,28 @@ func TestLoadAppEnv(t *testing.T) {
 	}
 }
 
+func TestLoadBusinessTimeZone(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.BusinessLocation == nil || cfg.BusinessLocation.String() != "Asia/Tashkent" {
+		t.Fatalf("default zone = %v, %v; want Asia/Tashkent", cfg.BusinessLocation, err)
+	}
+	_, offset := time.Date(2026, 11, 24, 12, 0, 0, 0, cfg.BusinessLocation).Zone()
+	if offset != 5*60*60 {
+		t.Fatalf("Tashkent offset = %d seconds, want UTC+5", offset)
+	}
+
+	t.Setenv("BUSINESS_TIMEZONE", "Europe/Moscow")
+	cfg, err = Load()
+	if err != nil || cfg.BusinessLocation.String() != "Europe/Moscow" {
+		t.Fatalf("zone from the environment = %v, %v; want Europe/Moscow", cfg.BusinessLocation, err)
+	}
+
+	t.Setenv("BUSINESS_TIMEZONE", "Mars/Olympus")
+	if _, err := Load(); err == nil {
+		t.Fatal("an unknown time zone was accepted")
+	}
+}
+
 func TestLoadOpenAPIFile(t *testing.T) {
 	cfg, err := Load()
 	if err != nil || cfg.OpenAPIFile != "" {

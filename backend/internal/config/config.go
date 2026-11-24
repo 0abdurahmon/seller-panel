@@ -6,12 +6,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // zone names must resolve on any machine, including Windows without a zone database
 )
 
 const (
 	EnvProduction  = "production"
 	EnvDevelopment = "development"
 )
+
+// DefaultBusinessTimeZone defines "today" on the dashboard (see D10).
+const DefaultBusinessTimeZone = "Asia/Tashkent"
 
 const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
@@ -29,6 +33,7 @@ type Config struct {
 	LoginAttempts     int
 	LoginWindow       time.Duration
 	TrustedProxies    []string
+	BusinessLocation  *time.Location
 }
 
 func Load() (Config, error) {
@@ -76,6 +81,10 @@ func Load() (Config, error) {
 	}
 	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive")
+	}
+	zone := getEnv("BUSINESS_TIMEZONE", DefaultBusinessTimeZone)
+	if cfg.BusinessLocation, err = time.LoadLocation(zone); err != nil {
+		return Config{}, fmt.Errorf("BUSINESS_TIMEZONE must be a zone name like %s: %w", DefaultBusinessTimeZone, err)
 	}
 	return cfg, nil
 }

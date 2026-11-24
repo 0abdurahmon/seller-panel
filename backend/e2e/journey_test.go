@@ -100,7 +100,7 @@ func TestSellerJourney(t *testing.T) {
 func TestResponsesAreJSON(t *testing.T) {
 	s := newServer(t)
 	sel := s.register()
-	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/products/999999", "/nope", "/products/1/nope"} {
+	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/dashboard/summary", "/products/999999", "/nope", "/products/1/nope"} {
 		res := s.do(http.MethodGet, path, sel.token, nil)
 		if ct := res.header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 			t.Errorf("GET %s: Content-Type = %q, want JSON (status %d)", path, ct, res.status)

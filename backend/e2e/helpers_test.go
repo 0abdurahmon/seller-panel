@@ -34,6 +34,10 @@ type server struct {
 func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	t.Helper()
 	pool := dbtest.NewPool(t, "e2e")
+	zone, err := time.LoadLocation(config.DefaultBusinessTimeZone)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Config{
 		Env:               config.EnvDevelopment,
 		OpenAPIFile:       "../../api/openapi.yaml",
@@ -47,6 +51,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 		LoginAttempts:     5,
 		LoginWindow:       15 * time.Minute,
 		TrustedProxies:    []string{"127.0.0.1/32", "::1/128"},
+		BusinessLocation:  zone,
 	}
 	for _, m := range mutate {
 		m(&cfg)
