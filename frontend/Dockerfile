@@ -1,14 +1,17 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY --chmod=755 docs-auth.sh /docker-entrypoint.d/40-docs-auth.sh
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY docs/ /usr/share/nginx/html/docs/
+COPY --from=build /app/node_modules/swagger-ui-dist/swagger-ui.css /app/node_modules/swagger-ui-dist/swagger-ui-bundle.js /usr/share/nginx/html/docs/
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
