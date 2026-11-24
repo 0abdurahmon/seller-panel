@@ -37,7 +37,7 @@ Rules:
 4. Validate and trim in the service before any SQL. Database `CHECK` and `UNIQUE` constraints are the second line.
 5. Money is `int64` in so'm. No floats. Time is UTC `timestamptz`.
 6. Anything that changes more than one row uses `database.InTx`. New repositories accept `database.DBTX`.
-7. Wire new features only in `cmd/server/main.go` and `internal/httpapi/router.go`. Protected routes go through `auth.RequireAuth`.
+7. Wire new features only in `cmd/server/main.go` and `internal/httpapi/router.go`. Protected routes are registered with `protected(handler)`, which applies `auth.RequireAuth` and the per shop rate limit. Do not register a protected route any other way.
 8. Fakes live only in `_test.go` files. Production code never contains an in-memory repository.
 
 ## HTTP conventions
@@ -53,6 +53,7 @@ Rules:
 | missing or bad token | 401 | `unauthorized` |
 | `ErrNotFound` (also other shop's row) | 404 | `not_found` |
 | duplicate or state conflict | 409 | feature code, for example `sku_taken`, `email_taken`, `insufficient_stock` |
+| rate limit hit (`httpx.WriteRateLimited`) | 429 | `rate_limited`, with `Retry-After` |
 | anything else | 500 | `internal`, message never leaks details |
 
 - Lists: `?page=1&page_size=20`, default 20, max 100. Response `{"items": [], "page", "page_size", "total"}`, `items` is `[]`, never `null`.

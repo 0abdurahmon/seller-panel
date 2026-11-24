@@ -107,6 +107,7 @@ Photos: `POST /uploads` accepts jpeg, png or webp up to 5 MB, stores the file un
 
 - **Config:** environment variables only, loaded once in `config`. Defaults make `docker compose up` work without a `.env`.
 - **Logging:** `log/slog` JSON to stdout, one line per request (method, path, status, duration), no passwords or tokens.
+- **Rate limiting:** nginx limits per IP, the backend limits per shop on protected routes and guards login against password guessing, see D6. Every protected route goes through `protected(...)` in `httpapi/router.go`, so a new route is limited without extra code.
 - **Shutdown:** `http.Server.Shutdown` on SIGTERM, then close the pool.
 - **Time zone:** "today", "last 7 days" and "last 30 days" on the dashboard use one fixed business time zone (see open questions).
 

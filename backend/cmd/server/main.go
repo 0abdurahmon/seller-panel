@@ -66,13 +66,21 @@ func run(logger *slog.Logger) error {
 	}
 	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
+	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
+	if err != nil {
+		return err
+	}
+	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
+
 	router := httpapi.NewRouter(httpapi.Deps{
-		Auth:    auth.NewHandler(authSvc),
+		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
 		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
+
+		ShopLimiter: httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
