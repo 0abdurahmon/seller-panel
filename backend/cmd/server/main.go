@@ -10,6 +10,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
+	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
@@ -47,6 +48,7 @@ func main() {
 		Addr: ":" + cfg.Port,
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Auth:   auth.NewHandler(authSvc),
+			Shop:   shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 			Tokens: tokens,
 			Stock:  stock.NewHandler(stockSvc),
 		}),
