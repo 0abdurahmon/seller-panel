@@ -138,5 +138,6 @@ WHERE id = $product_id AND shop_id = $shop_id AND stock - reserved >= $qty;
 
 ## 9. Known limits
 
+- Product field lengths and ranges (title 1-200, description up to 5000, sku 1-64, price up to 1 000 000 000 000, stock up to 1 000 000) are limits of the products service, not database constraints. The database only enforces what section 4 lists.
 - `order_items` does not check in SQL that a product belongs to the same shop as the order. The service enforces it. A composite foreign key would add `shop_id` to several tables for little gain.
 - `OFFSET` pagination is fine at this size. Keyset pagination is the upgrade if lists grow large.
