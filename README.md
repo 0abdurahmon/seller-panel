@@ -131,7 +131,7 @@ Stack: Go (backend), React + TypeScript + Vite (frontend), PostgreSQL. See [`doc
 
 ### Prerequisites
 - Docker with Compose v2 (for the one-command run)
-- For local development without Docker: Go 1.24+, Node 20.19+ (or 22.12+) and npm
+- For local development without Docker: Go 1.26+, Node 20.19+ (or 22.12+) and npm
 
 ### One command (Docker)
 
@@ -160,6 +160,7 @@ cp .env.example .env
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `seller`, `change-me`, `seller` | Database credentials |
 | `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
+| `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
