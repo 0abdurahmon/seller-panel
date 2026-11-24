@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useMatch } from 'react-router';
 import { cn } from 'cn';
-import { LogoutButton } from '@/features/auth/logout';
 import { bottomMenuItems, mainMenuItems, type MenuItem } from '@/shared/config';
 import { useSidebarState } from '@/shared/providers';
 import {
@@ -112,16 +111,6 @@ export const Aside = () => {
               {bottomMenuItems.map((item) => (
                 <MenuLink key={item.href} item={item} collapsed={collapsed} />
               ))}
-              <li>
-                {collapsed ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<LogoutButton collapsed />} />
-                    <TooltipContent side="right">Выйти</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <LogoutButton />
-                )}
-              </li>
             </ul>
           </nav>
         </aside>

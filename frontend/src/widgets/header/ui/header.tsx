@@ -1,9 +1,7 @@
 import { Fragment } from 'react';
 import { Link, useMatches } from 'react-router';
+import { useShop } from '@/entities/shop';
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -11,6 +9,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/shared/ui';
+import { UserMenu } from './user-menu';
 
 /** Route `handle` shape: a route sets `handle: { title: '...' }` to name its page. */
 export type RouteHandle = { title?: string };
@@ -27,15 +26,6 @@ function useCrumbs(): Crumb[] {
     return title ? [{ title, href: match.pathname }] : [];
   });
   return crumbs[0]?.href === '/' ? crumbs : [HOME, ...crumbs];
-}
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
 }
 
 function PageBreadcrumb({ crumbs, shopName }: { crumbs: Crumb[]; shopName: string }) {
@@ -69,38 +59,18 @@ function PageBreadcrumb({ crumbs, shopName }: { crumbs: Crumb[]; shopName: strin
   );
 }
 
-// Replace with the shop from the API once auth is connected.
-const FALLBACK_SHOP_NAME = 'Мой магазин';
-
-export const Header = ({
-  shopName = FALLBACK_SHOP_NAME,
-  logoUrl,
-}: {
-  shopName?: string;
-  logoUrl?: string | null;
-}) => {
+export const Header = () => {
   const crumbs = useCrumbs();
   const title = crumbs[crumbs.length - 1]?.title;
+  const { data: shop } = useShop();
 
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex flex-col">
         <h1 className="text-base font-medium md:text-2xl md:font-semibold">{title}</h1>
-        <PageBreadcrumb crumbs={crumbs} shopName={shopName} />
+        <PageBreadcrumb crumbs={crumbs} shopName={shop?.name ?? 'Мой магазин'} />
       </div>
-      <Link
-        to="/shop"
-        aria-label={`Магазин: ${shopName}`}
-        title={shopName}
-        className="shrink-0 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-      >
-        <Avatar className="size-10 rounded-xl">
-          {logoUrl ? <AvatarImage src={logoUrl} alt="" /> : null}
-          <AvatarFallback className="bg-muted text-foreground">
-            {getInitials(shopName)}
-          </AvatarFallback>
-        </Avatar>
-      </Link>
+      <UserMenu />
     </div>
   );
 };
