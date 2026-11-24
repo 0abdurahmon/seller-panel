@@ -18,7 +18,7 @@ flowchart LR
 
 ## 2. Backend structure
 
-Packages are grouped by **feature**, not by technical layer, so one person can own a feature end to end.
+Packages are grouped by **feature**, not by technical layer, so one person can own the backend of a feature.
 
 ```
 backend/
@@ -132,7 +132,7 @@ frontend/src/
 - Server state with TanStack Query: each screen has loading, empty and error states (graded in `EVALUATION.md`).
 - API types generated from `api/openapi.yaml`, so the client cannot drift from the contract.
 - A protected-route wrapper redirects to login when there is no token. A `401` response clears the token and redirects.
-- Features mirror the backend packages, so the owner of "Orders" owns `order/` and `features/orders/`.
+- Features mirror the backend packages, so `features/orders/` shows the screens of the `order/` package. The backend package belongs to its owner and the whole `frontend/` folder to the frontend owner (`TEAM.md`).
 
 ## 8. Testing strategy
 
