@@ -188,9 +188,24 @@ The Vite dev server runs on http://localhost:5173 and proxies `/api` to the back
 ### Checks (same as CI)
 
 ```bash
-cd backend && gofmt -l . && go vet ./... && go test ./... && go build ./...
+cd backend && gofmt -l . && go vet ./... && go test -race ./... && go build ./...
 cd frontend && npm run lint && npm run build
 ```
+
+The database tests need PostgreSQL and are skipped without it. Start the database and point the tests at it:
+
+```bash
+docker compose up -d db
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race ./...
+```
+
+CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. You can run the same check locally while the stack is up:
+
+```bash
+sh scripts/smoke.sh
+```
+
+`BACKEND_URL` and `FRONTEND_URL` override the default `http://localhost:8080` and `http://localhost:3000` when you changed the ports.
 
 ### Seed data
 
