@@ -3,8 +3,6 @@ set -eu
 
 backend="${BACKEND_URL:-http://localhost:8080}"
 frontend="${FRONTEND_URL:-http://localhost:3000}"
-docs_user="${SWAGGER_USER:-alifco}"
-docs_password="${SWAGGER_PASSWORD:-alifco26}"
 email="smoke-$(date +%s)-$$@example.com"
 json="Content-Type: application/json"
 failures=0
@@ -44,6 +42,7 @@ token="$(printf '%s' "$login_response" | field token)"
 check "login through nginx returns a token" 1 "$(printf '%s' "$token" | grep -c .)"
 check "protected route without a token" 401 "$(status "$frontend/api/shop")"
 check "protected route with a token (Authorization passes the proxy)" 200 "$(status "$frontend/api/shop" -H "Authorization: Bearer $token")"
+check "spec JSON under /api" 200 "$(status "$frontend/api/openapi.json")"
 
 edge_limited=0
 for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
@@ -61,14 +60,11 @@ for attempt in $(seq 1 80); do
 done
 check "nginx limits bursts on /api/" 1 "$([ "$global_limited" -ge 1 ] && echo 1 || echo 0)"
 
-check "docs without credentials" 401 "$(status "$frontend/docs/")"
-check "docs with a wrong password" 401 "$(status -u "$docs_user:wrong-password" "$frontend/docs/")"
-check "docs with credentials" 200 "$(status -u "$docs_user:$docs_password" "$frontend/docs/")"
-check "spec JSON without credentials" 401 "$(status "$frontend/swagger")"
-check "spec JSON at /swagger with credentials" 200 "$(status -u "$docs_user:$docs_password" "$frontend/swagger")"
-check "spec JSON next to the YAML" 200 "$(status -u "$docs_user:$docs_password" "$frontend/docs/spec/openapi.json")"
-check "spec JSON is the OpenAPI document" 1 "$(curl -s -u "$docs_user:$docs_password" "$frontend/swagger" | grep -c '^  "openapi":')"
-check "spec JSON is not public under /api" 404 "$(status "$frontend/api/openapi.json")"
+check "docs open without a login" 200 "$(status "$frontend/docs/")"
+check "spec YAML open without a login" 200 "$(status "$frontend/docs/spec/openapi.yaml")"
+check "spec JSON at /swagger" 200 "$(status "$frontend/swagger")"
+check "spec JSON next to the YAML" 200 "$(status "$frontend/docs/spec/openapi.json")"
+check "spec JSON is the OpenAPI document" 1 "$(curl -s "$frontend/swagger" | grep -c '^  "openapi":')"
 
 if [ "$failures" -ne 0 ]; then
   printf '%s check(s) failed\n' "$failures" >&2
