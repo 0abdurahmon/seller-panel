@@ -66,14 +66,9 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(application.Handler)
-	handler, closer, err := app.NewHandler(cfg, pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// Cleanups run last in, first out: the server stops, then the upload directory is released, then the temp directory goes.
-	t.Cleanup(func() { _ = closer.Close() })
-	srv := httptest.NewServer(handler)
+	t.Cleanup(func() { _ = application.Close() })
+	srv := httptest.NewServer(application.Handler)
 	t.Cleanup(srv.Close)
 	return &server{t: t, url: srv.URL, pool: pool, app: application, dir: dir}
 }
