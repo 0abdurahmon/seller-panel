@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/database/dbtest"
 )
-
-var orderSeq atomic.Int64
 
 func newPgRepo(t *testing.T) (*PgRepository, *pgxpool.Pool) {
 	t.Helper()
@@ -38,9 +35,16 @@ func seedShop(t *testing.T, pool *pgxpool.Pool) int64 {
 	return shopID
 }
 
-// newOrderID is unique across runs because the unique key (order_id, type) is global.
-func newOrderID() int64 {
-	return time.Now().UnixNano()/1000 + orderSeq.Add(1)
+// newOrder creates a delivered order, the row a balance entry must point to.
+func newOrder(t *testing.T, pool *pgxpool.Pool, shopID int64) int64 {
+	t.Helper()
+	var id int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO orders (shop_id, status, buyer_name, buyer_phone, delivery_address, total)
+		 VALUES ($1, 'delivered', 'Buyer', '+998901234567', 'Tashkent', 1000) RETURNING id`, shopID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func insertEntry(pool *pgxpool.Pool, shopID int64, orderID *int64, typ string, amount int64, at time.Time) error {
@@ -59,7 +63,7 @@ func mustInsert(t *testing.T, pool *pgxpool.Pool, shopID int64, orderID *int64, 
 
 func mustDeliver(t *testing.T, pool *pgxpool.Pool, shopID, total int64, at time.Time) int64 {
 	t.Helper()
-	order := newOrderID()
+	order := newOrder(t, pool, shopID)
 	mustInsert(t, pool, shopID, &order, "sale", total, at)
 	mustInsert(t, pool, shopID, &order, "commission", -(total * 10 / 100), at)
 	return order
@@ -124,7 +128,7 @@ func TestPgEntriesPagination(t *testing.T) {
 	ctx := context.Background()
 	shop := seedShop(t, pool)
 	for i := range 25 {
-		order := newOrderID()
+		order := newOrder(t, pool, shop)
 		mustInsert(t, pool, shop, &order, "sale", int64(100+i), t0.Add(time.Duration(i)*time.Minute))
 	}
 
@@ -155,13 +159,13 @@ func TestPgConstraintsRefuseBrokenEntries(t *testing.T) {
 		amount     int64
 		constraint string
 	}{
-		{"sale of zero", ptr(newOrderID()), "sale", 0, "balance_entries_sign"},
-		{"negative sale", ptr(newOrderID()), "sale", -5, "balance_entries_sign"},
-		{"positive commission", ptr(newOrderID()), "commission", 5, "balance_entries_sign"},
+		{"sale of zero", ptr(newOrder(t, pool, shop)), "sale", 0, "balance_entries_sign"},
+		{"negative sale", ptr(newOrder(t, pool, shop)), "sale", -5, "balance_entries_sign"},
+		{"positive commission", ptr(newOrder(t, pool, shop)), "commission", 5, "balance_entries_sign"},
 		{"positive payout", nil, "payout", 5, "balance_entries_sign"},
 		{"zero payout", nil, "payout", 0, "balance_entries_sign"},
 		{"sale without an order", nil, "sale", 100, "balance_entries_order_matches_type"},
-		{"payout with an order", ptr(newOrderID()), "payout", -100, "balance_entries_order_matches_type"},
+		{"payout with an order", ptr(newOrder(t, pool, shop)), "payout", -100, "balance_entries_order_matches_type"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -174,7 +178,7 @@ func TestPgConstraintsRefuseBrokenEntries(t *testing.T) {
 	}
 
 	// A zero commission is legal (commission percent 0), and payouts can repeat.
-	order := newOrderID()
+	order := newOrder(t, pool, shop)
 	mustInsert(t, pool, shop, &order, "sale", 100, at)
 	mustInsert(t, pool, shop, &order, "commission", 0, at)
 	mustInsert(t, pool, shop, nil, "payout", -10, at)
@@ -184,7 +188,7 @@ func TestPgConstraintsRefuseBrokenEntries(t *testing.T) {
 func TestPgOneSaleAndOneCommissionPerOrder(t *testing.T) {
 	_, pool := newPgRepo(t)
 	shop := seedShop(t, pool)
-	order := newOrderID()
+	order := newOrder(t, pool, shop)
 	at := time.Now().UTC()
 
 	mustInsert(t, pool, shop, &order, "sale", 1000, at)

@@ -103,8 +103,8 @@ Each feature owner writes the migration for the tables they own, in the order th
 | `0002_categories` | `categories` and the seeded tree, read through `GET /categories` (#72) | Products | in progress |
 | `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | in progress |
 | product photos | `product_photos` | Products | planned |
-| orders | `orders`, `order_items`, `order_status_history`, `order_number_seq`, and the foreign key `balance_entries.order_id` to `orders` | Orders (#70) | planned |
-| `0004_balance_entries` | `balance_entries` and its enum, constraints and index, without the foreign key to `orders` (that table does not exist yet) | Balance (#84) | in review |
+| `0004_balance_entries` | `balance_entries` and its enum, constraints and index, without the foreign key to `orders` (that table did not exist yet) | Balance (#84) | in review |
+| `0005_orders` | `orders`, `order_items`, `order_status_history`, `order_number_seq`, and the foreign key `balance_entries.order_id` to `orders` | schema by Balance (#91), Go code by Orders (#70) | in review |
 
 Reference data (categories) ships as a migration. Demo data (seller, shop, about 15 products, about 30 orders with balance entries) comes from a seed command that only runs when asked and writes through the service code, so the numbers stay consistent.
 
