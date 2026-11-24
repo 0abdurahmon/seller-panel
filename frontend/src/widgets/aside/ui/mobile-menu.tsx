@@ -11,14 +11,14 @@ export const MobileMenu = () => {
       <SheetTrigger
         render={
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon-lg"
             className="shrink-0 rounded-xl md:hidden"
             aria-label="Открыть меню"
           />
         }
       >
-        <MenuIcon />
+        <MenuIcon className="size-6" />
       </SheetTrigger>
       <SheetContent
         side="left"
