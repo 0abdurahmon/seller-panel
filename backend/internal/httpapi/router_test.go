@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
@@ -26,7 +27,13 @@ func newTestRouter(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewRouter(Deps{Auth: auth.NewHandler(svc), Tokens: tokens, Stock: stock.NewHandler(stockSvc)})
+	shopRepo := shop.NewMemRepository()
+	return NewRouter(Deps{
+		Auth:   auth.NewHandler(svc),
+		Shop:   shop.NewHandler(shop.NewService(shopRepo)),
+		Tokens: tokens,
+		Stock:  stock.NewHandler(stockSvc),
+	})
 }
 
 func TestStockRouteRequiresAuth(t *testing.T) {
