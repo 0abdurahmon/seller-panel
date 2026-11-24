@@ -52,7 +52,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
 	mux.Handle("GET /balance", protected(d.Balance.Summary))
 	mux.Handle("GET /balance/entries", protected(d.Balance.Entries))
-	return mux
+	return httpx.JSONErrors(mux)
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

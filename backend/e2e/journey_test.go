@@ -100,10 +100,48 @@ func TestSellerJourney(t *testing.T) {
 func TestResponsesAreJSON(t *testing.T) {
 	s := newServer(t)
 	sel := s.register()
-	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/products/999999"} {
+	for _, path := range []string{"/health", "/products", "/categories", "/shop", "/products/999999", "/nope", "/products/1/nope"} {
 		res := s.do(http.MethodGet, path, sel.token, nil)
 		if ct := res.header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 			t.Errorf("GET %s: Content-Type = %q, want JSON (status %d)", path, ct, res.status)
+		}
+	}
+}
+
+func TestUnknownRoutesAndMethodsUseTheSharedErrorShape(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+
+	s.expect(s.do(http.MethodGet, "/nope", sel.token, nil), http.StatusNotFound, "not_found")
+	s.expect(s.do(http.MethodGet, "/nope", "", nil), http.StatusNotFound, "not_found")
+
+	for _, c := range []struct{ method, path string }{
+		{http.MethodPost, "/health"},
+		{http.MethodDelete, "/products"},
+		{http.MethodPut, "/auth/login"},
+		{http.MethodPatch, "/shop"},
+	} {
+		res := s.do(c.method, c.path, sel.token, nil)
+		s.expect(res, http.StatusMethodNotAllowed, "method_not_allowed")
+		if res.header.Get("Allow") == "" {
+			t.Errorf("%s %s: the Allow header is missing", c.method, c.path)
+		}
+	}
+}
+
+func TestTimestampsAreUTC(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+	p := s.createProduct(sel.token, s.categoryID(sel.token), 1)
+
+	var raw struct {
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+	s.do(http.MethodGet, productPath(p), sel.token, nil).decode(&raw)
+	for name, ts := range map[string]string{"created_at": raw.CreatedAt, "updated_at": raw.UpdatedAt} {
+		if !strings.HasSuffix(ts, "Z") {
+			t.Errorf("%s = %q, want a UTC time ending in Z", name, ts)
 		}
 	}
 }

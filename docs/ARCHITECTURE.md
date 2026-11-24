@@ -98,9 +98,14 @@ The contract is `api/openapi.yaml` (D3). These conventions apply to every endpoi
 | `400` | Invalid JSON (`code: invalid_body`) or invalid input (`code: validation_error`) |
 | `401` | Missing or invalid token |
 | `404` | Not found, or belongs to another shop |
+| Unknown route, wrong method | JSON too: `404 not_found` and `405 method_not_allowed` with an `Allow` header (`httpx.JSONErrors` wraps the router) |
+| Empty values | Follow the column: a nullable column that is not set is `null` (`logo_url`, `contact_phone`, `pickup_address`), a `NOT NULL DEFAULT ''` text is `""` (product `description`). Lists are `[]`, never `null` |
+| Times | UTC in RFC 3339 (`2026-11-24T07:56:00Z`). Repositories call `.UTC()` when they scan a `timestamptz` |
 | `409` | State conflict: invalid status transition, insufficient stock, duplicate SKU, email taken |
 | `500` | Unexpected. Logged with details, response has no internals |
 | Validation | In the service, before any SQL. The database constraints are a second check, not the first |
+
+Known shape differences, on purpose: `GET /categories` returns `{"items": [...]}` without paging fields (about a dozen rows), `GET /health` returns `{"status": "ok"}`, and `PATCH /products/{id}/stock` returns a stock level (`product_id`, `stock`, `reserved`, `available`, `stock_label`, `updated_at`) instead of the whole product (D5).
 
 Photos: `POST /uploads` accepts jpeg, png or webp up to 5 MB, stores the file under `UPLOAD_DIR`, returns its URL. The product stores URLs. The backend serves the files and nginx proxies them under `/api/uploads/...`.
 

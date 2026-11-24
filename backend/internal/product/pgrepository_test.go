@@ -66,6 +66,14 @@ func TestPgCreateAndGetAreScopedByShop(t *testing.T) {
 	if err != nil || got.Title != "Phone X" {
 		t.Fatalf("get = %+v, %v", got, err)
 	}
+	for name, ts := range map[string]time.Time{
+		"created.CreatedAt": created.CreatedAt, "created.UpdatedAt": created.UpdatedAt,
+		"got.CreatedAt": got.CreatedAt, "got.UpdatedAt": got.UpdatedAt,
+	} {
+		if ts.Location() != time.UTC {
+			t.Errorf("%s is in %v, want UTC so the JSON never carries a local offset", name, ts.Location())
+		}
+	}
 	if _, err := repo.Get(ctx, shopB, created.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other shop get err = %v, want ErrNotFound", err)
 	}
