@@ -200,17 +200,18 @@ cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./... && go 
 cd frontend && npm run lint && npm run build
 ```
 
-The database tests need PostgreSQL and are skipped without it. Start the database and point the tests at it:
+The database tests need PostgreSQL and are skipped without it. They **clear tables**, so never point them at the database the app uses (`seller`): its sellers, shops, products and orders would be deleted. Create a separate throwaway database once and use it. The tests refuse any database whose name does not end with `_test`, and each package works in its own copy (`seller_test_auth`, `seller_test_product`, ...) that they create themselves:
 
 ```bash
 docker compose up -d db
-cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race ./...
+docker compose exec db createdb -U seller seller_test   # once
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller_test?sslmode=disable' go test -race ./...
 ```
 
 The end-to-end tests (`backend/e2e`, build tag `e2e`) run the whole API against PostgreSQL: seller journeys, isolation between sellers, error cases and rate limits. They are not part of the default `go test`:
 
 ```bash
-cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race -tags e2e ./e2e/...
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller_test?sslmode=disable' go test -race -tags e2e ./e2e/...
 ```
 
 CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. The smoke test checks the running stack only: containers and migrations are up, nginx proxies `/api` and passes the `Authorization` header, security headers, the nginx rate limits and the `/docs` password. Business behaviour (products, stock, isolation between sellers, login blocking) is tested by the Go end-to-end tests in `backend/e2e`. You can run the smoke test locally while the stack is up:
