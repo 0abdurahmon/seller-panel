@@ -11,7 +11,22 @@ Record every important decision here: what you chose, what else you considered, 
 - Considered: Node + React (one language, but Go gives a typed, explicit backend), Next.js full-stack (less setup, but blurs the frontend/backend split and review ownership), SQLite (no setup, weak under parallel writes), MySQL (works, but Postgres is the better fit in the Go ecosystem).
 
 ## D2 — Auth approach
+- Email + password. `POST /auth/register` creates the seller and their shop in one transaction and returns a token; `POST /auth/login` returns a token. Password 8–72 bytes (bcrypt reads only 72), stored as a bcrypt hash; email trimmed and lower-cased; shop name 1–120 characters.
+- Token: JWT signed with HS256 and `JWT_SECRET`, lifetime `JWT_TTL` (default 24h), carrying `seller_id` and `shop_id`. Sent as `Authorization: Bearer <token>`; only HS256 is accepted, expired or foreign tokens get `401 unauthorized`.
+- `auth.RequireAuth` checks the token and puts the principal in the request context; handlers read the shop only from there (`auth.MustPrincipal`), never from the body or URL. Every repository filters by that `shop_id`, so another seller's data is `404`.
+- Wrong password and unknown email both answer `401 invalid_credentials` and take about the same time (a dummy bcrypt compare), so the API does not reveal which emails exist. A taken email is `409 email_taken`.
+- Logout is client-side: the frontend drops the token. No server session store. The frontend will keep the token in `localStorage` (ARCHITECTURE open question 1, a known trade-off).
+- Why: works without any outside service, is easy to test, and fits a 3–5 day MVP; one token per seller already scopes every request to one shop.
+- Considered: phone + one-time code (needs an SMS provider and rate limiting), server sessions with cookies (state on the server, CSRF handling), refresh tokens (more moving parts than an MVP needs; a seller logs in again after 24h).
+
 ## D3 — API contract format
+- The contract is OpenAPI 3.0 in `api/openapi.yaml`. It is the single source of truth for paths, request and response schemas and error cases; field names equal the JSON tags in Go.
+- Every new or changed endpoint is described in the same PR as its code (AGENTS.md). Swagger UI at `/docs/` (behind basic auth from `SWAGGER_USER` / `SWAGGER_PASSWORD`) shows the file; `npx @redocly/cli lint api/openapi.yaml` validates it.
+- Shared conventions live in the file once: Bearer auth, `snake_case` JSON, money as integer so'm, `?page=&page_size=` lists returning `{items, page, page_size, total}`, and errors as `{code, message}` with the codes from AGENTS.md.
+- The frontend will generate its API types from this file (ARCHITECTURE section 7), so the client cannot drift from the backend.
+- Why: frontend and backend can work in parallel against one agreed contract, reviewers see API changes as a diff, and the docs page comes for free.
+- Considered: a shared TypeScript types package (no docs page, Go side still hand-written), a markdown table in the README (drifts silently, no validation), GraphQL / tRPC (new tooling for the team, tRPC needs a TypeScript backend).
+
 ## D4 — Branching & merge rules
 - Never commit directly to `main`. Every change is an issue, a branch and a pull request.
 - Branch name: `<type>/<issue-number>-<short-name>`, for example `feat/12-product-list`, `fix/31-stock-negative`, `docs/4-branching-rules`. Types: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
