@@ -15,12 +15,14 @@ import { useCategoryName } from "@/entities/category";
 import { ProductStatusBadge, StockLabelBadge } from "@/entities/product";
 import { ActivateProductMenuItem } from "@/features/product/activate-product";
 import { ArchiveProductMenuItem } from "@/features/product/archive-product";
+import { EditProductMenuItem } from "@/features/product/edit-product";
 import { useProductDetails } from "@/features/product/product-details";
 import { formatDateTime, formatPrice } from "@/shared/lib/format";
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Empty,
   EmptyDescription,
@@ -78,7 +80,9 @@ function ProductActions({ product }: { product: Product }) {
           <More className="rotate-90" />
         </DropdownMenuTrigger>
         <DropdownMenuContent>
+          <EditProductMenuItem product={product} />
           <ActivateProductMenuItem product={product} />
+          <DropdownMenuSeparator />
           <ArchiveProductMenuItem product={product} />
         </DropdownMenuContent>
       </DropdownMenu>

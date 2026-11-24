@@ -1,1 +1,7 @@
-export { categoryKeys, categoryLabel, useCategories, useCategoryName } from './model/queries';
+export {
+  categoryKeys,
+  categoryLabel,
+  useCategories,
+  useCategoryName,
+  useCategoryOptions,
+} from './model/queries';

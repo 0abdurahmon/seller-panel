@@ -27,3 +27,10 @@ export function useCategoryName() {
   const { data } = useCategories();
   return (id: number) => data?.find((c) => c.id === id)?.name ?? '—';
 }
+
+/** Categories as select options, with the query status so a form can show loading or an error. */
+export function useCategoryOptions() {
+  const { data, status } = useCategories();
+  const options = (data ?? []).map((c) => ({ value: String(c.id), label: categoryLabel(c, data ?? []) }));
+  return { options, status };
+}

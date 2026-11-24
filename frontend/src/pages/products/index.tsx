@@ -8,6 +8,9 @@ import {
   CreateProductButton,
   CreateProductModal,
 } from "@/features/product/create-product";
+import { ActivateProductDialog } from "@/features/product/activate-product";
+import { ArchiveProductDialog } from "@/features/product/archive-product";
+import { EditProductModal } from "@/features/product/edit-product";
 import { ProductDetailsModal } from "@/features/product/product-details";
 import { getApiErrorMessage } from "@/shared/api/http/error";
 import {
@@ -74,6 +77,9 @@ export const ProductsPage = () => {
     <div className="flex min-h-full flex-col space-y-6">
       <CreateProductModal />
       <ProductDetailsModal />
+      <EditProductModal />
+      <ActivateProductDialog />
+      <ArchiveProductDialog />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Tabs
