@@ -108,10 +108,15 @@ func (r *PgRepository) Create(ctx context.Context, shopID int64, n NewOrder, at 
 			return fmt.Errorf("insert order: %w", err)
 		}
 		for _, it := range n.Items {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO order_items (order_id, product_id, title_snapshot, price_snapshot, quantity) VALUES ($1, $2, $3, $4, $5)`,
-				id, it.ProductID, it.Title, it.Price, it.Quantity); err != nil {
+			tag, err := tx.Exec(ctx,
+				`INSERT INTO order_items (order_id, product_id, title_snapshot, price_snapshot, quantity)
+				 SELECT $1::bigint, p.id, $3::text, $4::bigint, $5::integer FROM products p WHERE p.id = $2 AND p.shop_id = $6`,
+				id, it.ProductID, it.Title, it.Price, it.Quantity, shopID)
+			if err != nil {
 				return fmt.Errorf("insert order item: %w", err)
+			}
+			if tag.RowsAffected() == 0 {
+				return ErrProductNotFound
 			}
 		}
 		if _, err := tx.Exec(ctx,
@@ -216,8 +221,8 @@ func (t *pgTx) SetStatus(ctx context.Context, shopID, orderID int64, to Status, 
 func (t *pgTx) AddBalance(ctx context.Context, entries []BalanceEntry) error {
 	for _, e := range entries {
 		if _, err := t.tx.Exec(ctx,
-			`INSERT INTO balance_entries (shop_id, order_id, type, amount) VALUES ($1, $2, $3::balance_entry_type, $4)`,
-			e.ShopID, e.OrderID, e.Type, e.Amount); err != nil {
+			`INSERT INTO balance_entries (shop_id, order_id, type, amount, created_at) VALUES ($1, $2, $3::balance_entry_type, $4, $5)`,
+			e.ShopID, e.OrderID, e.Type, e.Amount, e.CreatedAt); err != nil {
 			return fmt.Errorf("add balance entry: %w", err)
 		}
 	}

@@ -225,7 +225,19 @@ The script also trips the rate limits on purpose (nginx allows 10 auth requests 
 
 ### Seed data
 
-There is no seed script yet. To get orders to work with, use the dev endpoint (it exists when `APP_ENV=development`, which is the Docker Compose default). Create products first (the app, Swagger at `/docs/`, or the API), then:
+A seed command fills an empty database with a demo shop. It only runs when `APP_ENV=development` (the Docker Compose default) and refuses otherwise. With the stack up:
+
+```bash
+docker compose exec backend /seed
+```
+
+Without Docker, set `DATABASE_URL` and `APP_ENV=development` (see `.env.example`) and run `cd backend && go run ./cmd/seed`.
+
+It creates a seller, a shop, 15 products (13 active, 1 draft, 1 archived; two are low on stock and one is out of stock) and 30 orders over the last 30 days: 4 new, 2 accepted, 2 packed, 3 handed to the courier, 15 delivered and 4 cancelled. Everything goes through the service code, so stock, reservations, status history and balance entries agree, and the dates are in the past, so the dashboard shows today, 7 and 30 days. Log in with `demo@example.com` / `demo-pass-1234`.
+
+Running it again does nothing, because the demo seller already exists. To start over, remove the data with `docker compose down -v` and bring the stack up again (see D11).
+
+To add more orders one at a time, use the dev endpoint (it exists when `APP_ENV=development`). Create products first (the app, Swagger at `/docs/`, or the API), then:
 
 ```bash
 curl -s -X POST http://localhost:3000/api/dev/simulate-order -H "Authorization: Bearer $TOKEN"

@@ -24,7 +24,7 @@ Packages are grouped by **feature**, not by technical layer, so one person can o
 backend/
   cmd/
     server/main.go        process start: config, db, migrations, graceful shutdown
-    seed/main.go          dev seed (categories, demo products, ~30 orders), not written yet
+    seed/main.go          dev seed command: refuses outside APP_ENV=development, runs internal/seed (D11)
   migrations/             NNNN_name.up.sql / NNNN_name.down.sql (golang-migrate)
   internal/
     config/               env loading
@@ -38,6 +38,7 @@ backend/
     stock/                stock change, stock label; reserve / release / commit for orders (D5)
     order/                orders, status machine, simulate order
     dashboard/            summary queries
+    seed/                 demo shop, 15 products and 30 orders, written through the services (D11)
     balance/              balance entries
 ```
 

@@ -66,6 +66,11 @@ func (m *memRepository) Create(_ context.Context, shopID int64, n NewOrder, at t
 		}
 	}
 	id++
+	for _, it := range n.Items {
+		if p, ok := m.products[it.ProductID]; !ok || p.shopID != shopID {
+			return Order{}, ErrProductNotFound
+		}
+	}
 	o := Order{ID: id, ShopID: shopID, Number: fmt.Sprintf("#%d", 100000+id), Status: StatusNew,
 		BuyerName: n.BuyerName, BuyerPhone: n.BuyerPhone, DeliveryAddress: n.DeliveryAddress,
 		Items: []Item{}, CreatedAt: at, StatusChangedAt: at}

@@ -526,3 +526,52 @@ func TestPgSimulateWithoutSellableProducts(t *testing.T) {
 		t.Fatalf("a refused simulation left %d orders", n)
 	}
 }
+
+func TestPgCreateRejectsAnotherShopsProductAndStoresNothing(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	shopA, shopB := seedShop(t, pool), seedShop(t, pool)
+	foreign := seedProduct(t, pool, shopA, 10, 0)
+
+	_, err := repo.Create(context.Background(), shopB, NewOrder{
+		BuyerName: "Buyer", BuyerPhone: "+998901234567", DeliveryAddress: "Tashkent",
+		Items: []NewItem{{ProductID: foreign, Title: "Phone", Price: 1000, Quantity: 1}},
+	}, time.Now())
+	if !errors.Is(err, ErrProductNotFound) {
+		t.Fatalf("err = %v, want ErrProductNotFound", err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM orders WHERE shop_id = $1`, shopB); n != 0 {
+		t.Fatalf("%d orders stored for shop B, want the whole order rolled back", n)
+	}
+}
+
+func TestPgBalanceEntriesKeepTheTimeOfTheStatusChange(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	shop := seedShop(t, pool)
+	product := seedProduct(t, pool, shop, 10, 3)
+	id := seedOrder(t, pool, shop, StatusHandedToCourier, time.Now().Add(-72*time.Hour), seedItem{product, 3, 1000})
+	at := time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Second)
+
+	svc := newPgService(t, repo).WithClock(func() time.Time { return at })
+	if _, err := svc.Transition(context.Background(), shop, id, TransitionRequest{To: StatusDelivered}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(context.Background(), `SELECT created_at FROM balance_entries WHERE order_id = $1`, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		var got time.Time
+		if err := rows.Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if !got.Equal(at) {
+			t.Errorf("entry created_at = %v, want the delivery time %v", got, at)
+		}
+		n++
+	}
+	if n != 2 {
+		t.Fatalf("%d balance entries, want a sale and a commission", n)
+	}
+}
