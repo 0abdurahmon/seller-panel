@@ -22,3 +22,5 @@ vendor/
 
 pgdata/
 uploads/
+
+*.dbdiagram
