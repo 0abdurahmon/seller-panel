@@ -12,7 +12,7 @@ func validInput() CreateInput {
 }
 
 func newService() *Service {
-	return NewService(newMemRepository())
+	return NewService(newMemRepository(), newFakePhotos())
 }
 
 func TestCreateValidation(t *testing.T) {
@@ -35,7 +35,7 @@ func TestCreateValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			in := validInput()
 			mutate(&in)
-			if _, err := newService().Create(context.Background(), 1, in); !errors.Is(err, ErrValidation) {
+			if _, err := newService().Create(context.Background(), 1, in, nil); !errors.Is(err, ErrValidation) {
 				t.Fatalf("err = %v, want ErrValidation", err)
 			}
 		})
@@ -46,7 +46,7 @@ func TestCreateDefaultsAndTrims(t *testing.T) {
 	in := validInput()
 	in.Title = "  Phone X  "
 	in.SKU = " PX-1 "
-	p, err := newService().Create(context.Background(), 7, in)
+	p, err := newService().Create(context.Background(), 7, in, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,13 +64,13 @@ func TestCreateDefaultsAndTrims(t *testing.T) {
 func TestSKUUniquePerShop(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	if _, err := svc.Create(ctx, 1, validInput()); err != nil {
+	if _, err := svc.Create(ctx, 1, validInput(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Create(ctx, 1, validInput()); !errors.Is(err, ErrSKUTaken) {
+	if _, err := svc.Create(ctx, 1, validInput(), nil); !errors.Is(err, ErrSKUTaken) {
 		t.Fatalf("same shop err = %v, want ErrSKUTaken", err)
 	}
-	if _, err := svc.Create(ctx, 2, validInput()); err != nil {
+	if _, err := svc.Create(ctx, 2, validInput(), nil); err != nil {
 		t.Fatalf("other shop must accept the same sku: %v", err)
 	}
 }
@@ -78,12 +78,12 @@ func TestSKUUniquePerShop(t *testing.T) {
 func TestOtherShopCannotTouchProduct(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput())
+	p, _ := svc.Create(ctx, 1, validInput(), nil)
 
 	if _, err := svc.Get(ctx, 2, p.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("get err = %v, want ErrNotFound", err)
 	}
-	if _, err := svc.Update(ctx, 2, p.ID, UpdateInput{CategoryID: 1, Title: "Hacked", Price: 1, SKU: "H"}); !errors.Is(err, ErrNotFound) {
+	if _, err := svc.Update(ctx, 2, p.ID, UpdateInput{CategoryID: 1, Title: "Hacked", Price: 1, SKU: "H"}, PhotoChange{}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("update err = %v, want ErrNotFound", err)
 	}
 	if _, err := svc.Archive(ctx, 2, p.ID); !errors.Is(err, ErrNotFound) {
@@ -106,13 +106,13 @@ func TestGetRejectsNonPositiveID(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput())
+	p, _ := svc.Create(ctx, 1, validInput(), nil)
 	other := validInput()
 	other.SKU = "OTHER"
-	svc.Create(ctx, 1, other)
+	svc.Create(ctx, 1, other, nil)
 
 	t.Run("changes fields and keeps stock and status", func(t *testing.T) {
-		got, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 2, Title: " New ", Description: "d", Price: 2_000_000, SKU: " PX-1 "})
+		got, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 2, Title: " New ", Description: "d", Price: 2_000_000, SKU: " PX-1 "}, PhotoChange{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,25 +124,25 @@ func TestUpdate(t *testing.T) {
 		}
 	})
 	t.Run("activates", func(t *testing.T) {
-		got, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "PX-1", Status: StatusActive})
+		got, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "PX-1", Status: StatusActive}, PhotoChange{})
 		if err != nil || got.Status != StatusActive {
 			t.Fatalf("got %+v, err %v", got, err)
 		}
 	})
 	t.Run("sku of another product is taken", func(t *testing.T) {
-		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "OTHER"})
+		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "OTHER"}, PhotoChange{})
 		if !errors.Is(err, ErrSKUTaken) {
 			t.Fatalf("err = %v, want ErrSKUTaken", err)
 		}
 	})
 	t.Run("invalid input", func(t *testing.T) {
-		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "", Price: 1, SKU: "PX-1"})
+		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "", Price: 1, SKU: "PX-1"}, PhotoChange{})
 		if !errors.Is(err, ErrValidation) {
 			t.Fatalf("err = %v, want ErrValidation", err)
 		}
 	})
 	t.Run("cannot archive through update", func(t *testing.T) {
-		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "PX-1", Status: StatusArchived})
+		_, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "New", Price: 1, SKU: "PX-1", Status: StatusArchived}, PhotoChange{})
 		if !errors.Is(err, ErrValidation) {
 			t.Fatalf("err = %v, want ErrValidation", err)
 		}
@@ -152,7 +152,7 @@ func TestUpdate(t *testing.T) {
 func TestArchive(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput())
+	p, _ := svc.Create(ctx, 1, validInput(), nil)
 
 	got, err := svc.Archive(ctx, 1, p.ID)
 	if err != nil || got.Status != StatusArchived {
@@ -161,7 +161,7 @@ func TestArchive(t *testing.T) {
 	if again, err := svc.Archive(ctx, 1, p.ID); err != nil || again.Status != StatusArchived {
 		t.Fatalf("archive must be idempotent: %+v, %v", again, err)
 	}
-	if _, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "Edit", Price: 1, SKU: "PX-1"}); !errors.Is(err, ErrArchived) {
+	if _, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 1, Title: "Edit", Price: 1, SKU: "PX-1"}, PhotoChange{}); !errors.Is(err, ErrArchived) {
 		t.Fatalf("update archived err = %v, want ErrArchived", err)
 	}
 }
@@ -178,7 +178,7 @@ func seedList(t *testing.T) *Service {
 	ctx := context.Background()
 	add := func(shop int64, title, sku string, cat int64, status Status) {
 		in := CreateInput{CategoryID: cat, Title: title, Price: 1000, SKU: sku, Status: status}
-		if _, err := svc.Create(ctx, shop, in); err != nil {
+		if _, err := svc.Create(ctx, shop, in, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     Seller Panel API: sellers sign up with email and password, manage their shop and products,
-    process orders, see their balance, and (planned) see the dashboard.
+    process orders, see their balance, and see the dashboard.
 
     **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
     `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -21,10 +21,9 @@ info:
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
-    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
     `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
     Compose default); otherwise it answers 404 like any unknown route.
-    Planned (it answers 404 until built): dashboard.
 servers:
   - url: /api
     description: Through the proxy, the same address the app uses
@@ -264,7 +263,20 @@ paths:
   /dashboard/summary:
     get:
       tags: [Dashboard]
-      summary: (planned) Home page numbers for the current shop
+      summary: Home page numbers for the current shop
+      description: |
+        Days are calendar days in the business time zone (`BUSINESS_TIMEZONE`, `Asia/Tashkent` by default),
+        not in UTC. "Today" runs from 00:00 to 24:00 in that zone, "last 7 days" is today and the 6 days
+        before it, and "last 30 days" is today and the 29 days before it.
+
+        - `today_orders`: orders created today, in any status.
+        - `waiting_for_action`: orders in `new`, `accepted` or `packed`, whatever their age.
+        - `revenue_7d`, `revenue_30d`: sum of the `total` of orders that became `delivered` in the window,
+          before commission. Cancelled orders never count.
+        - `top_products`: up to 5 products by units in orders delivered in the last 30 days, most units first,
+          then most revenue, then lowest `product_id`. `title` is the current title of the product.
+
+        A shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D10).
       responses:
         '200':
           description: Dashboard summary
@@ -272,8 +284,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardSummary'
+              examples:
+                shopWithSales:
+                  summary: A shop with orders
+                  value:
+                    today_orders: 4
+                    waiting_for_action: 2
+                    revenue_7d: 4500000
+                    revenue_30d: 12000000
+                    top_products:
+                      - product_id: 12
+                        title: Phone Pro
+                        quantity_sold: 5
+                        revenue: 7500000
+                      - product_id: 7
+                        title: Phone case
+                        quantity_sold: 3
+                        revenue: 150000
+                newShop:
+                  summary: A shop without orders
+                  value:
+                    today_orders: 0
+                    waiting_for_action: 0
+                    revenue_7d: 0
+                    revenue_30d: 0
+                    top_products: []
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /balance:
     get:
@@ -421,26 +460,72 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Products]
-      summary: Create a product in the current shop
+      summary: Create a product in the current shop, with its photos
+      description: |
+        Two request formats:
+        - `application/json`: the fields only, a product without photos.
+        - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
+          (jpeg, png or webp, 5 MB each). The first image is the cover.
+
+        The product and its photos are saved together: when anything fails (a bad field, a file that is not an
+        image, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP
+        and scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts
+        against the same per shop limit as uploads (20 a minute by default); a JSON request does not.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateProductForm'
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/webp
       responses:
         '201':
-          description: The created product
+          description: The created product, `photos` has the URLs of the stored images
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Product'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: |
+            Invalid field, an unknown or repeated form field, more than 5 photos, an empty file or a file that is not a
+            decodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
           description: SKU already used in this shop (`sku_taken`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: A photo is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: A file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -465,10 +550,18 @@ paths:
           $ref: '#/components/responses/NotFound'
     put:
       tags: [Products]
-      summary: Replace the editable fields of a product
+      summary: Replace the editable fields and change the photos of a product
       description: |
         Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
         Archived products cannot be edited.
+
+        Same two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`
+        request changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order
+        wanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;
+        an empty `keep_photos` removes them all. At most 5 photos in the end.
+
+        All or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are
+        no longer listed are deleted from the server once the product is saved.
       parameters:
         - $ref: '#/components/parameters/ProductId'
       requestBody:
@@ -477,6 +570,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateProductForm'
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/webp
       responses:
         '200':
           description: The updated product
@@ -485,13 +584,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: |
+            Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of
+            this product, more than 5 photos in the end, or a file that is not a decodable image (`validation_error`);
+            a body that is not valid JSON or multipart (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           description: '`sku_taken` or `product_archived`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: A photo is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: A file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -557,6 +687,70 @@ paths:
               example:
                 code: stock_changed
                 message: stock was changed since you opened it; reload and try again
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Upload an image, it is stored as WebP
+      description: |
+        `multipart/form-data` with one image in the field `file`: jpeg, png or webp, at most 5 MB and 20 megapixels.
+        The type is checked from the file content, not from its name or `Content-Type`.
+        The image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,
+        and re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.
+        Use the returned `url` in `photos` of a product (the shop `logo_url` takes it too). Opening the `url` in a
+        browser needs no token: nginx serves the files straight from the uploads volume, the API does not.
+        Limited per shop (20 uploads a minute by default); when the server is processing many images
+        at once the answer is 503 `busy` with `Retry-After`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: The stored image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadedImage'
+        '400':
+          description: No `file` field, empty file, a file that is not a decodable image, or more than 20 megapixels (`validation_error`); a broken multipart body (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: The file is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: The request is not `multipart/form-data`, or the file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   securitySchemes:
@@ -843,12 +1037,15 @@ components:
           format: int64
         title:
           type: string
+          description: Current title of the product
         quantity_sold:
           type: integer
-          description: Units in delivered orders in the last 30 days
+          format: int64
+          description: Units in orders delivered in the last 30 days
         revenue:
           type: integer
-          description: so'm
+          format: int64
+          description: Sum of price at the time of the order times quantity for those units, so'm
 
     DashboardSummary:
       type: object
@@ -856,19 +1053,22 @@ components:
       properties:
         today_orders:
           type: integer
-          description: Orders created today
+          description: Orders created today in the business time zone, in any status
         waiting_for_action:
           type: integer
           description: Orders the seller still has to act on, in status `new`, `accepted` or `packed`
         revenue_7d:
           type: integer
-          description: Sum of delivered order totals in the last 7 days, so'm
+          format: int64
+          description: Sum of delivered order totals in the last 7 days (today and 6 days before), so'm
         revenue_30d:
           type: integer
-          description: Sum of delivered order totals in the last 30 days, so'm
+          format: int64
+          description: Sum of delivered order totals in the last 30 days (today and 29 days before), so'm
         top_products:
           type: array
           maxItems: 5
+          description: Best sellers of the last 30 days; `[]` when nothing was delivered
           items:
             $ref: '#/components/schemas/TopProduct'
 
@@ -950,6 +1150,24 @@ components:
           nullable: true
           maxLength: 300
 
+    UploadedImage:
+      type: object
+      required: [url, content_type, size, width, height]
+      properties:
+        url:
+          type: string
+          example: /api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp
+        content_type:
+          type: string
+          enum: [image/webp]
+        size:
+          type: integer
+          description: Bytes of the stored file
+        width:
+          type: integer
+        height:
+          type: integer
+
     ShopUpdate:
       type: object
       required: [name]
@@ -978,7 +1196,7 @@ components:
 
     Product:
       type: object
-      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, created_at, updated_at]
+      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, photos, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -1010,12 +1228,24 @@ components:
           $ref: '#/components/schemas/StockLabel'
         status:
           $ref: '#/components/schemas/ProductStatus'
+        photos:
+          $ref: '#/components/schemas/ProductPhotos'
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+
+    ProductPhotos:
+      type: array
+      maxItems: 5
+      items:
+        type: string
+      description: |
+        URLs of the product's photos, the first one is the cover. Open them directly (no token), for example
+        `/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp`. `[]` when there are none.
+      example: ['/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp']
 
     CreateProductRequest:
       type: object
@@ -1083,6 +1313,91 @@ components:
           type: string
           enum: [draft, active]
           description: Kept as is when omitted
+
+    CreateProductForm:
+      type: object
+      required: [category_id, title, price, sku]
+      description: The fields of `CreateProductRequest` as form fields, plus the images.
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
+        status:
+          type: string
+          enum: [draft, active]
+          default: draft
+        photos:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            format: binary
+          description: Images (jpeg, png or webp, 5 MB each). The first one is the cover.
+
+    UpdateProductForm:
+      type: object
+      required: [category_id, title, price, sku]
+      description: The fields of `UpdateProductRequest` as form fields, plus the photo changes.
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          type: string
+          enum: [draft, active]
+          description: Kept as is when omitted
+        keep_photos:
+          type: array
+          items:
+            type: string
+          description: |
+            Current photo URLs that stay, in the order wanted. Omit the field to keep all of them,
+            send it empty to remove them all.
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: New images, added after the kept photos. At most 5 photos in the end.
 
     ProductPage:
       type: object

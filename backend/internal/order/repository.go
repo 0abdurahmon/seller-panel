@@ -13,10 +13,11 @@ const (
 
 // BalanceEntry is one money movement for the shop.
 type BalanceEntry struct {
-	ShopID  int64
-	OrderID int64
-	Type    string
-	Amount  int64
+	ShopID    int64
+	OrderID   int64
+	Type      string
+	Amount    int64
+	CreatedAt time.Time
 }
 
 // Filter narrows the order list.

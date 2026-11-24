@@ -145,6 +145,8 @@ docker compose up --build
 | Backend | http://localhost:8080 (`GET /health`, this machine only) |
 | PostgreSQL | localhost:5432 (this machine only) |
 
+A fresh database is empty. To fill it with a demo shop, products and orders, run `docker compose exec backend /seed` (see [Seed data](#seed-data)).
+
 The frontend page shows `Backend: ok` when everything is connected. Every service has a healthcheck: `docker compose ps` shows `healthy`, and `docker compose up --build --wait` returns only when all three are healthy. The backend and the database are published on `127.0.0.1` only; the frontend is the single entry point for other machines. The apps run as non-root users with a read-only filesystem and no extra Linux capabilities. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
 
 ### Configuration
@@ -164,12 +166,12 @@ cp .env.example .env
 | `TELEGRAM_BOT_TOKEN` | empty | Bot token from @BotFather. Empty turns off sign-in by Telegram code (`503 telegram_unavailable`) |
 | `TELEGRAM_BOT_USERNAME` | empty | The bot's username without `@`, required when the token is set |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, change only for a test double |
-| `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `APP_ENV` | `development` in Docker Compose, `production` when unset | `development` turns on the dev endpoint `POST /dev/simulate-order` (fake buyer orders); in `production` it does not exist |
 | `OPENAPI_FILE` | empty (off); `/app/api/openapi.yaml` in Docker Compose | Path of the OpenAPI file the backend turns into JSON at `GET /openapi.json`. Running the backend from `backend/` use `../api/openapi.yaml` |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `RATE_LIMIT_SHOP_RPS`, `RATE_LIMIT_SHOP_BURST` | `20`, `40` | Requests per second and burst allowed for each shop on protected routes (see D6) |
 | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
+| `BUSINESS_TIMEZONE` | `Asia/Tashkent` | Time zone that defines "today", "last 7 days" and "last 30 days" on the dashboard (see D10) |
 | `TRUSTED_PROXIES` | private ranges and loopback | Networks whose `X-Real-IP` header the backend trusts (the nginx container) |
 | `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
@@ -177,12 +179,11 @@ Never commit `.env`. Only `.env.example` is tracked.
 
 ### API documentation (Swagger)
 
-With the stack running, open http://localhost:3000/docs/ and sign in with `SWAGGER_USER` and `SWAGGER_PASSWORD` (defaults in the table above). It shows `api/openapi.yaml`.
+With the stack running, open http://localhost:3000/docs/. It shows `api/openapi.yaml`. There is no login.
 
 - The `api/` folder is mounted read-only into the frontend and the backend container: edit the spec, refresh the browser, no rebuild.
-- The same spec as JSON, for type and client generators or Postman: `GET /swagger` (also `GET /docs/spec/openapi.json`), same login as the UI. For example `curl -u "$SWAGGER_USER:$SWAGGER_PASSWORD" http://localhost:3000/swagger -o openapi.json`. The backend makes the JSON from `api/openapi.yaml` on request and notices edits at once (no restart). The YAML is at `/docs/spec/openapi.yaml`, and generators can also read `api/openapi.yaml` straight from the repository.
-- The backend serves the JSON itself at `GET /openapi.json` (no login, reachable on the backend port on your machine only). nginx publishes it only behind the docs login, `/api/openapi.json` answers 404 there.
-- The password is hashed when the container starts; it is not stored in the image. Basic auth sends the password with every request, so use HTTPS in front of any shared deployment.
+- The same spec as JSON, for type and client generators or Postman: `GET /swagger` (also `/docs/spec/openapi.json` and `/api/openapi.json`). For example `curl http://localhost:3000/swagger -o openapi.json`. The backend makes the JSON from `api/openapi.yaml` on request and notices edits at once (no restart). The YAML is at `/docs/spec/openapi.yaml`, and generators can also read `api/openapi.yaml` straight from the repository.
+- The docs and the spec are open to anyone who can reach the port. The spec is not secret and the API itself still needs a token, but "Try it out" is there for everybody, so for a public deployment put your own protection in front of `/docs/`, `/swagger` and `/api/openapi.json`.
 - Swagger UI is only part of the Docker setup, `npm run dev` does not serve it.
 
 ### Local development (without Docker for the apps)
@@ -202,17 +203,18 @@ cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./... && go 
 cd frontend && npm run lint && npm run build
 ```
 
-The database tests need PostgreSQL and are skipped without it. Start the database and point the tests at it:
+The database tests need PostgreSQL and are skipped without it. They **clear tables**, so never point them at the database the app uses (`seller`): its sellers, shops, products and orders would be deleted. Create a separate throwaway database once and use it. The tests refuse any database whose name does not end with `_test`, and each package works in its own copy (`seller_test_auth`, `seller_test_product`, ...) that they create themselves:
 
 ```bash
 docker compose up -d db
-cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race ./...
+docker compose exec db createdb -U seller seller_test   # once
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller_test?sslmode=disable' go test -race ./...
 ```
 
 The end-to-end tests (`backend/e2e`, build tag `e2e`) run the whole API against PostgreSQL: seller journeys, isolation between sellers, error cases and rate limits. They are not part of the default `go test`:
 
 ```bash
-cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race -tags e2e ./e2e/...
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller_test?sslmode=disable' go test -race -tags e2e ./e2e/...
 ```
 
 CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. The smoke test checks the running stack only: containers and migrations are up, nginx proxies `/api` and passes the `Authorization` header, security headers, the nginx rate limits and the `/docs` password. Business behaviour (products, stock, isolation between sellers, login blocking) is tested by the Go end-to-end tests in `backend/e2e`. You can run the smoke test locally while the stack is up:
@@ -227,7 +229,19 @@ The script also trips the rate limits on purpose (nginx allows 10 auth requests 
 
 ### Seed data
 
-There is no seed script yet. To get orders to work with, use the dev endpoint (it exists when `APP_ENV=development`, which is the Docker Compose default). Create products first (the app, Swagger at `/docs/`, or the API), then:
+A seed command fills an empty database with a demo shop. It only runs when `APP_ENV=development` (the Docker Compose default) and refuses otherwise. With the stack up:
+
+```bash
+docker compose exec backend /seed
+```
+
+Without Docker, set `DATABASE_URL` and `APP_ENV=development` (see `.env.example`) and run `cd backend && go run ./cmd/seed`.
+
+It creates a seller, a shop, 15 products (13 active, 1 draft, 1 archived; two are low on stock and one is out of stock) and 30 orders over the last 30 days: 4 new, 2 accepted, 2 packed, 3 handed to the courier, 15 delivered and 4 cancelled. Everything goes through the service code, so stock, reservations, status history and balance entries agree, and the dates are in the past, so the dashboard shows today, 7 and 30 days. Log in with `demo@example.com` / `demo-pass-1234`.
+
+Running it again does nothing, because the demo seller already exists. To start over, remove the data with `docker compose down -v` and bring the stack up again (see D11).
+
+To add more orders one at a time, use the dev endpoint (it exists when `APP_ENV=development`). Create products first (the app, Swagger at `/docs/`, or the API), then:
 
 ```bash
 curl -s -X POST http://localhost:3000/api/dev/simulate-order -H "Authorization: Bearer $TOKEN"

@@ -26,6 +26,8 @@ type api struct {
 	t      *testing.T
 	mux    *http.ServeMux
 	tokens *auth.TokenIssuer
+	svc    *Service
+	photos *fakePhotoStore
 }
 
 func newAPI(t *testing.T) *api {
@@ -34,7 +36,9 @@ func newAPI(t *testing.T) *api {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(NewService(newMemRepository()), testLabel)
+	photos := newFakePhotos()
+	svc := NewService(newMemRepository(), photos)
+	h := NewHandler(svc, testLabel)
 	protect := auth.RequireAuth(tokens)
 	mux := http.NewServeMux()
 	mux.Handle("GET /products", protect(http.HandlerFunc(h.List)))
@@ -42,7 +46,7 @@ func newAPI(t *testing.T) *api {
 	mux.Handle("GET /products/{id}", protect(http.HandlerFunc(h.Get)))
 	mux.Handle("PUT /products/{id}", protect(http.HandlerFunc(h.Update)))
 	mux.Handle("POST /products/{id}/archive", protect(http.HandlerFunc(h.Archive)))
-	return &api{t: t, mux: mux, tokens: tokens}
+	return &api{t: t, mux: mux, tokens: tokens, svc: svc, photos: photos}
 }
 
 func (a *api) token(shopID int64) string {

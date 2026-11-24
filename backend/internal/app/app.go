@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
+	"github.com/0abdurahmon/seller-panel/backend/internal/dashboard"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
@@ -19,6 +21,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 	"github.com/0abdurahmon/seller-panel/backend/internal/telegram"
+	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 // App is the HTTP handler and the background work that runs next to it.
@@ -61,6 +64,16 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		return nil, err
 	}
 
+	dashboardSvc, err := dashboard.NewService(dashboard.NewPgRepository(pool), cfg.BusinessLocation)
+	if err != nil {
+		return nil, err
+	}
+	uploadRepo, err := upload.NewFSRepository(cfg.UploadDir)
+	if err != nil {
+		return nil, err
+	}
+	uploadSvc := upload.NewService(uploadRepo, cfg.UploadPublicURL)
+
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
 		return nil, err
@@ -76,15 +89,19 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc}), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
+		Upload:  upload.NewHandler(uploadSvc),
 
-		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
-		DevEndpoints: cfg.Env == config.EnvDevelopment,
-		Spec:         spec,
+		Dashboard: dashboard.NewHandler(dashboardSvc),
+
+		ShopLimiter:   httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
+		UploadLimiter: httpx.NewLimiterPer(cfg.UploadsPerMinute, time.Minute),
+		DevEndpoints:  cfg.Env == config.EnvDevelopment,
+		Spec:          spec,
 	})
 	app := &App{Handler: httpx.Logging(logger)(router)}
 	if bot != nil {

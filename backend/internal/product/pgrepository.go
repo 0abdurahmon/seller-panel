@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 )
@@ -22,35 +23,112 @@ const (
 var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 type PgRepository struct {
-	db database.DBTX
+	pool *pgxpool.Pool
 }
 
-func NewPgRepository(db database.DBTX) *PgRepository {
-	return &PgRepository{db: db}
+func NewPgRepository(pool *pgxpool.Pool) *PgRepository {
+	return &PgRepository{pool: pool}
 }
 
 func (r *PgRepository) Create(ctx context.Context, shopID int64, p Product) (Product, error) {
-	row := r.db.QueryRow(ctx,
-		`INSERT INTO products (shop_id, category_id, title, description, price, sku, stock, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING `+columns,
-		shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Stock, p.Status)
-	return scanWrite(row)
+	var created Product
+	err := database.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		var err error
+		created, err = scanWrite(tx.QueryRow(ctx,
+			`INSERT INTO products (shop_id, category_id, title, description, price, sku, stock, status)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			 RETURNING `+columns,
+			shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Stock, p.Status))
+		if err != nil {
+			return err
+		}
+		return replacePhotos(ctx, tx, &created, p.Photos)
+	})
+	if err != nil {
+		return Product{}, err
+	}
+	return created, nil
 }
 
 func (r *PgRepository) Get(ctx context.Context, shopID, id int64) (Product, error) {
-	return scanRead(r.db.QueryRow(ctx,
+	p, err := scanRead(r.pool.QueryRow(ctx,
 		`SELECT `+columns+` FROM products WHERE id = $1 AND shop_id = $2`, id, shopID))
+	if err != nil {
+		return Product{}, err
+	}
+	items := []Product{p}
+	if err := loadPhotos(ctx, r.pool, items); err != nil {
+		return Product{}, err
+	}
+	return items[0], nil
 }
 
 func (r *PgRepository) Update(ctx context.Context, shopID int64, p Product) (Product, error) {
-	row := r.db.QueryRow(ctx,
-		`UPDATE products
-		    SET category_id = $3, title = $4, description = $5, price = $6, sku = $7, status = $8, updated_at = now()
-		  WHERE id = $1 AND shop_id = $2
-		RETURNING `+columns,
-		p.ID, shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Status)
-	return scanWrite(row)
+	var updated Product
+	err := database.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		var err error
+		updated, err = scanWrite(tx.QueryRow(ctx,
+			`UPDATE products
+			    SET category_id = $3, title = $4, description = $5, price = $6, sku = $7, status = $8, updated_at = now()
+			  WHERE id = $1 AND shop_id = $2
+			RETURNING `+columns,
+			p.ID, shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Status))
+		if err != nil {
+			return err
+		}
+		return replacePhotos(ctx, tx, &updated, p.Photos)
+	})
+	if err != nil {
+		return Product{}, err
+	}
+	return updated, nil
+}
+
+// replacePhotos stores photos in order (position 0 is the cover) and sets them on p.
+func replacePhotos(ctx context.Context, db database.DBTX, p *Product, photos []string) error {
+	if _, err := db.Exec(ctx, `DELETE FROM product_photos WHERE product_id = $1`, p.ID); err != nil {
+		return fmt.Errorf("clear photos: %w", err)
+	}
+	if len(photos) > 0 {
+		if _, err := db.Exec(ctx,
+			`INSERT INTO product_photos (product_id, url, position)
+			 SELECT $1, u, ord - 1 FROM unnest($2::text[]) WITH ORDINALITY AS t(u, ord)`,
+			p.ID, photos); err != nil {
+			return fmt.Errorf("insert photos: %w", err)
+		}
+	}
+	p.Photos = append([]string{}, photos...)
+	return nil
+}
+
+// loadPhotos fills Photos of every product with one query.
+func loadPhotos(ctx context.Context, db database.DBTX, items []Product) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(items))
+	index := make(map[int64]int, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+		index[items[i].ID] = i
+		items[i].Photos = []string{}
+	}
+	rows, err := db.Query(ctx,
+		`SELECT product_id, url FROM product_photos WHERE product_id = ANY($1) ORDER BY product_id, position`, ids)
+	if err != nil {
+		return fmt.Errorf("load photos: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var url string
+		if err := rows.Scan(&id, &url); err != nil {
+			return fmt.Errorf("scan photo: %w", err)
+		}
+		i := index[id]
+		items[i].Photos = append(items[i].Photos, url)
+	}
+	return rows.Err()
 }
 
 func (r *PgRepository) List(ctx context.Context, shopID int64, f ListFilter) ([]Product, int, error) {
@@ -70,12 +148,12 @@ func (r *PgRepository) List(ctx context.Context, shopID int64, f ListFilter) ([]
 		  AND ($4::text IS NULL OR title ILIKE '%' || $4 || '%' OR sku ILIKE '%' || $4 || '%')`
 
 	var total int
-	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM products WHERE `+where,
+	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM products WHERE `+where,
 		shopID, status, category, query).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count products: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx,
+	rows, err := r.pool.Query(ctx,
 		`SELECT `+columns+` FROM products WHERE `+where+`
 		  ORDER BY created_at DESC, id DESC
 		  LIMIT $5 OFFSET $6`,
@@ -95,6 +173,9 @@ func (r *PgRepository) List(ctx context.Context, shopID int64, f ListFilter) ([]
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("list products: %w", err)
+	}
+	if err := loadPhotos(ctx, r.pool, out); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }

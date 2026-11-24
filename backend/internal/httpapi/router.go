@@ -1,17 +1,20 @@
 package httpapi
 
 import (
+	"mime"
 	"net/http"
 	"strconv"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
+	"github.com/0abdurahmon/seller-panel/backend/internal/dashboard"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
+	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 // Deps are the handlers and services the router is wired with.
@@ -24,10 +27,14 @@ type Deps struct {
 	Stock   *stock.Handler
 	Balance *balance.Handler
 	Order   *order.Handler
+	Upload  *upload.Handler
 
-	ShopLimiter  *httpx.Limiter
-	DevEndpoints bool
-	Spec         http.Handler
+	Dashboard *dashboard.Handler
+
+	ShopLimiter   *httpx.Limiter
+	UploadLimiter *httpx.Limiter
+	DevEndpoints  bool
+	Spec          http.Handler
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -47,14 +54,29 @@ func NewRouter(d Deps) http.Handler {
 	protected := func(h http.HandlerFunc) http.Handler {
 		return requireAuth(limitPerShop(h))
 	}
+	limitUploads := httpx.RateLimit(d.UploadLimiter, func(r *http.Request) (string, bool) {
+		p, ok := auth.PrincipalFrom(r.Context())
+		return strconv.FormatInt(p.ShopID, 10), ok
+	})
+	// A product saved with photos costs as much as an upload, so it shares the upload limit; JSON edits do not.
+	limitImages := func(next http.HandlerFunc) http.HandlerFunc {
+		limited := limitUploads(next)
+		return func(w http.ResponseWriter, r *http.Request) {
+			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "multipart/form-data" {
+				limited.ServeHTTP(w, r)
+				return
+			}
+			next(w, r)
+		}
+	}
 	mux.Handle("POST /auth/telegram/link", protected(d.Auth.LinkTelegram))
 	mux.Handle("GET /shop", protected(d.Shop.Get))
 	mux.Handle("PUT /shop", protected(d.Shop.Update))
 	mux.Handle("GET /categories", protected(d.Catalog.List))
 	mux.Handle("GET /products", protected(d.Product.List))
-	mux.Handle("POST /products", protected(d.Product.Create))
+	mux.Handle("POST /products", protected(limitImages(d.Product.Create)))
 	mux.Handle("GET /products/{id}", protected(d.Product.Get))
-	mux.Handle("PUT /products/{id}", protected(d.Product.Update))
+	mux.Handle("PUT /products/{id}", protected(limitImages(d.Product.Update)))
 	mux.Handle("POST /products/{id}/archive", protected(d.Product.Archive))
 	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
 	mux.Handle("GET /balance", protected(d.Balance.Summary))
@@ -62,6 +84,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders", protected(d.Order.List))
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
+	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))
+	mux.Handle("POST /uploads", protected(limitUploads(http.HandlerFunc(d.Upload.Create)).ServeHTTP))
 	if d.Spec != nil {
 		mux.Handle("GET /openapi.json", d.Spec)
 	}

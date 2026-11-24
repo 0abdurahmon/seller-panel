@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,7 +47,7 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),
 		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
-		Product: product.NewHandler(product.NewService(fakeProductRepository{}), func(int) string { return "in_stock" }),
+		Product: product.NewHandler(product.NewService(fakeProductRepository{}, fakePhotoStore{}), func(int) string { return "in_stock" }),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 
@@ -230,6 +231,12 @@ type fakeStockRepository struct{}
 func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (stock.Row, error) {
 	return stock.Row{Stock: qty}, nil
 }
+
+type fakePhotoStore struct{}
+
+func (fakePhotoStore) Save(context.Context, int64, io.Reader) (string, error) { return "", nil }
+
+func (fakePhotoStore) Remove(context.Context, int64, []string) {}
 
 type fakeProductRepository struct{}
 

@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -28,6 +29,7 @@ type Product struct {
 	Stock       int       `json:"stock"`
 	Reserved    int       `json:"reserved"`
 	Status      Status    `json:"status"`
+	Photos      []string  `json:"photos"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -68,6 +70,21 @@ type Page struct {
 	Page     int       `json:"page"`
 	PageSize int       `json:"page_size"`
 	Total    int       `json:"total"`
+}
+
+// PhotoStore turns image bytes into stored files. Save converts and stores one image and returns its URL;
+// Remove deletes stored files and never fails the caller (a file that stays behind is only wasted space).
+type PhotoStore interface {
+	Save(ctx context.Context, shopID int64, image io.Reader) (url string, err error)
+	Remove(ctx context.Context, shopID int64, urls []string)
+}
+
+// PhotoChange describes what a request does to the photos of a product.
+// Keep nil means "keep every current photo"; otherwise exactly the listed current URLs stay, in that order.
+// Add holds new images, appended after the kept ones.
+type PhotoChange struct {
+	Keep *[]string
+	Add  [][]byte
 }
 
 type Repository interface {

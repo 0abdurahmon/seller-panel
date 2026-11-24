@@ -131,11 +131,12 @@ Table product_photos {
 
   indexes {
     (product_id, position) [unique, name: 'product_photos_position_key']
+    (product_id, url) [unique, name: 'product_photos_url_key']
   }
 
   checks {
-    `url <> ''` [name: 'product_photos_url_check']
-    `position >= 0` [name: 'product_photos_position_check']
+    `btrim(url) <> ''` [name: 'product_photos_url_check']
+    `position >= 0 AND position < 5` [name: 'product_photos_position_check']
   }
 }
 

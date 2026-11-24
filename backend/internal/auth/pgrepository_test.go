@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0abdurahmon/seller-panel/backend/internal/database"
+	"github.com/0abdurahmon/seller-panel/backend/internal/database/dbtest"
 )
 
-// These tests need a real PostgreSQL. Set TEST_DATABASE_URL to run them;
-// without it they are skipped.
+// These tests need a real PostgreSQL. Set TEST_DATABASE_URL (a database named *_test) to run them;
+// without it they are skipped. They run in their own database, and clear it before each test.
 func newPgService(t *testing.T) (*Service, *TokenIssuer) {
 	t.Helper()
 	return newPgServiceWith(t, nil)
@@ -25,14 +25,7 @@ func newPgServiceWith(t *testing.T, tg Telegram) (*Service, *TokenIssuer) {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	if err := database.Migrate(url); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := database.Connect(ctx, url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := dbtest.NewPool(t, "auth")
 	if _, err := pool.Exec(ctx, `TRUNCATE shops, sellers RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)
 	}
