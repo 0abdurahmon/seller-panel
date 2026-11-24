@@ -3,7 +3,7 @@
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
 | Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Stock, Balance, Dashboard |
-| Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, infra (Docker, CI) |
+| Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | **Products**: model, validation, endpoints, the category tree, archive, search and filters, up to 5 photos saved with the product<br>**Images**: converting and storing images as WebP (`internal/upload`), used by product photos and the shop logo<br>**Infra**: Docker Compose, hardened images, nginx and rate limits, CI, smoke and end-to-end tests<br>**API docs**: the OpenAPI spec, Swagger UI at `/docs`, the spec as JSON at `/swagger`<br>**Backend conventions**: one shape for every feature, `AGENTS.md`, the rules for database tests |
 | Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile, Orders |
 | Abdukhalil | @uicodee | Everything | Go | All frontend |
 
