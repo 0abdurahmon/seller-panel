@@ -29,6 +29,7 @@ type server struct {
 	t    *testing.T
 	url  string
 	pool *pgxpool.Pool
+	app  *app.App
 	dir  string
 }
 
@@ -61,6 +62,11 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	for _, m := range mutate {
 		m(&cfg)
 	}
+	application, err := app.NewApp(cfg, pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(application.Handler)
 	handler, closer, err := app.NewHandler(cfg, pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +75,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	t.Cleanup(func() { _ = closer.Close() })
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return &server{t: t, url: srv.URL, pool: pool, dir: dir}
+	return &server{t: t, url: srv.URL, pool: pool, app: application, dir: dir}
 }
 
 type response struct {

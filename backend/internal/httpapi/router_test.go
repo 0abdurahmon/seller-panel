@@ -34,7 +34,7 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := auth.NewService(&fakeAuthRepository{byMail: map[string]auth.Credentials{}}, tokens)
+	svc, err := auth.NewService(&fakeAuthRepository{byMail: map[string]auth.Credentials{}}, tokens, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,8 @@ func (fakeCatalogRepository) List(context.Context) ([]catalog.Category, error) {
 }
 
 type fakeAuthRepository struct {
-	byMail map[string]auth.Credentials
+	auth.Repository // the sign-in code methods are not exercised by these tests
+	byMail          map[string]auth.Credentials
 }
 
 func (r *fakeAuthRepository) CreateSellerWithShop(_ context.Context, email, passwordHash, _ string) (int64, int64, error) {

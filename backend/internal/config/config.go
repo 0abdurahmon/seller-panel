@@ -20,41 +20,47 @@ const DefaultBusinessTimeZone = "Asia/Tashkent"
 const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 type Config struct {
-	Env               string
-	Port              string
-	OpenAPIFile       string
-	DatabaseURL       string
-	JWTSecret         string
-	JWTTTL            time.Duration
-	CommissionPercent int
-	LowStockThreshold int
-	ShopRPS           float64
-	ShopBurst         int
-	LoginAttempts     int
-	LoginWindow       time.Duration
-	TrustedProxies    []string
-	BusinessLocation  *time.Location
-	UploadDir         string
-	UploadPublicURL   string
-	UploadsPerMinute  int
+	Env                 string
+	Port                string
+	OpenAPIFile         string
+	DatabaseURL         string
+	JWTSecret           string
+	JWTTTL              time.Duration
+	CommissionPercent   int
+	LowStockThreshold   int
+	ShopRPS             float64
+	ShopBurst           int
+	LoginAttempts       int
+	LoginWindow         time.Duration
+	TrustedProxies      []string
+	TelegramBotToken    string
+	TelegramBotUsername string
+	TelegramAPIURL      string
+	BusinessLocation    *time.Location
+	UploadDir           string
+	UploadPublicURL     string
+	UploadsPerMinute    int
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Env:               getEnv("APP_ENV", EnvProduction),
-		Port:              getEnv("BACKEND_PORT", "8080"),
-		OpenAPIFile:       os.Getenv("OPENAPI_FILE"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		JWTSecret:         os.Getenv("JWT_SECRET"),
-		CommissionPercent: 10,
-		LowStockThreshold: 5,
-		ShopRPS:           20,
-		ShopBurst:         40,
-		LoginAttempts:     5,
-		UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),
-		UploadPublicURL:   getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
-		UploadsPerMinute:  20,
-		TrustedProxies:    strings.Split(getEnv("TRUSTED_PROXIES", defaultTrustedProxies), ","),
+		Env:                 getEnv("APP_ENV", EnvProduction),
+		Port:                getEnv("BACKEND_PORT", "8080"),
+		OpenAPIFile:         os.Getenv("OPENAPI_FILE"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		JWTSecret:           os.Getenv("JWT_SECRET"),
+		CommissionPercent:   10,
+		LowStockThreshold:   5,
+		ShopRPS:             20,
+		ShopBurst:           40,
+		LoginAttempts:       5,
+		TrustedProxies:      strings.Split(getEnv("TRUSTED_PROXIES", defaultTrustedProxies), ","),
+		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramBotUsername: strings.TrimPrefix(os.Getenv("TELEGRAM_BOT_USERNAME"), "@"),
+		TelegramAPIURL:      getEnv("TELEGRAM_API_URL", "https://api.telegram.org"),
+		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
+		UploadPublicURL:     getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
+		UploadsPerMinute:    20,
 	}
 
 	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
@@ -90,6 +96,9 @@ func Load() (Config, error) {
 	}
 	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.UploadsPerMinute < 1 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive")
+	}
+	if cfg.TelegramBotToken != "" && cfg.TelegramBotUsername == "" {
+		return Config{}, fmt.Errorf("TELEGRAM_BOT_USERNAME is required when TELEGRAM_BOT_TOKEN is set")
 	}
 	zone := getEnv("BUSINESS_TIMEZONE", DefaultBusinessTimeZone)
 	if cfg.BusinessLocation, err = time.LoadLocation(zone); err != nil {

@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,15 @@ import (
 // without it they are skipped. They run in their own database, and clear it before each test.
 func newPgService(t *testing.T) (*Service, *TokenIssuer) {
 	t.Helper()
+	return newPgServiceWith(t, nil)
+}
+
+func newPgServiceWith(t *testing.T, tg Telegram) (*Service, *TokenIssuer) {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
 	ctx := context.Background()
 	pool := dbtest.NewPool(t, "auth")
 	if _, err := pool.Exec(ctx, `TRUNCATE shops, sellers RESTART IDENTITY CASCADE`); err != nil {
@@ -23,7 +34,7 @@ func newPgService(t *testing.T) (*Service, *TokenIssuer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(NewPgRepository(pool), tokens)
+	svc, err := NewService(NewPgRepository(pool), tokens, tg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,4 +98,59 @@ func TestPgRejectedRegisterCreatesNoExtraShop(t *testing.T) {
 	if shops != 1 {
 		t.Fatalf("shops = %d, want 1 (rolled-back register left a shop behind)", shops)
 	}
+}
+
+func TestPgTelegramSignInFlow(t *testing.T) {
+	tg := &fakeTelegram{}
+	svc, tokens := newPgServiceWith(t, tg)
+	ctx := context.Background()
+	for _, email := range []string{"otp-pg@example.com", "otp-pg-2@example.com"} {
+		if _, err := svc.Register(ctx, RegisterRequest{Email: email, Password: "long-enough-pw", ShopName: "Shop"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	link, err := svc.StartTelegramLink(ctx, sellerIDOf(t, svc, "otp-pg@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := strings.TrimPrefix(link.URL, "https://t.me/seller_panel_bot?start=")
+	const chat = int64(9_001)
+	if err := svc.HandleBotMessage(ctx, chat, "/start "+token); err != nil {
+		t.Fatal(err)
+	}
+
+	other, err := svc.StartTelegramLink(ctx, sellerIDOf(t, svc, "otp-pg-2@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.HandleBotMessage(ctx, chat, "/start "+strings.TrimPrefix(other.URL, "https://t.me/seller_panel_bot?start=")); err != nil {
+		t.Fatal(err)
+	}
+	if last := tg.messages()[len(tg.messages())-1].text; !strings.Contains(last, "already linked to another seller") {
+		t.Fatalf("second seller reply = %q", last)
+	}
+
+	if err := svc.RequestCode(ctx, "otp-pg@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := svc.VerifyCode(ctx, "otp-pg@example.com", tg.lastCode(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tokens.Parse(res.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.VerifyCode(ctx, "otp-pg@example.com", tg.lastCode(t)); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("reused code: err = %v", err)
+	}
+}
+
+func sellerIDOf(t *testing.T, svc *Service, email string) int64 {
+	t.Helper()
+	c, err := svc.repo.FindCredentials(context.Background(), email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.SellerID
 }

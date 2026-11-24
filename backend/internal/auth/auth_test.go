@@ -20,7 +20,7 @@ func newService(t *testing.T) (*Service, *TokenIssuer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(newMemRepository(), tokens)
+	svc, err := NewService(newMemRepository(), tokens, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestLoginWrongPasswordAndUnknownEmailLookTheSame(t *testing.T) {
 func TestPasswordIsNotStoredInPlainText(t *testing.T) {
 	store := newMemRepository()
 	tokens, _ := NewTokenIssuer("s", time.Hour)
-	svc, _ := NewService(store, tokens)
+	svc, _ := NewService(store, tokens, nil)
 	register(t, svc, "a@example.com")
 	if c := store.byMail["a@example.com"]; c.PasswordHash == "correct-horse" || c.PasswordHash == "" {
 		t.Fatalf("stored password hash looks wrong: %q", c.PasswordHash)
