@@ -65,6 +65,6 @@ Record every important decision here: what you chose, what else you considered, 
 - `GET /balance`: `available` = sum of all entries, `earned` = sum of `sale`, `commission` = sum of `commission` (negative). One `SUM … FILTER` query; a shop with no entries gets zeros, not 404.
 - `GET /balance/entries`: newest first (`created_at DESC, id DESC`, so equal times keep a stable order), `?page=&page_size=` clamped like product lists (default 20, max 100), `items` is `[]` when empty.
 - Both routes are protected and filter by the shop from the token; another shop's entries are never visible.
-- The `balance_entries` table comes from the orders migration (#70), not from this feature, so the order writes and the balance reads share one schema (`backend/docs/schema.dbml`).
+- The `balance_entries` table comes from migration `0004_balance_entries` (Balance), in the shape of `backend/docs/schema.dbml` but without the foreign key `order_id → orders`, because the orders table does not exist yet. The orders migration adds that key. Until then the order feature is trusted to write real order ids; the unique key `(order_id, type)` and the sign checks already protect the money.
 - Why compute totals on read: entries are append only and few per order, the sum is one indexed query, and there is no stored total that could drift from the history.
 - Considered: a stored running balance on `shops` (faster for huge histories, but two places to keep in sync), net per order instead of separate entries (simpler table, but loses the commission line the seller wants to see).

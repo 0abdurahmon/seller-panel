@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
@@ -44,6 +45,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
+		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 
 		ShopLimiter: httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
 	})

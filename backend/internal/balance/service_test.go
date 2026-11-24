@@ -2,6 +2,7 @@ package balance
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -124,6 +125,16 @@ func TestEntriesPagination(t *testing.T) {
 				t.Fatal("items is nil, want an empty slice so JSON shows []")
 			}
 		})
+	}
+}
+
+func TestEntriesRejectsHugePage(t *testing.T) {
+	svc := NewService(newMemRepository())
+	if _, err := svc.Entries(context.Background(), 1, maxPage+1, 20); !errors.Is(err, ErrValidation) {
+		t.Fatalf("err = %v, want ErrValidation (a huge page would overflow the offset)", err)
+	}
+	if _, err := svc.Entries(context.Background(), 1, maxPage, 100); err != nil {
+		t.Fatalf("the largest allowed page failed: %v", err)
 	}
 }
 
