@@ -41,7 +41,7 @@ Record every important decision here: what you chose, what else you considered, 
 
 ## D5 — Stock
 - Own package `backend/internal/stock`, separate from `product`, because Stock and Products have different owners (`TEAM.md`). It writes only `stock` and `updated_at` of the `products` table and reads `reserved` and `status`; the table itself comes from the products migration.
-- `available = stock − reserved`. Label: `out_of_stock` when available is 0, `low_stock` when 0 < available ≤ threshold, `in_stock` otherwise. The backend returns the label (`stock_label`), so every screen shows the same one.
+- `available = stock − reserved`. Label: `out_of_stock` when available is 0, `low_stock` when 0 < available ≤ threshold, `in_stock` otherwise. The label (`stock_label`) comes with the stock level of `PATCH /products/{id}/stock`; the product itself no longer carries `available` or `stock_label` (D13), a screen computes `available` from `stock` and `reserved`.
 - Low-stock threshold: one global value, `LOW_STOCK_THRESHOLD` (default 5, `0` turns the warning off). Not per shop in the MVP.
 - Manual change: `PATCH /products/{id}/stock` with `{"stock": 12, "expected_stock": 10}`, behind auth. `stock` is the new absolute quantity, not a delta, so a retried request gives the same result. Rules: integer 0–1 000 000; not below `reserved` (`409 stock_below_reserved`, the seller cannot take back goods promised to accepted orders); archived products cannot change (`409 product_archived`); another shop's product is `404 not_found`. Response: `{product_id, stock, reserved, available, stock_label, updated_at}`.
 - `expected_stock` (required) is the stock the seller saw before editing. If it no longer matches (another tab, an order), nothing is written and the answer is `409 stock_changed`; the UI reloads the product and shows the real number. Error bodies are the shared `{code, message}` (AGENTS.md).
@@ -122,3 +122,9 @@ Record every important decision here: what you chose, what else you considered, 
 - A request with images costs as much as an upload, so a multipart `POST /products` or `PUT /products/{id}` shares the per shop upload limit; JSON requests are not counted. nginx accepts bodies up to 27 MB (5 photos of 5 MB), the backend limits each route (1 MB for JSON, 5 MB per photo, 5 photos).
 - Not done: a sweeper for files that nothing references (a crash mid save, `POST /uploads` files that were never used), per-shop disk quota, object storage (S3). `FSRepository` and the nginx location are the two places to replace for S3.
 - Considered: `chai2010/webp` and `h2non/bimg` (faster, but need cgo and libwebp or libvips in the image), `disintegration/imaging` (resize only, no WebP encoder), storing the original next to the WebP (doubles disk, keeps EXIF).
+
+## D13 — Simpler product shape
+- A product response has `stock` and `reserved` but no `available` and no `stock_label`: they are derived from the two numbers, the stock endpoint still returns them for a stock change, and keeping them on every product made the list heavier than the screens needed. `Product.Available()` is gone from the code.
+- A product is always created as a `draft`: `POST /products` (JSON and multipart) takes no `status`, a `status` in the body is `400 invalid_body` (`400 validation_error` in multipart). Publishing and archiving are separate actions after creation. Until a dedicated publish action exists, `PUT /products/{id}` still takes an optional `status` (`draft` or `active`), and `POST /products/{id}/archive` archives.
+- The service still accepts a status on create (the seed uses it to build demo products as active, archived and so on), only the HTTP body no longer does.
+

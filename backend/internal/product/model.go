@@ -34,10 +34,6 @@ type Product struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func (p Product) Available() int {
-	return p.Stock - p.Reserved
-}
-
 type CreateInput struct {
 	CategoryID  int64  `json:"category_id"`
 	Title       string `json:"title"`
@@ -45,7 +41,8 @@ type CreateInput struct {
 	Price       int64  `json:"price"`
 	SKU         string `json:"sku"`
 	Stock       int    `json:"stock"`
-	Status      Status `json:"status"`
+	// Status is not part of the request body: a product is created as a draft, the seed sets it directly.
+	Status Status `json:"-"`
 }
 
 type UpdateInput struct {

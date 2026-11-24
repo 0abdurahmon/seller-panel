@@ -187,8 +187,6 @@ type product struct {
 	SKU         string   `json:"sku"`
 	Stock       int      `json:"stock"`
 	Reserved    int      `json:"reserved"`
-	Available   int      `json:"available"`
-	StockLabel  string   `json:"stock_label"`
 	Status      string   `json:"status"`
 	Photos      []string `json:"photos"`
 }
@@ -222,7 +220,7 @@ func (s *server) categoryID(token string) int64 {
 func productBody(category int64, sku string, stock int) map[string]any {
 	return map[string]any{
 		"category_id": category, "title": "Phone " + sku, "description": "Good phone",
-		"price": 1_500_000, "sku": sku, "stock": stock, "status": "active",
+		"price": 1_500_000, "sku": sku, "stock": stock,
 	}
 }
 
@@ -237,6 +235,21 @@ func (s *server) createProduct(token string, category int64, stock int) product 
 		s.t.Fatalf("create product status = %d: %s", res.status, res.body)
 	}
 	var p product
+	res.decode(&p)
+	return s.activate(token, p)
+}
+
+// activate moves a draft product to active: a product is created as a draft, so tests that need one
+// to be sold (simulate-order only picks active products) publish it with an edit.
+func (s *server) activate(token string, p product) product {
+	s.t.Helper()
+	body := productBody(p.CategoryID, p.SKU, 0)
+	delete(body, "stock")
+	body["status"] = "active"
+	res := s.do(http.MethodPut, productPath(p), token, body)
+	if res.status != http.StatusOK {
+		s.t.Fatalf("activate product status = %d: %s", res.status, res.body)
+	}
 	res.decode(&p)
 	return p
 }

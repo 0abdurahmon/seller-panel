@@ -64,7 +64,7 @@ func (s *server) productForm(method, path, token string, parts ...formPart) resp
 func createParts(category int64, sku string, extra ...formPart) []formPart {
 	return append([]formPart{
 		text("category_id", fmt.Sprint(category)), text("title", "Phone "+sku), text("description", "Good phone"),
-		text("price", "1500000"), text("sku", sku), text("stock", "5"), text("status", "active"),
+		text("price", "1500000"), text("sku", sku), text("stock", "5"),
 	}, extra...)
 }
 
@@ -105,7 +105,7 @@ func TestProductPhotosJourney(t *testing.T) {
 	s.expect(res, http.StatusCreated, "")
 	var created product
 	res.decode(&created)
-	if len(created.Photos) != 2 || created.Title != "Phone "+sku || created.Stock != 5 || created.Status != "active" {
+	if len(created.Photos) != 2 || created.Title != "Phone "+sku || created.Stock != 5 || created.Status != "draft" {
 		t.Fatalf("created = %+v", created)
 	}
 	for _, u := range created.Photos {
