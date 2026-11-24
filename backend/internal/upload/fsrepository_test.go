@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -36,13 +37,15 @@ func TestFSRepositorySaveAndOpen(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("shop dir has %d entries, want 1 (no temp files left)", len(entries))
 	}
-	info, _ := os.Stat(filepath.Join(dir, "5", name))
-	if info.Mode().Perm() != 0o644 {
-		t.Fatalf("mode = %v, want 0644, nginx must be able to read it", info.Mode().Perm())
-	}
-	dirInfo, _ := os.Stat(filepath.Join(dir, "5"))
-	if dirInfo.Mode().Perm() != 0o755 {
-		t.Fatalf("dir mode = %v, want 0755", dirInfo.Mode().Perm())
+	if runtime.GOOS != "windows" { // Windows has no Unix permission bits; the volume is served from Linux.
+		info, _ := os.Stat(filepath.Join(dir, "5", name))
+		if info.Mode().Perm() != 0o644 {
+			t.Fatalf("mode = %v, want 0644, nginx must be able to read it", info.Mode().Perm())
+		}
+		dirInfo, _ := os.Stat(filepath.Join(dir, "5"))
+		if dirInfo.Mode().Perm() != 0o755 {
+			t.Fatalf("dir mode = %v, want 0755", dirInfo.Mode().Perm())
+		}
 	}
 }
 
@@ -67,7 +70,7 @@ func TestFSRepositoryIsolatesShopsAndRejectsEscapes(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "secret")
 	_ = os.WriteFile(outside, []byte("secret"), 0o600)
 	if err := os.Symlink(outside, filepath.Join(dir, "1", "link.webp")); err != nil {
-		t.Fatal(err)
+		t.Skipf("cannot create a symlink here (Windows needs a privilege): %v", err)
 	}
 	if f, err := repo.Open(ctx, 1, "link.webp"); err == nil {
 		f.Close()
