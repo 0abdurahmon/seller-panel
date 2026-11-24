@@ -8,4 +8,7 @@ var (
 	ErrArchived      = errors.New("product is archived")
 	ErrStockChanged  = errors.New("stock was changed by someone else")
 	ErrBelowReserved = errors.New("stock cannot be lower than reserved")
+
+	ErrInsufficientStock   = errors.New("insufficient stock")
+	ErrReservationMismatch = errors.New("fewer units reserved than the order holds")
 )
