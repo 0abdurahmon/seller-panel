@@ -59,3 +59,12 @@ Record every important decision here: what you chose, what else you considered, 
 - Why per shop and not per IP for protected routes: sellers behind one office or mobile network share an IP, a shop ID is the real unit of fairness. Per IP stays at the nginx edge, where no token exists yet.
 - Why not a rule per endpoint: new endpoints get the global and per shop limits without anyone remembering to add them. Only the two routes with a real abuse case (login, register through `/api/auth/`) get a stricter rule.
 - Not included: CAPTCHA, permanent account lock, Redis.
+
+## D7 — Balance
+- Read only. The order feature writes the entries when an order becomes `delivered`: `sale` (+total) and `commission` (−total × `COMMISSION_PERCENT` / 100, integer division), in the same transaction as the status change. `payout` exists in the model; the MVP never creates one.
+- `GET /balance`: `available` = sum of all entries, `earned` = sum of `sale`, `commission` = sum of `commission` (negative). One `SUM … FILTER` query; a shop with no entries gets zeros, not 404.
+- `GET /balance/entries`: newest first (`created_at DESC, id DESC`, so equal times keep a stable order), `?page=&page_size=` clamped like product lists (default 20, max 100), `items` is `[]` when empty.
+- Both routes are protected and filter by the shop from the token; another shop's entries are never visible.
+- The `balance_entries` table comes from the orders migration (#70), not from this feature, so the order writes and the balance reads share one schema (`backend/docs/schema.dbml`).
+- Why compute totals on read: entries are append only and few per order, the sum is one indexed query, and there is no stored total that could drift from the history.
+- Considered: a stored running balance on `shops` (faster for huge histories, but two places to keep in sync), net per order instead of separate entries (simpler table, but loses the commission line the seller wants to see).

@@ -104,7 +104,7 @@ Each feature owner writes the migration for the tables they own, in the order th
 | `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | in progress |
 | product photos | `product_photos` | Products | planned |
 | orders | `orders`, `order_items`, `order_status_history`, `order_number_seq` | not assigned | planned |
-| balance | `balance_entries` | not assigned | planned |
+| balance | `balance_entries` | created by the orders migration (#70), read by Balance (#84) | planned |
 
 Reference data (categories) ships as a migration. Demo data (seller, shop, about 15 products, about 30 orders with balance entries) comes from a seed command that only runs when asked and writes through the service code, so the numbers stay consistent.
 
