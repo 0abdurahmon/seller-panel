@@ -23,11 +23,12 @@ Packages are grouped by **feature**, not by technical layer, so one person can o
 ```
 backend/
   cmd/
-    server/main.go        wiring: config, db, migrations, router, graceful shutdown
+    server/main.go        process start: config, db, migrations, graceful shutdown
     seed/main.go          dev seed (categories, demo products, ~30 orders), not written yet
   migrations/             NNNN_name.up.sql / NNNN_name.down.sql (golang-migrate)
   internal/
     config/               env loading
+    app/                  wiring: builds every service, handler, limiter and the router
     database/             pgx pool, DBTX, InTx helper, migration runner
     httpx/                JSON helpers, error type, request logging
     auth/                 sign up, login, JWT
@@ -60,7 +61,7 @@ Authentication helpers live in `auth`: `RequireAuth` for routes, `MustPrincipal`
 2. `service` does not import `net/http`. `repository` does not know about HTTP or rules.
 3. `service` declares the repository interface it needs. Tests pass a fake.
 4. Features do not import each other's concrete types. If `order` needs stock operations, it declares a small interface and `stock`'s repository implements it.
-5. Wiring happens only in `cmd/server/main.go`.
+5. Wiring happens only in `internal/app`, so `cmd/server` and the end-to-end tests run the same application.
 
 ## 3. Database access
 
@@ -135,6 +136,7 @@ frontend/src/
 | Stock reserve and release | Integration tests against a real PostgreSQL, including two concurrent accepts and "never negative" | `product` + `order` repository |
 | Data isolation | Per feature: seller B requesting seller A's resource gets `404` | handler or integration |
 | HTTP behaviour | `httptest` against the router | each `handler` |
+| Whole journeys, isolation, error shape, limits | Real router and PostgreSQL through `app.NewHandler`, build tag `e2e` | `backend/e2e` |
 | Frontend | A few component tests for critical flows (login, stock change, order transition) | `features/*` |
 
 CI (`.github/workflows/ci.yml`) already runs lint, vet, build and tests. Integration tests need a database, see open questions.

@@ -10,15 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
-	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
+	"github.com/0abdurahmon/seller-panel/backend/internal/app"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
-	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
-	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
-	"github.com/0abdurahmon/seller-panel/backend/internal/product"
-	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
-	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -52,39 +46,13 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	tokens, err := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
+	handler, err := app.NewHandler(cfg, pool, logger)
 	if err != nil {
 		return err
 	}
-	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens)
-	if err != nil {
-		return err
-	}
-	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
-	if err != nil {
-		return err
-	}
-	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
-
-	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
-	if err != nil {
-		return err
-	}
-	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
-
-	router := httpapi.NewRouter(httpapi.Deps{
-		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
-		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
-		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
-		Tokens:  tokens,
-		Stock:   stock.NewHandler(stockSvc),
-
-		ShopLimiter: httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
-	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpx.Logging(logger)(router),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
