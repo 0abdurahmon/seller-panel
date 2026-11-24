@@ -36,7 +36,7 @@ Record every important decision here: what you chose, what else you considered, 
 - Merge: only when CI is green and the PR is approved. Use squash and merge, then delete the branch. The author merges their own approved PR.
 - Merge captain: one person per day, rotating, listed in `TEAM.md`. Watches the board, unblocks reviews and keeps `main` releasable.
 - Stuck for more than about 1 hour: ask a teammate or pair up.
-- Why: small reviewed PRs keep `main` working for three people changing the same repo, and the history shows who did what.
+- Why: small reviewed PRs keep `main` working for the whole team changing the same repo, and the history shows who did what.
 - Considered: trunk-based direct commits (faster, no review trail), long-lived feature branches (big merges and conflicts).
 
 ## D5 — Stock
