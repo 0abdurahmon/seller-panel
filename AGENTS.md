@@ -13,7 +13,7 @@ Go backend, React + TypeScript + Vite frontend, PostgreSQL, Docker Compose.
 | Run everything | `docker compose up --build --wait` |
 | Backend checks | `cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./...` |
 | End-to-end tests | `cd backend && go test -race -tags e2e ./e2e/...` (needs `TEST_DATABASE_URL`) |
-| Database tests | need `DATABASE_URL`, CI runs them against PostgreSQL |
+| Database tests | need `TEST_DATABASE_URL` and CI runs them against PostgreSQL. It must name a throwaway database ending in `_test` (`seller_test`), never the one the app uses: the tests truncate tables and refuse other names. New database tests use `dbtest.NewPool(t, "<feature>")`, not the URL directly |
 | Smoke test | `scripts/smoke.sh` |
 | Frontend | `cd frontend && npm ci && npm run build` |
 
