@@ -6,7 +6,7 @@
 | Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, infra (Docker, CI) |
 | Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile |
 
-Orders was built by all three of us and has no single owner yet: the domain code is Samandar's (#71), the PostgreSQL side and the routes are Akbar's (#97), the tables are Nuriddin's (#93). We still need to name one owner for it.
+Orders was built by all three of us and has no single owner yet: the domain code is Samandar's (#71), the PostgreSQL side and the routes are Akbar's (#97), the tables (#93) and the stock effects orders call (#76) are Nuriddin's. Issue #70 is assigned to Samandar and Akbar. We still need to name one owner for it.
 
 ## Working agreement
 - Core hours: 10:00–18:00 (Tashkent, UTC+5)
