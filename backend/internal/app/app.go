@@ -67,7 +67,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), uploadSvc), stockLabel),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc}), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),

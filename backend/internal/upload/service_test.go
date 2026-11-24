@@ -205,3 +205,39 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("%d files left", repo.count())
 	}
 }
+
+func TestRemove(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemRepository()
+	svc := NewService(repo, "/api/uploads")
+	got, err := svc.Upload(ctx, 1, bytes.NewReader(pngBytes(t, 10, 10)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		shop    int64
+		url     string
+		wantErr error
+	}{
+		{"another shop", 2, got.URL, ErrNotFound},
+		{"external url", 1, "https://example.com/api/uploads/1/" + strings.Repeat("a", 32) + ".webp", ErrNotFound},
+		{"other prefix", 1, strings.Replace(got.URL, "/api/uploads", "/files", 1), ErrNotFound},
+		{"foreign name", 1, "/api/uploads/1/../1/x.webp", ErrNotFound},
+		{"unknown file", 1, "/api/uploads/1/" + strings.Repeat("0", 32) + ".webp", ErrNotFound},
+		{"not a url", 1, "", ErrNotFound},
+		{"owner removes it", 1, got.URL, nil},
+		{"second remove", 1, got.URL, ErrNotFound},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := svc.Remove(ctx, tc.shop, tc.url); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+	if repo.count() != 0 {
+		t.Fatalf("%d files left", repo.count())
+	}
+}

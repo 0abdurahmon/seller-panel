@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -38,24 +39,22 @@ func (p Product) Available() int {
 }
 
 type CreateInput struct {
-	CategoryID  int64    `json:"category_id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Price       int64    `json:"price"`
-	SKU         string   `json:"sku"`
-	Stock       int      `json:"stock"`
-	Status      Status   `json:"status"`
-	Photos      []string `json:"photos"`
+	CategoryID  int64  `json:"category_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Price       int64  `json:"price"`
+	SKU         string `json:"sku"`
+	Stock       int    `json:"stock"`
+	Status      Status `json:"status"`
 }
 
 type UpdateInput struct {
-	CategoryID  int64    `json:"category_id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Price       int64    `json:"price"`
-	SKU         string   `json:"sku"`
-	Status      Status   `json:"status"`
-	Photos      []string `json:"photos"`
+	CategoryID  int64  `json:"category_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Price       int64  `json:"price"`
+	SKU         string `json:"sku"`
+	Status      Status `json:"status"`
 }
 
 type ListFilter struct {
@@ -73,9 +72,19 @@ type Page struct {
 	Total    int       `json:"total"`
 }
 
-// PhotoStore tells whether a photo URL is an uploaded file of the shop.
+// PhotoStore turns image bytes into stored files. Save converts and stores one image and returns its URL;
+// Remove deletes stored files and never fails the caller (a file that stays behind is only wasted space).
 type PhotoStore interface {
-	Owns(ctx context.Context, shopID int64, url string) (bool, error)
+	Save(ctx context.Context, shopID int64, image io.Reader) (url string, err error)
+	Remove(ctx context.Context, shopID int64, urls []string)
+}
+
+// PhotoChange describes what a request does to the photos of a product.
+// Keep nil means "keep every current photo"; otherwise exactly the listed current URLs stay, in that order.
+// Add holds new images, appended after the kept ones.
+type PhotoChange struct {
+	Keep *[]string
+	Add  [][]byte
 }
 
 type Repository interface {
