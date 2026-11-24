@@ -142,10 +142,10 @@ docker compose up --build
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
-| Backend | http://localhost:8080 (`GET /health`) |
-| PostgreSQL | localhost:5432 |
+| Backend | http://localhost:8080 (`GET /health`, this machine only) |
+| PostgreSQL | localhost:5432 (this machine only) |
 
-The frontend page shows `Backend: ok` when everything is connected. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
+The frontend page shows `Backend: ok` when everything is connected. Every service has a healthcheck: `docker compose ps` shows `healthy`, and `docker compose up --build --wait` returns only when all three are healthy. The backend and the database are published on `127.0.0.1` only; the frontend is the single entry point for other machines. The apps run as non-root users with a read-only filesystem and no extra Linux capabilities. Stop with `Ctrl+C`; remove containers and the database volume with `docker compose down -v`.
 
 ### Configuration
 
@@ -161,10 +161,19 @@ cp .env.example .env
 | `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
+| `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
 Never commit `.env`. Only `.env.example` is tracked.
+
+### API documentation (Swagger)
+
+With the stack running, open http://localhost:3000/docs/ and sign in with `SWAGGER_USER` and `SWAGGER_PASSWORD` (defaults in the table above). It shows `api/openapi.yaml`.
+
+- The `api/` folder is mounted read-only into the frontend container: edit the spec, refresh the browser, no rebuild.
+- The password is hashed when the container starts; it is not stored in the image. Basic auth sends the password with every request, so use HTTPS in front of any shared deployment.
+- Swagger UI is only part of the Docker setup, `npm run dev` does not serve it.
 
 ### Local development (without Docker for the apps)
 
@@ -179,9 +188,24 @@ The Vite dev server runs on http://localhost:5173 and proxies `/api` to the back
 ### Checks (same as CI)
 
 ```bash
-cd backend && gofmt -l . && go vet ./... && go test ./... && go build ./...
+cd backend && gofmt -l . && go vet ./... && go test -race ./... && go build ./...
 cd frontend && npm run lint && npm run build
 ```
+
+The database tests need PostgreSQL and are skipped without it. Start the database and point the tests at it:
+
+```bash
+docker compose up -d db
+cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race ./...
+```
+
+CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. You can run the same check locally while the stack is up:
+
+```bash
+sh scripts/smoke.sh
+```
+
+`BACKEND_URL` and `FRONTEND_URL` override the default `http://localhost:8080` and `http://localhost:3000` when you changed the ports.
 
 ### Seed data
 

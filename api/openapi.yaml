@@ -1,0 +1,411 @@
+openapi: 3.0.3
+info:
+  title: Seller Panel API
+  version: 0.1.0
+  description: |
+    Draft contract for orders, dashboard and balance (issue #11).
+    Auth, shop, categories and products are added by the auth/products issue (#10).
+    All money fields are integers in so'm (no floats).
+servers:
+  - url: http://localhost:8080
+    description: Local development
+security:
+  - bearerAuth: []
+paths:
+  /orders:
+    get:
+      tags: [Orders]
+      summary: List orders of the current shop
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get one order with its items
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{id}/transition:
+    post:
+      tags: [Orders]
+      summary: Move an order to the next status
+      description: |
+        Allowed transitions follow the status machine in docs/DOMAIN.md:
+        `new → accepted → packed → handed_to_courier → delivered`, and `cancelled`
+        from `new`, `accepted` or `packed`.
+        - `accepted` reserves stock (fails with 409 `insufficient_stock` if available < quantity).
+        - `cancelled` releases reserved stock and requires `reason`.
+        - `delivered` deducts stock and writes `sale` and `commission` balance entries.
+        Any other transition is rejected with 409 `invalid_transition`.
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: The order after the transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Home page numbers for the current shop
+      responses:
+        '200':
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /balance:
+    get:
+      tags: [Balance]
+      summary: Current balance of the shop
+      description: |
+        `available` is the sum of all balance entries (sale + commission + payout).
+        Commission is 10% of each delivered order total.
+      responses:
+        '200':
+          description: Balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /balance/entries:
+    get:
+      tags: [Balance]
+      summary: Balance history (newest first)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of balance entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceEntryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /dev/simulate-order:
+    post:
+      tags: [Dev]
+      summary: Create a random `new` order from the shop's active products
+      description: Development only. Not available when the server runs in production mode (returns 404).
+      responses:
+        '201':
+          description: The created order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [new, accepted, packed, handed_to_courier, delivered, cancelled]
+
+    OrderItem:
+      type: object
+      required: [id, product_id, title, price, quantity]
+      properties:
+        id:
+          type: string
+        product_id:
+          type: string
+        title:
+          type: string
+          description: Title snapshot taken at order time
+        price:
+          type: integer
+          description: Unit price snapshot in so'm
+        quantity:
+          type: integer
+          minimum: 1
+
+    Order:
+      type: object
+      required: [id, number, status, buyer_name, buyer_phone, delivery_address, items, total, created_at, status_changed_at]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+          example: '#100245'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        buyer_name:
+          type: string
+        buyer_phone:
+          type: string
+        delivery_address:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        total:
+          type: integer
+          description: Sum of price × quantity in so'm
+        cancel_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        status_changed_at:
+          type: string
+          format: date-time
+
+    OrderSummary:
+      type: object
+      description: Order without items, used in lists
+      required: [id, number, status, buyer_name, total, created_at]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        buyer_name:
+          type: string
+        total:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    OrderPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderSummary'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+
+    TransitionRequest:
+      type: object
+      required: [to]
+      properties:
+        to:
+          $ref: '#/components/schemas/OrderStatus'
+        reason:
+          type: string
+          minLength: 1
+          description: Required when `to` is `cancelled`
+
+    TopProduct:
+      type: object
+      required: [product_id, title, quantity_sold, revenue]
+      properties:
+        product_id:
+          type: string
+        title:
+          type: string
+        quantity_sold:
+          type: integer
+          description: Units in delivered orders in the last 30 days
+        revenue:
+          type: integer
+          description: so'm
+
+    DashboardSummary:
+      type: object
+      required: [today_orders, waiting_for_action, revenue_7d, revenue_30d, top_products]
+      properties:
+        today_orders:
+          type: integer
+          description: Orders created today
+        waiting_for_action:
+          type: integer
+          description: Orders in status `new`
+        revenue_7d:
+          type: integer
+          description: Sum of delivered order totals in the last 7 days, so'm
+        revenue_30d:
+          type: integer
+          description: Sum of delivered order totals in the last 30 days, so'm
+        top_products:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/TopProduct'
+
+    Balance:
+      type: object
+      required: [available, earned, commission]
+      properties:
+        available:
+          type: integer
+          description: Sum of all balance entries, so'm
+        earned:
+          type: integer
+          description: Sum of `sale` entries, so'm
+        commission:
+          type: integer
+          description: Sum of `commission` entries (negative), so'm
+
+    BalanceEntry:
+      type: object
+      required: [id, order_id, type, amount, created_at]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        type:
+          type: string
+          enum: [sale, commission, payout]
+        amount:
+          type: integer
+          description: Signed amount in so'm (sale > 0, commission < 0)
+        created_at:
+          type: string
+          format: date-time
+
+    BalanceEntryPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceEntry'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: invalid_transition
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found, or not owned by the current shop
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Invalid request body (for example, missing `reason` on cancel)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: |
+        Business rule violated: `invalid_transition` or `insufficient_stock`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
