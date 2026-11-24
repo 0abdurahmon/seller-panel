@@ -35,7 +35,7 @@ func newPgService(t *testing.T) (*Service, *TokenIssuer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(NewPgStore(pool), tokens)
+	svc, err := NewService(NewPgRepository(pool), tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestPgRejectedRegisterCreatesNoExtraShop(t *testing.T) {
 		t.Fatalf("err = %v, want ErrEmailTaken", err)
 	}
 	var shops int
-	pool := svc.store.(*pgStore).pool
+	pool := svc.repo.(*PgRepository).pool
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shops`).Scan(&shops); err != nil {
 		t.Fatal(err)
 	}

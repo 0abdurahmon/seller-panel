@@ -2,15 +2,11 @@ package shop
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
 )
-
-// ErrValidation is returned for invalid input. The handler maps it to 400.
-var ErrValidation = errors.New("validation failed")
 
 const (
 	maxNameLen        = 120

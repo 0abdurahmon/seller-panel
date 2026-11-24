@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,15 +20,15 @@ func newTestRouter(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := auth.NewService(auth.NewMemStore(), tokens)
+	svc, err := auth.NewService(&fakeAuthRepository{byMail: map[string]auth.Credentials{}}, tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stockSvc, err := stock.NewService(stock.NewMemStore(), 5)
+	stockSvc, err := stock.NewService(fakeStockRepository{}, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	shopRepo := shop.NewMemRepository()
+	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
 		Auth:   auth.NewHandler(svc),
 		Shop:   shop.NewHandler(shop.NewService(shopRepo)),
@@ -91,4 +92,41 @@ func TestUnknownRouteIs404(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNotFound)
 	}
+}
+
+type fakeAuthRepository struct {
+	byMail map[string]auth.Credentials
+}
+
+func (r *fakeAuthRepository) CreateSellerWithShop(_ context.Context, email, passwordHash, _ string) (int64, int64, error) {
+	if _, taken := r.byMail[email]; taken {
+		return 0, 0, auth.ErrEmailTaken
+	}
+	id := int64(len(r.byMail) + 1)
+	r.byMail[email] = auth.Credentials{SellerID: id, ShopID: id, PasswordHash: passwordHash}
+	return id, id, nil
+}
+
+func (r *fakeAuthRepository) FindCredentials(_ context.Context, email string) (auth.Credentials, error) {
+	c, ok := r.byMail[email]
+	if !ok {
+		return auth.Credentials{}, auth.ErrNotFound
+	}
+	return c, nil
+}
+
+type fakeShopRepository struct{}
+
+func (fakeShopRepository) Get(_ context.Context, shopID int64) (shop.Shop, error) {
+	return shop.Shop{ID: shopID, Name: "Test shop"}, nil
+}
+
+func (fakeShopRepository) Update(_ context.Context, shopID int64, p shop.Profile) (shop.Shop, error) {
+	return shop.Shop{ID: shopID, Name: p.Name}, nil
+}
+
+type fakeStockRepository struct{}
+
+func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (stock.Row, error) {
+	return stock.Row{Stock: qty}, nil
 }

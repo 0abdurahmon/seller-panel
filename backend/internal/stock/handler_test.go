@@ -12,7 +12,7 @@ import (
 )
 
 // newMux serves the stock route behind real auth middleware, like the router.
-func newMux(t *testing.T) (*http.ServeMux, *MemStore, *auth.TokenIssuer) {
+func newMux(t *testing.T) (*http.ServeMux, *memRepository, *auth.TokenIssuer) {
 	t.Helper()
 	svc, store := newService(t)
 	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
@@ -79,9 +79,9 @@ func TestHandlerUpdateStock(t *testing.T) {
 		{"stale expected", "/products/10/stock", `{"stock": 9, "expected_stock": 20}`, http.StatusConflict, "stock_changed"},
 		{"below reserved", "/products/10/stock", `{"stock": 1, "expected_stock": 6}`, http.StatusConflict, "stock_below_reserved"},
 		{"archived", "/products/11/stock", `{"stock": 9, "expected_stock": 5}`, http.StatusConflict, "product_archived"},
-		{"missing product", "/products/999/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "product_not_found"},
-		{"bad id", "/products/abc/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "product_not_found"},
-		{"zero id", "/products/0/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "product_not_found"},
+		{"missing product", "/products/999/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "not_found"},
+		{"bad id", "/products/abc/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "not_found"},
+		{"zero id", "/products/0/stock", `{"stock": 9, "expected_stock": 0}`, http.StatusNotFound, "not_found"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestHandlerUpdateStock(t *testing.T) {
 	}
 }
 
-func TestHandlerConflictCarriesCurrentStock(t *testing.T) {
+func TestHandlerStaleExpectedThenRetry(t *testing.T) {
 	mux, store, tokens := newMux(t)
 	store.Put(1, 10, 12, 2, false)
 	token := issue(t, tokens, 100, 1)
@@ -106,17 +106,12 @@ func TestHandlerConflictCarriesCurrentStock(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409; body %s", rec.Code, rec.Body)
 	}
-	var body struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Current Level  `json:"current"`
-	}
+	var body map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Code != "stock_changed" || body.Message == "" ||
-		body.Current.Stock != 12 || body.Current.Available != 10 || body.Current.Label != InStock {
-		t.Fatalf("body = %+v, want stock_changed with current stock 12", body)
+	if len(body) != 2 || body["code"] != "stock_changed" || body["message"] == "" {
+		t.Fatalf("body = %v, want only code stock_changed and a message", body)
 	}
 
 	if rec := patch(t, mux, token, "/products/10/stock", `{"stock": 30, "expected_stock": 12}`); rec.Code != http.StatusOK {

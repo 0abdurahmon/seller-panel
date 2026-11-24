@@ -23,6 +23,16 @@ func PrincipalFrom(ctx context.Context) (Principal, bool) {
 	return p, ok
 }
 
+// MustPrincipal returns the principal set by RequireAuth. If it is missing it
+// writes a 401 and reports false, so handlers can return right away.
+func MustPrincipal(w http.ResponseWriter, r *http.Request) (Principal, bool) {
+	p, ok := PrincipalFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
+	}
+	return p, ok
+}
+
 // RequireAuth rejects requests without a valid Bearer token with 401.
 func RequireAuth(tokens *TokenIssuer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

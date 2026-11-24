@@ -18,7 +18,7 @@ func newService(t *testing.T) (*Service, *TokenIssuer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(NewMemStore(), tokens)
+	svc, err := NewService(newMemRepository(), tokens)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestLoginWrongPasswordAndUnknownEmailLookTheSame(t *testing.T) {
 }
 
 func TestPasswordIsNotStoredInPlainText(t *testing.T) {
-	store := NewMemStore().(*memStore)
+	store := newMemRepository()
 	tokens, _ := NewTokenIssuer("s", time.Hour)
 	svc, _ := NewService(store, tokens)
 	register(t, svc, "a@example.com")

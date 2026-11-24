@@ -14,16 +14,16 @@ import (
 
 const uniqueViolation = "23505"
 
-type pgStore struct {
+type PgRepository struct {
 	pool *pgxpool.Pool
 }
 
-// NewPgStore returns the PostgreSQL-backed store for sellers and shops.
-func NewPgStore(pool *pgxpool.Pool) store {
-	return &pgStore{pool: pool}
+// NewPgRepository returns the PostgreSQL-backed repository for sellers and shops.
+func NewPgRepository(pool *pgxpool.Pool) *PgRepository {
+	return &PgRepository{pool: pool}
 }
 
-func (s *pgStore) CreateSellerWithShop(ctx context.Context, email, passwordHash, shopName string) (int64, int64, error) {
+func (s *PgRepository) CreateSellerWithShop(ctx context.Context, email, passwordHash, shopName string) (int64, int64, error) {
 	var sellerID, shopID int64
 	err := database.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx,
@@ -47,7 +47,7 @@ func (s *pgStore) CreateSellerWithShop(ctx context.Context, email, passwordHash,
 	return sellerID, shopID, nil
 }
 
-func (s *pgStore) FindCredentials(ctx context.Context, email string) (Credentials, error) {
+func (s *PgRepository) FindCredentials(ctx context.Context, email string) (Credentials, error) {
 	var c Credentials
 	err := s.pool.QueryRow(ctx,
 		`SELECT se.id, sh.id, se.password_hash
