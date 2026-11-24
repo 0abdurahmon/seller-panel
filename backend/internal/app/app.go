@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -22,39 +23,41 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
-func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (http.Handler, error) {
+// NewHandler wires the API. The returned Closer releases the upload directory and must be closed after the server stops.
+func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (http.Handler, io.Closer, error) {
 	tokens, err := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dashboardSvc, err := dashboard.NewService(dashboard.NewPgRepository(pool), cfg.BusinessLocation)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uploadRepo, err := upload.NewFSRepository(cfg.UploadDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uploadSvc := upload.NewService(uploadRepo, cfg.UploadPublicURL)
 
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
-		return nil, err
+		_ = uploadRepo.Close()
+		return nil, nil, err
 	}
 	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
 
@@ -81,5 +84,5 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		DevEndpoints:  cfg.Env == config.EnvDevelopment,
 		Spec:          spec,
 	})
-	return httpx.Logging(logger)(router), nil
+	return httpx.Logging(logger)(router), uploadRepo, nil
 }
