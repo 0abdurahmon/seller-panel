@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Link, useMatches } from 'react-router';
 import { useShop } from '@/entities/shop';
 import {
@@ -59,14 +59,16 @@ function PageBreadcrumb({ crumbs, shopName }: { crumbs: Crumb[]; shopName: strin
   );
 }
 
-export const Header = () => {
+/** `leading` goes before the title: the app layout puts the phone menu button there. */
+export const Header = ({ leading }: { leading?: ReactNode }) => {
   const crumbs = useCrumbs();
   const title = crumbs[crumbs.length - 1]?.title;
   const { data: shop } = useShop();
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex flex-col">
+    <div className="flex items-center gap-3">
+      {leading}
+      <div className="flex min-w-0 flex-1 flex-col">
         <h1 className="text-base font-medium md:text-2xl md:font-semibold">{title}</h1>
         <PageBreadcrumb crumbs={crumbs} shopName={shop?.name ?? 'Мой магазин'} />
       </div>

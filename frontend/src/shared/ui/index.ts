@@ -17,6 +17,7 @@ export * from './logo';
 export * from './password-input';
 export * from './select';
 export * from './separator';
+export * from './sheet';
 export * from './spinner';
 export * from './table';
 export * from './tabs';

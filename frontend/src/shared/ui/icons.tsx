@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-// Primitive icons drawn by hand: iconsax has no plain cross, dots, check or thin chevrons,
+// Primitive icons drawn by hand: iconsax has no plain cross, dots, check, menu lines or thin chevrons,
 // only boxed, circled or heavier ones.
 // They follow iconsax's grid (24×24, 1.5 stroke, round caps) and its default 24px size,
 // so they sit next to iconsax icons without looking different. Colour is currentColor.
@@ -103,6 +103,15 @@ function ChevronRightIcon(props: IconProps) {
   )
 }
 
+/** Three lines: opens the navigation menu on small screens. */
+function MenuIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </IconBase>
+  )
+}
+
 export {
   CheckIcon,
   ChevronDownIcon,
@@ -110,6 +119,7 @@ export {
   ChevronRightIcon,
   ChevronUpIcon,
   CloseIcon,
+  MenuIcon,
   MoreHorizontalIcon,
   MoreVerticalIcon,
 }
