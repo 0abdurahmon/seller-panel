@@ -5,7 +5,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "cn"
 
 import { Button } from "./button"
-import { CloseCircle } from "iconsax-reactjs"
+import { CloseIcon } from "./icons"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -70,7 +70,7 @@ function DialogContent({
               />
             }
           >
-            <CloseCircle
+            <CloseIcon
             />
             <span className="sr-only">Закрыть</span>
           </DialogPrimitive.Close>

@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Box, More, Sort } from "iconsax-reactjs";
+import { ArrowDown, ArrowUp, Box, Sort } from "iconsax-reactjs";
 import { Skeleton } from "skullet/react";
 import { useCategoryName } from "@/entities/category";
 import { ProductStatusBadge, StockLabelBadge } from "@/entities/product";
@@ -19,6 +19,7 @@ import { useProductDetails } from "@/features/product/product-details";
 import { formatDateTime, formatPrice } from "@/shared/lib";
 import {
   Button,
+  MoreVerticalIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuSeparator,
@@ -84,7 +85,7 @@ function ProductActions({ product }: { product: Product }) {
             <Button variant="ghost" size="icon-sm" aria-label={`Действия: ${product.title}`} />
           }
         >
-          <More className="rotate-90" />
+          <MoreVerticalIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <EditProductMenuItem product={product} />

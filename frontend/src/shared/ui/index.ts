@@ -9,6 +9,7 @@ export * from './dialog';
 export * from './dropdown-menu';
 export * from './empty';
 export * from './field';
+export * from './icons';
 export * from './input';
 export * from './label';
 export * from './logo';

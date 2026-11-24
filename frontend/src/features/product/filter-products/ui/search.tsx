@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { CloseCircle, SearchNormal1 } from "iconsax-reactjs";
-import { Button, Input } from "@/shared/ui";
+import { SearchNormal1 } from "iconsax-reactjs";
+import { Button, CloseIcon, Input } from "@/shared/ui";
 
 const SEARCH_DELAY_MS = 300;
 /** Same limit as the `q` parameter in api/openapi.yaml. */
@@ -63,7 +63,7 @@ export const ProductSearch = ({
           aria-label="Очистить поиск"
           className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full text-muted-foreground"
         >
-          <CloseCircle />
+          <CloseIcon />
         </Button>
       )}
     </div>
