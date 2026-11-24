@@ -44,7 +44,8 @@ Rules:
 ## HTTP conventions
 
 - JSON, `snake_case`. Create returns 201, other success 200.
-- Errors are always `httpx.WriteError(w, status, code, message)`, body `{"code","message"}`.
+- Errors are always `httpx.WriteError(w, status, code, message)`, body `{"code","message"}`. Unknown routes and wrong methods get the same shape from `httpx.JSONErrors`, so never write a plain-text error.
+- Unset optional values follow the column: nullable column is `null`, `NOT NULL DEFAULT ''` text is `""`, lists are `[]`. Times are UTC, call `.UTC()` after scanning a `timestamptz`.
 - Handler error mapping, one `write<Feature>Error` function per handler:
 
 | Error | Status | `code` |

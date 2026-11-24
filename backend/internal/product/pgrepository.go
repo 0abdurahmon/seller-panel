@@ -109,6 +109,8 @@ func scanRead(row pgx.Row) (Product, error) {
 	if err != nil {
 		return Product{}, fmt.Errorf("scan product: %w", err)
 	}
+	p.CreatedAt = p.CreatedAt.UTC()
+	p.UpdatedAt = p.UpdatedAt.UTC()
 	return p, nil
 }
 

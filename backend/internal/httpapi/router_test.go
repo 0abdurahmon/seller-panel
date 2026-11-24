@@ -91,7 +91,7 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestUnknownRouteIs404(t *testing.T) {
+func TestUnknownRouteIsJSON404(t *testing.T) {
 	srv := httptest.NewServer(newTestRouter(t))
 	defer srv.Close()
 
@@ -103,6 +103,33 @@ func TestUnknownRouteIs404(t *testing.T) {
 
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNotFound)
+	}
+	var e struct{ Code, Message string }
+	if err := json.NewDecoder(res.Body).Decode(&e); err != nil || e.Code != "not_found" || e.Message == "" {
+		t.Fatalf("body is not the shared error shape: %+v, %v", e, err)
+	}
+}
+
+func TestWrongMethodIsJSON405(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter(t))
+	defer srv.Close()
+
+	for _, path := range []string{"/health", "/auth/login", "/products"} {
+		method := http.MethodDelete
+		req, err := http.NewRequest(method, srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e struct{ Code, Message string }
+		decodeErr := json.NewDecoder(res.Body).Decode(&e)
+		res.Body.Close()
+		if res.StatusCode != http.StatusMethodNotAllowed || res.Header.Get("Allow") == "" || decodeErr != nil || e.Code != "method_not_allowed" {
+			t.Errorf("%s %s: status %d, Allow %q, error %+v (%v)", method, path, res.StatusCode, res.Header.Get("Allow"), e, decodeErr)
+		}
 	}
 }
 
