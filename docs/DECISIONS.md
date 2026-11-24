@@ -21,7 +21,7 @@ Record every important decision here: what you chose, what else you considered, 
 
 ## D3 — API contract format
 - The contract is OpenAPI 3.0 in `api/openapi.yaml`. It is the single source of truth for paths, request and response schemas and error cases; field names equal the JSON tags in Go.
-- Every new or changed endpoint is described in the same PR as its code (AGENTS.md). Swagger UI at `/docs/` (behind basic auth from `SWAGGER_USER` / `SWAGGER_PASSWORD`) shows the file; `npx @redocly/cli lint api/openapi.yaml` validates it.
+- Every new or changed endpoint is described in the same PR as its code (AGENTS.md). Swagger UI at `/docs/` (open, no login) shows the file; `npx @redocly/cli lint api/openapi.yaml` validates it.
 - Shared conventions live in the file once: Bearer auth, `snake_case` JSON, money as integer so'm, `?page=&page_size=` lists returning `{items, page, page_size, total}`, and errors as `{code, message}` with the codes from AGENTS.md.
 - The frontend will generate its API types from this file (ARCHITECTURE section 7), so the client cannot drift from the backend.
 - Why: frontend and backend can work in parallel against one agreed contract, reviewers see API changes as a diff, and the docs page comes for free.
@@ -84,7 +84,7 @@ Record every important decision here: what you chose, what else you considered, 
 
 ## D9 — The spec as JSON
 - Swagger UI at `/docs/` only shows `api/openapi.yaml`. Type and client generators and Postman want JSON from a URL, so the backend serves it: `GET /openapi.json`, made from the file in `OPENAPI_FILE` on request (cached by modification time and size, so an edit shows at once and nothing is converted twice). A missing file is a JSON 404 `spec_not_found`, an invalid one a 500 that hides the details and logs them. With `OPENAPI_FILE` empty the route does not exist.
-- nginx publishes it as `GET /swagger` and `GET /docs/spec/openapi.json` behind the same basic auth as `/docs/` (D2/#50 keep the docs behind a login). It blocks `/api/openapi.json` so the login cannot be skipped through the API prefix. The backend port itself is bound to `127.0.0.1`, so the unauthenticated route is not reachable from the network.
+- nginx publishes it as `GET /swagger` and `GET /docs/spec/openapi.json`, and `/api/openapi.json` reaches the same backend route (rate limited like the rest of `/api`). The docs have no login: the basic auth added in #50 was removed (#102) because the team and the frontend developers use the docs and the JSON all the time from several machines. The spec is not secret and the API still needs a token. A public deployment should put its own protection in front of `/docs/`, `/swagger` and `/api/openapi.json`.
 - Docker Compose mounts `./api` read-only into the backend too, because the spec lives outside the Go module and cannot be embedded without moving it (it is shared with the frontend generators and Swagger UI).
 - Why in the backend and not in the docs container: it is testable in Go (unit and e2e tests), works with `go run`, and needs no extra binary or start script. Keys come out in alphabetical order, which is cosmetic.
 - Considered: converting with `yq` when the frontend container starts (works, but needs a binary in the image, a start script, and the JSON goes stale until a restart), baking the JSON at build time (the image is built from `./frontend` and cannot see `api/`), committing a generated `openapi.json` (two copies that can drift), `go:embed` (needs the spec inside `backend/`).
