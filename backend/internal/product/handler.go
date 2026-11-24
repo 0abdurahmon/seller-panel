@@ -34,6 +34,9 @@ func NewHandler(svc *Service, label StockLabeler) *Handler {
 }
 
 func (h *Handler) response(p Product) Response {
+	if p.Photos == nil {
+		p.Photos = []string{}
+	}
 	available := p.Stock - p.Reserved
 	return Response{Product: p, Available: available, StockLabel: h.label(available)}
 }

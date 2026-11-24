@@ -15,14 +15,17 @@ const (
 	maxStock          = 1_000_000
 	defaultPageSize   = 20
 	maxPageSize       = 100
+	maxPhotos         = 5
+	maxPhotoURLLen    = 2048
 )
 
 type Service struct {
-	repo Repository
+	repo   Repository
+	photos PhotoStore
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, photos PhotoStore) *Service {
+	return &Service{repo: repo, photos: photos}
 }
 
 func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput) (Product, error) {
@@ -45,6 +48,11 @@ func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput) (Pro
 	if p.Stock < 0 || p.Stock > maxStock {
 		return Product{}, invalid("stock must be between 0 and %d", maxStock)
 	}
+	photos, err := s.checkPhotos(ctx, shopID, in.Photos)
+	if err != nil {
+		return Product{}, err
+	}
+	p.Photos = photos
 	return s.repo.Create(ctx, shopID, p)
 }
 
@@ -73,6 +81,11 @@ func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput) 
 	}
 	if err := validate(&p); err != nil {
 		return Product{}, err
+	}
+	if in.Photos != nil {
+		if p.Photos, err = s.checkPhotos(ctx, shopID, in.Photos); err != nil {
+			return Product{}, err
+		}
 	}
 	return s.repo.Update(ctx, shopID, p)
 }
@@ -118,6 +131,34 @@ func (s *Service) List(ctx context.Context, shopID int64, f ListFilter) (Page, e
 		items = []Product{}
 	}
 	return Page{Items: items, Page: f.Page, PageSize: f.PageSize, Total: total}, nil
+}
+
+// checkPhotos trims and checks the URLs: at most maxPhotos, no repeats, and each one an upload of this shop.
+func (s *Service) checkPhotos(ctx context.Context, shopID int64, urls []string) ([]string, error) {
+	if len(urls) > maxPhotos {
+		return nil, invalid("photos must have at most %d items", maxPhotos)
+	}
+	out := make([]string, 0, len(urls))
+	seen := make(map[string]bool, len(urls))
+	for i, u := range urls {
+		u = strings.TrimSpace(u)
+		switch {
+		case u == "" || len(u) > maxPhotoURLLen:
+			return nil, invalid("photos[%d] must be a URL returned by POST /uploads", i)
+		case seen[u]:
+			return nil, invalid("photos[%d] is listed twice", i)
+		}
+		ok, err := s.photos.Owns(ctx, shopID, u)
+		if err != nil {
+			return nil, fmt.Errorf("check photo: %w", err)
+		}
+		if !ok {
+			return nil, invalid("photos[%d] is not an image uploaded by your shop", i)
+		}
+		seen[u] = true
+		out = append(out, u)
+	}
+	return out, nil
 }
 
 func validate(p *Product) error {

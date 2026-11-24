@@ -49,7 +49,7 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 Derived, not stored: `available = stock - reserved`, and the stock label: `out_of_stock` when `available = 0`, `low_stock` when `available <= LOW_STOCK_THRESHOLD`, `in_stock` otherwise.
 
 ### product_photos
-`id`, `product_id`, `url`, `position` (0 is the cover). A table rather than an array so order and removal are simple.
+`id`, `product_id`, `url`, `position` (0 is the cover, at most 5 photos). A table rather than an array so order and removal are simple. `url` is the URL returned by `POST /uploads`, the service checks it belongs to the product's shop. `(product_id, position)` and `(product_id, url)` are unique, the position key is deferrable.
 
 ### orders
 `id`, `shop_id`, `number` (sequence from 100000, shown as `#100245`), `status`, `buyer_name`, `buyer_phone`, `delivery_address`, `total` (fixed at creation), `cancel_reason`, `created_at`, `status_changed_at`. One order belongs to one shop.
@@ -102,7 +102,7 @@ Each feature owner writes the migration for the tables they own, in the order th
 | `0001_sellers_shops` | `sellers`, `shops` | Auth, Shop profile | merged |
 | `0002_categories` | `categories` and the seeded tree, read through `GET /categories` (#72) | Products | merged |
 | `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | merged |
-| product photos | `product_photos` | Products | planned |
+| `0006_product_photos` | `product_photos`, at most 5 per product (position 0 to 4), no repeated URL | Products | merged |
 | `0004_balance_entries` | `balance_entries` and its enum, constraints and index, without the foreign key to `orders` (that table did not exist yet) | Balance (#84) | merged |
 | `0005_orders` | `orders`, `order_items`, `order_status_history`, `order_number_seq`, and the foreign key `balance_entries.order_id` to `orders` | schema by Balance (#91), Go code by Orders (#70) | merged, written by the order code in this PR |
 

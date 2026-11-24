@@ -3,14 +3,17 @@ module github.com/0abdurahmon/seller-panel/backend
 go 1.26.0
 
 require (
+	github.com/gen2brain/webp v0.6.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/jackc/pgx/v5 v5.13.0
 	golang.org/x/crypto v0.59.0
+	golang.org/x/image v0.48.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
+	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

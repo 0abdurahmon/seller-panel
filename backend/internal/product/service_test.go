@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -12,7 +13,21 @@ func validInput() CreateInput {
 }
 
 func newService() *Service {
-	return NewService(newMemRepository())
+	return NewService(newMemRepository(), newFakePhotos(1))
+}
+
+func photoURL(shop int64, n int) string {
+	return fmt.Sprintf("/api/uploads/%d/%032d.webp", shop, n)
+}
+
+func newServiceWithPhotos(shop int64, n int) (*Service, []string) {
+	urls := make([]string, n)
+	store := newFakePhotos(shop)
+	for i := range urls {
+		urls[i] = photoURL(shop, i+1)
+		store.add(shop, urls[i])
+	}
+	return NewService(newMemRepository(), store), urls
 }
 
 func TestCreateValidation(t *testing.T) {
@@ -257,4 +272,99 @@ func TestListValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPhotos(t *testing.T) {
+	ctx := context.Background()
+	other := photoURL(2, 1)
+
+	t.Run("create keeps the order", func(t *testing.T) {
+		svc, urls := newServiceWithPhotos(1, 3)
+		in := validInput()
+		in.Photos = []string{urls[2], urls[0], urls[1]}
+		p, err := svc.Create(ctx, 1, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprint(p.Photos) != fmt.Sprint(in.Photos) {
+			t.Fatalf("photos = %v, want %v", p.Photos, in.Photos)
+		}
+	})
+
+	t.Run("create without photos", func(t *testing.T) {
+		p, err := newService().Create(ctx, 1, validInput())
+		if err != nil || len(p.Photos) != 0 {
+			t.Fatalf("photos = %v, err = %v", p.Photos, err)
+		}
+	})
+
+	rejected := map[string]func(urls []string) []string{
+		"six photos":           func(u []string) []string { return append(append([]string{}, u...), photoURL(1, 6)) },
+		"the same photo twice": func(u []string) []string { return []string{u[0], u[0]} },
+		"unknown file":         func(u []string) []string { return []string{photoURL(1, 99)} },
+		"another shop's file":  func(u []string) []string { return []string{other} },
+		"external url":         func(u []string) []string { return []string{"https://evil.example.com/a.webp"} },
+		"javascript url":       func(u []string) []string { return []string{"javascript:alert(1)"} },
+		"blank":                func(u []string) []string { return []string{"   "} },
+		"url too long":         func(u []string) []string { return []string{strings.Repeat("a", maxPhotoURLLen+1)} },
+	}
+	for name, mutate := range rejected {
+		t.Run("create rejects "+name, func(t *testing.T) {
+			svc, urls := newServiceWithPhotos(1, 5)
+			svc.photos.(*fakePhotoStore).add(2, other)
+			in := validInput()
+			in.Photos = mutate(urls)
+			if _, err := svc.Create(ctx, 1, in); !errors.Is(err, ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation", err)
+			}
+		})
+	}
+
+	t.Run("five photos are allowed", func(t *testing.T) {
+		svc, urls := newServiceWithPhotos(1, 5)
+		in := validInput()
+		in.Photos = urls
+		if p, err := svc.Create(ctx, 1, in); err != nil || len(p.Photos) != 5 {
+			t.Fatalf("photos = %v, err = %v", p.Photos, err)
+		}
+	})
+
+	t.Run("update keeps, replaces and clears", func(t *testing.T) {
+		svc, urls := newServiceWithPhotos(1, 3)
+		in := validInput()
+		in.Photos = urls[:2]
+		p, err := svc.Create(ctx, 1, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		up := UpdateInput{CategoryID: 1, Title: "New", Price: 5, SKU: in.SKU}
+
+		got, err := svc.Update(ctx, 1, p.ID, up)
+		if err != nil || fmt.Sprint(got.Photos) != fmt.Sprint(urls[:2]) {
+			t.Fatalf("photos omitted: %v, err = %v, want them kept", got.Photos, err)
+		}
+		up.Photos = []string{urls[2]}
+		if got, err = svc.Update(ctx, 1, p.ID, up); err != nil || fmt.Sprint(got.Photos) != fmt.Sprint(urls[2:]) {
+			t.Fatalf("photos replaced: %v, err = %v", got.Photos, err)
+		}
+		up.Photos = []string{}
+		if got, err = svc.Update(ctx, 1, p.ID, up); err != nil || len(got.Photos) != 0 {
+			t.Fatalf("photos cleared: %v, err = %v", got.Photos, err)
+		}
+		up.Photos = []string{other}
+		if _, err = svc.Update(ctx, 1, p.ID, up); !errors.Is(err, ErrValidation) {
+			t.Fatalf("another shop's photo: err = %v", err)
+		}
+	})
+
+	t.Run("archive keeps photos", func(t *testing.T) {
+		svc, urls := newServiceWithPhotos(1, 1)
+		in := validInput()
+		in.Photos = urls
+		p, _ := svc.Create(ctx, 1, in)
+		got, err := svc.Archive(ctx, 1, p.ID)
+		if err != nil || len(got.Photos) != 1 {
+			t.Fatalf("photos = %v, err = %v", got.Photos, err)
+		}
+	})
 }

@@ -29,6 +29,7 @@ type server struct {
 	t    *testing.T
 	url  string
 	pool *pgxpool.Pool
+	dir  string
 }
 
 func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
@@ -38,6 +39,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dir := t.TempDir()
 	cfg := config.Config{
 		Env:               config.EnvDevelopment,
 		OpenAPIFile:       "../../api/openapi.yaml",
@@ -52,6 +54,9 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 		LoginWindow:       15 * time.Minute,
 		TrustedProxies:    []string{"127.0.0.1/32", "::1/128"},
 		BusinessLocation:  zone,
+		UploadDir:         dir,
+		UploadPublicURL:   "/api/uploads",
+		UploadsPerMinute:  1000,
 	}
 	for _, m := range mutate {
 		m(&cfg)
@@ -62,7 +67,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	}
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return &server{t: t, url: srv.URL, pool: pool}
+	return &server{t: t, url: srv.URL, pool: pool, dir: dir}
 }
 
 type response struct {
@@ -173,18 +178,19 @@ func (s *server) login(email, password string, headers ...string) response {
 }
 
 type product struct {
-	ID          int64  `json:"id"`
-	ShopID      int64  `json:"shop_id"`
-	CategoryID  int64  `json:"category_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Price       int64  `json:"price"`
-	SKU         string `json:"sku"`
-	Stock       int    `json:"stock"`
-	Reserved    int    `json:"reserved"`
-	Available   int    `json:"available"`
-	StockLabel  string `json:"stock_label"`
-	Status      string `json:"status"`
+	ID          int64    `json:"id"`
+	ShopID      int64    `json:"shop_id"`
+	CategoryID  int64    `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       int64    `json:"price"`
+	SKU         string   `json:"sku"`
+	Stock       int      `json:"stock"`
+	Reserved    int      `json:"reserved"`
+	Available   int      `json:"available"`
+	StockLabel  string   `json:"stock_label"`
+	Status      string   `json:"status"`
+	Photos      []string `json:"photos"`
 }
 
 type productPage struct {

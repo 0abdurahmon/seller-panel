@@ -3,6 +3,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
+	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (http.Handler, error) {
@@ -44,6 +46,11 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 	if err != nil {
 		return nil, err
 	}
+	uploadRepo, err := upload.NewFSRepository(cfg.UploadDir)
+	if err != nil {
+		return nil, err
+	}
+	uploadSvc := upload.NewService(uploadRepo, cfg.UploadPublicURL)
 
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
@@ -60,17 +67,19 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), uploadSvc), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
+		Upload:  upload.NewHandler(uploadSvc),
 
 		Dashboard: dashboard.NewHandler(dashboardSvc),
 
-		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
-		DevEndpoints: cfg.Env == config.EnvDevelopment,
-		Spec:         spec,
+		ShopLimiter:   httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
+		UploadLimiter: httpx.NewLimiterPer(cfg.UploadsPerMinute, time.Minute),
+		DevEndpoints:  cfg.Env == config.EnvDevelopment,
+		Spec:          spec,
 	})
 	return httpx.Logging(logger)(router), nil
 }

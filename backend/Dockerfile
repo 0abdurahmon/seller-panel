@@ -8,7 +8,9 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata \
-    && adduser -D -u 10001 app
+    && adduser -D -u 10001 app \
+    && mkdir -p /app/uploads \
+    && chown app /app/uploads
 USER app
 COPY --from=build /out/server /server
 COPY --from=build /out/seed /seed

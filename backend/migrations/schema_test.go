@@ -177,3 +177,23 @@ func TestBalanceEntriesPointToRealOrders(t *testing.T) {
 		t.Fatalf("a payout has no order and must still work: %v", err)
 	}
 }
+
+func TestProductPhotoConstraints(t *testing.T) {
+	f := newFixture(t)
+	insert := func(url string, position int) error {
+		_, err := f.pool.Exec(ctx, `INSERT INTO product_photos (product_id, url, position) VALUES ($1, $2, $3)`, f.product, url, position)
+		return err
+	}
+	if err := insert("/u/a", 0); err != nil {
+		t.Fatal(err)
+	}
+	wantConstraint(t, insert("/u/b", 0), "product_photos_position_key")
+	wantConstraint(t, insert("/u/a", 1), "product_photos_url_key")
+	wantConstraint(t, insert("  ", 1), "product_photos_url_check")
+	wantConstraint(t, insert("/u/c", -1), "product_photos_position_check")
+	wantConstraint(t, insert("/u/d", 5), "product_photos_position_check")
+
+	if _, err := f.pool.Exec(ctx, `INSERT INTO product_photos (product_id, url, position) VALUES (999999999, '/u/x', 0)`); err == nil {
+		t.Fatal("a photo of a missing product must be refused")
+	}
+}

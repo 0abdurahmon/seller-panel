@@ -55,7 +55,10 @@ Rules:
 | missing or bad token | 401 | `unauthorized` |
 | `ErrNotFound` (also other shop's row) | 404 | `not_found` |
 | duplicate or state conflict | 409 | feature code, for example `sku_taken`, `email_taken`, `insufficient_stock` |
+| file over the size limit | 413 | `file_too_large` |
+| wrong media type | 415 | `unsupported_media_type` |
 | rate limit hit (`httpx.WriteRateLimited`) | 429 | `rate_limited`, with `Retry-After` |
+| server busy, retry soon | 503 | `busy`, with `Retry-After` |
 | anything else | 500 | `internal`, message never leaks details |
 
 - Lists: `?page=1&page_size=20`, default 20, max 100. Response `{"items": [], "page", "page_size", "total"}`, `items` is `[]`, never `null`.

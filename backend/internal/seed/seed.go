@@ -147,11 +147,16 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 		tokens:  tokens,
 		shop:    shop.NewService(shop.NewPgRepository(pool)),
 		catalog: catalog.NewService(catalog.NewPgRepository(pool)),
-		product: product.NewService(product.NewPgRepository(pool)),
+		product: product.NewService(product.NewPgRepository(pool), noUploads{}),
 		stock:   stockSvc,
 		order:   orderSvc,
 	}, nil
 }
+
+// noUploads is the photo check for the seed: demo products have no photos, so no URL is ever accepted.
+type noUploads struct{}
+
+func (noUploads) Owns(context.Context, int64, string) (bool, error) { return false, nil }
 
 func createProducts(ctx context.Context, svc *services, shopID int64) (map[string]product.Product, error) {
 	cats, err := svc.catalog.List(ctx)

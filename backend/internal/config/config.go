@@ -34,6 +34,9 @@ type Config struct {
 	LoginWindow       time.Duration
 	TrustedProxies    []string
 	BusinessLocation  *time.Location
+	UploadDir         string
+	UploadPublicURL   string
+	UploadsPerMinute  int
 }
 
 func Load() (Config, error) {
@@ -48,6 +51,9 @@ func Load() (Config, error) {
 		ShopRPS:           20,
 		ShopBurst:         40,
 		LoginAttempts:     5,
+		UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),
+		UploadPublicURL:   getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
+		UploadsPerMinute:  20,
 		TrustedProxies:    strings.Split(getEnv("TRUSTED_PROXIES", defaultTrustedProxies), ","),
 	}
 
@@ -75,11 +81,14 @@ func Load() (Config, error) {
 	if cfg.LoginAttempts, err = getInt("RATE_LIMIT_LOGIN_ATTEMPTS", cfg.LoginAttempts); err != nil {
 		return Config{}, err
 	}
+	if cfg.UploadsPerMinute, err = getInt("RATE_LIMIT_UPLOADS_PER_MINUTE", cfg.UploadsPerMinute); err != nil {
+		return Config{}, err
+	}
 	window := getEnv("RATE_LIMIT_LOGIN_WINDOW", "15m")
 	if cfg.LoginWindow, err = time.ParseDuration(window); err != nil {
 		return Config{}, fmt.Errorf("RATE_LIMIT_LOGIN_WINDOW must be a duration like 15m: %w", err)
 	}
-	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 {
+	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.UploadsPerMinute < 1 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive")
 	}
 	zone := getEnv("BUSINESS_TIMEZONE", DefaultBusinessTimeZone)
