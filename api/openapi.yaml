@@ -3,8 +3,7 @@ info:
   title: Seller Panel API
   version: 0.1.0
   description: |
-    Contract for auth, shop, orders, dashboard, balance and the stock change (issues #10, #11, #51, D5).
-    Categories and products are added with their features.
+    Contract for auth, shop, categories, orders, dashboard, balance and the stock change (issues #10, #11, #45-#47, #51, #72, D5).
     Errors are `{code, message}`. Lists take `page` and `page_size`.
     All money fields are integers in so'm (no floats).
 servers:
@@ -66,6 +65,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /categories:
+    get:
+      tags: [Catalog]
+      summary: The category tree as a flat list
+      description: |
+        Read only and the same for every seller. Top-level categories have `parent_id: null`.
+        Each parent comes before its children.
+      responses:
+        '200':
+          description: All categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /orders:
     get:
@@ -251,6 +267,139 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /products:
+    get:
+      tags: [Products]
+      summary: List the products of the current shop, newest first
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: Case-insensitive search in title and SKU
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ProductStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Products]
+      summary: Create a product in the current shop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: The created product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: SKU already used in this shop (`sku_taken`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get one product
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Products]
+      summary: Replace the editable fields of a product
+      description: |
+        Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
+        Archived products cannot be edited.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: The updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: '`sku_taken` or `product_archived`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{id}/archive:
+    post:
+      tags: [Products]
+      summary: Archive a product
+      description: Hides it from new orders and keeps its history. Archiving an archived product returns it unchanged.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: The archived product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /products/{id}/stock:
     patch:
       tags: [Stock]
@@ -334,6 +483,30 @@ components:
         default: 20
 
   schemas:
+    Category:
+      type: object
+      required: [id, name, parent_id]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Null for a top-level category, two levels in total
+
+    CategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+
     RegisterRequest:
       type: object
       required: [email, password, shop_name]
@@ -605,6 +778,133 @@ components:
         pickup_address:
           type: string
           maxLength: 300
+
+    ProductStatus:
+      type: string
+      enum: [draft, active, archived]
+
+    Product:
+      type: object
+      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        shop_id:
+          type: integer
+          format: int64
+        category_id:
+          type: integer
+          format: int64
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: integer
+          format: int64
+          description: so'm
+        sku:
+          type: string
+        stock:
+          type: integer
+        reserved:
+          type: integer
+        available:
+          type: integer
+          description: stock minus reserved
+        stock_label:
+          $ref: '#/components/schemas/StockLabel'
+        status:
+          $ref: '#/components/schemas/ProductStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProductRequest:
+      type: object
+      required: [category_id, title, price, sku]
+      additionalProperties: false
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+          description: so'm
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Unique within the shop
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
+        status:
+          type: string
+          enum: [draft, active]
+          default: draft
+
+    UpdateProductRequest:
+      type: object
+      required: [category_id, title, price, sku]
+      additionalProperties: false
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          type: string
+          enum: [draft, active]
+          description: Kept as is when omitted
+
+    ProductPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
 
     StockLabel:
       type: string
