@@ -31,7 +31,7 @@ Merged work per owner, so the team can see what is done without reading the hist
 - The PostgreSQL side and routes were built by Akbar (#97, #99).
 
 **Open, not decided**
-- Real-time order changes: SSE or polling, with the choice still to make. README lists it as in scope; see the options discussed in #107's thread and `README.md`.
+- Real-time order changes: SSE or polling, with the choice still to make. README lists it as in scope (`README.md`, MVP list).
 - Telegram alerts for new orders: not started.
 - Frontend sign-in against the Telegram code flow: not started (Abdukhalil).
 - Running more than one backend instance: blocked by the bot polling in D10.
