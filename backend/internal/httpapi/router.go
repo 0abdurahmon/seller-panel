@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -55,13 +56,24 @@ func NewRouter(d Deps) http.Handler {
 		p, ok := auth.PrincipalFrom(r.Context())
 		return strconv.FormatInt(p.ShopID, 10), ok
 	})
+	// A product saved with photos costs as much as an upload, so it shares the upload limit; JSON edits do not.
+	limitImages := func(next http.HandlerFunc) http.HandlerFunc {
+		limited := limitUploads(next)
+		return func(w http.ResponseWriter, r *http.Request) {
+			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "multipart/form-data" {
+				limited.ServeHTTP(w, r)
+				return
+			}
+			next(w, r)
+		}
+	}
 	mux.Handle("GET /shop", protected(d.Shop.Get))
 	mux.Handle("PUT /shop", protected(d.Shop.Update))
 	mux.Handle("GET /categories", protected(d.Catalog.List))
 	mux.Handle("GET /products", protected(d.Product.List))
-	mux.Handle("POST /products", protected(d.Product.Create))
+	mux.Handle("POST /products", protected(limitImages(d.Product.Create)))
 	mux.Handle("GET /products/{id}", protected(d.Product.Get))
-	mux.Handle("PUT /products/{id}", protected(d.Product.Update))
+	mux.Handle("PUT /products/{id}", protected(limitImages(d.Product.Update)))
 	mux.Handle("POST /products/{id}/archive", protected(d.Product.Archive))
 	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
 	mux.Handle("GET /balance", protected(d.Balance.Summary))

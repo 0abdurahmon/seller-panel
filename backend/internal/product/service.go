@@ -1,6 +1,7 @@
 package product
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -16,7 +17,6 @@ const (
 	defaultPageSize   = 20
 	maxPageSize       = 100
 	maxPhotos         = 5
-	maxPhotoURLLen    = 2048
 )
 
 type Service struct {
@@ -28,7 +28,8 @@ func NewService(repo Repository, photos PhotoStore) *Service {
 	return &Service{repo: repo, photos: photos}
 }
 
-func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput) (Product, error) {
+// Create stores the product and its new photos together: when any step fails, no product and no file is left.
+func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput, add [][]byte) (Product, error) {
 	p := Product{
 		ShopID:      shopID,
 		CategoryID:  in.CategoryID,
@@ -48,12 +49,20 @@ func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput) (Pro
 	if p.Stock < 0 || p.Stock > maxStock {
 		return Product{}, invalid("stock must be between 0 and %d", maxStock)
 	}
-	photos, err := s.checkPhotos(ctx, shopID, in.Photos)
+	if len(add) > maxPhotos {
+		return Product{}, invalid("a product has at most %d photos", maxPhotos)
+	}
+	saved, err := s.savePhotos(ctx, shopID, add)
 	if err != nil {
 		return Product{}, err
 	}
-	p.Photos = photos
-	return s.repo.Create(ctx, shopID, p)
+	p.Photos = saved
+	created, err := s.repo.Create(ctx, shopID, p)
+	if err != nil {
+		s.photos.Remove(ctx, shopID, saved)
+		return Product{}, err
+	}
+	return created, nil
 }
 
 func (s *Service) Get(ctx context.Context, shopID, id int64) (Product, error) {
@@ -63,7 +72,9 @@ func (s *Service) Get(ctx context.Context, shopID, id int64) (Product, error) {
 	return s.repo.Get(ctx, shopID, id)
 }
 
-func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput) (Product, error) {
+// Update changes the product and its photos together. Photos that are no longer listed are deleted after the
+// product is saved; new files are deleted again when the save fails.
+func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput, pc PhotoChange) (Product, error) {
 	p, err := s.Get(ctx, shopID, id)
 	if err != nil {
 		return Product{}, err
@@ -82,12 +93,26 @@ func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput) 
 	if err := validate(&p); err != nil {
 		return Product{}, err
 	}
-	if in.Photos != nil {
-		if p.Photos, err = s.checkPhotos(ctx, shopID, in.Photos); err != nil {
-			return Product{}, err
-		}
+	current := p.Photos
+	kept, err := keptPhotos(current, pc.Keep)
+	if err != nil {
+		return Product{}, err
 	}
-	return s.repo.Update(ctx, shopID, p)
+	if len(kept)+len(pc.Add) > maxPhotos {
+		return Product{}, invalid("a product has at most %d photos, %d kept and %d new", maxPhotos, len(kept), len(pc.Add))
+	}
+	saved, err := s.savePhotos(ctx, shopID, pc.Add)
+	if err != nil {
+		return Product{}, err
+	}
+	p.Photos = append(append([]string{}, kept...), saved...)
+	updated, err := s.repo.Update(ctx, shopID, p)
+	if err != nil {
+		s.photos.Remove(ctx, shopID, saved)
+		return Product{}, err
+	}
+	s.photos.Remove(ctx, shopID, dropped(current, kept))
+	return updated, nil
 }
 
 func (s *Service) Archive(ctx context.Context, shopID, id int64) (Product, error) {
@@ -133,32 +158,58 @@ func (s *Service) List(ctx context.Context, shopID int64, f ListFilter) (Page, e
 	return Page{Items: items, Page: f.Page, PageSize: f.PageSize, Total: total}, nil
 }
 
-// checkPhotos trims and checks the URLs: at most maxPhotos, no repeats, and each one an upload of this shop.
-func (s *Service) checkPhotos(ctx context.Context, shopID int64, urls []string) ([]string, error) {
-	if len(urls) > maxPhotos {
-		return nil, invalid("photos must have at most %d items", maxPhotos)
+// savePhotos stores the new images in order. When one fails, the ones stored before it are removed again.
+func (s *Service) savePhotos(ctx context.Context, shopID int64, add [][]byte) ([]string, error) {
+	saved := make([]string, 0, len(add))
+	for i, data := range add {
+		url, err := s.photos.Save(ctx, shopID, bytes.NewReader(data))
+		if err != nil {
+			s.photos.Remove(ctx, shopID, saved)
+			return nil, fmt.Errorf("photos[%d]: %w", i, err)
+		}
+		saved = append(saved, url)
 	}
-	out := make([]string, 0, len(urls))
-	seen := make(map[string]bool, len(urls))
-	for i, u := range urls {
+	return saved, nil
+}
+
+// keptPhotos returns the photos that stay: all current ones when keep is nil, otherwise the listed ones,
+// each of which must be a current photo of the product and listed once.
+func keptPhotos(current []string, keep *[]string) ([]string, error) {
+	if keep == nil {
+		return current, nil
+	}
+	have := make(map[string]bool, len(current))
+	for _, u := range current {
+		have[u] = true
+	}
+	out := make([]string, 0, len(*keep))
+	seen := make(map[string]bool, len(*keep))
+	for i, u := range *keep {
 		u = strings.TrimSpace(u)
 		switch {
-		case u == "" || len(u) > maxPhotoURLLen:
-			return nil, invalid("photos[%d] must be a URL returned by POST /uploads", i)
+		case !have[u]:
+			return nil, invalid("keep_photos[%d] is not a photo of this product", i)
 		case seen[u]:
-			return nil, invalid("photos[%d] is listed twice", i)
-		}
-		ok, err := s.photos.Owns(ctx, shopID, u)
-		if err != nil {
-			return nil, fmt.Errorf("check photo: %w", err)
-		}
-		if !ok {
-			return nil, invalid("photos[%d] is not an image uploaded by your shop", i)
+			return nil, invalid("keep_photos[%d] is listed twice", i)
 		}
 		seen[u] = true
 		out = append(out, u)
 	}
 	return out, nil
+}
+
+func dropped(current, kept []string) []string {
+	stay := make(map[string]bool, len(kept))
+	for _, u := range kept {
+		stay[u] = true
+	}
+	var gone []string
+	for _, u := range current {
+		if !stay[u] {
+			gone = append(gone, u)
+		}
+	}
+	return gone
 }
 
 func validate(p *Product) error {

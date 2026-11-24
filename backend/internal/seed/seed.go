@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"time"
 
@@ -147,16 +148,20 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 		tokens:  tokens,
 		shop:    shop.NewService(shop.NewPgRepository(pool)),
 		catalog: catalog.NewService(catalog.NewPgRepository(pool)),
-		product: product.NewService(product.NewPgRepository(pool), noUploads{}),
+		product: product.NewService(product.NewPgRepository(pool), noPhotos{}),
 		stock:   stockSvc,
 		order:   orderSvc,
 	}, nil
 }
 
-// noUploads is the photo check for the seed: demo products have no photos, so no URL is ever accepted.
-type noUploads struct{}
+// noPhotos is the photo store of the seed: demo products have no photos, so nothing is ever saved.
+type noPhotos struct{}
 
-func (noUploads) Owns(context.Context, int64, string) (bool, error) { return false, nil }
+func (noPhotos) Save(context.Context, int64, io.Reader) (string, error) {
+	return "", errors.New("the seed does not store photos")
+}
+
+func (noPhotos) Remove(context.Context, int64, []string) {}
 
 func createProducts(ctx context.Context, svc *services, shopID int64) (map[string]product.Product, error) {
 	cats, err := svc.catalog.List(ctx)
@@ -186,7 +191,7 @@ func createProducts(ctx context.Context, svc *services, shopID int64) (map[strin
 		p, err := svc.product.Create(ctx, shopID, product.CreateInput{
 			CategoryID: cat, Title: spec.title, Description: spec.description,
 			Price: spec.price, SKU: spec.sku, Stock: stockLevel, Status: status,
-		})
+		}, nil)
 		if err != nil {
 			return nil, fmt.Errorf("create product %s: %w", spec.sku, err)
 		}

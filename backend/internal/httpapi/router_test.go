@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -232,7 +233,9 @@ func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (
 
 type fakePhotoStore struct{}
 
-func (fakePhotoStore) Owns(context.Context, int64, string) (bool, error) { return false, nil }
+func (fakePhotoStore) Save(context.Context, int64, io.Reader) (string, error) { return "", nil }
+
+func (fakePhotoStore) Remove(context.Context, int64, []string) {}
 
 type fakeProductRepository struct{}
 

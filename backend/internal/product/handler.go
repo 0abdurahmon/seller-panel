@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -83,11 +84,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in CreateInput
-	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+	var add [][]byte
+	if isMultipart(r) {
+		f, err := readForm(w, r, createFields)
+		if err == nil {
+			in, err = f.createInput()
+		}
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		add = f.files
+	} else if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		writeInvalidBody(w)
 		return
 	}
-	res, err := h.svc.Create(r.Context(), p.ShopID, in)
+	res, err := h.svc.Create(r.Context(), p.ShopID, in, add)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -114,11 +126,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in UpdateInput
-	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+	var pc PhotoChange
+	if isMultipart(r) {
+		f, err := readForm(w, r, updateFields)
+		if err == nil {
+			in, err = f.updateInput()
+		}
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		pc = PhotoChange{Keep: f.keep, Add: f.files}
+	} else if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		writeInvalidBody(w)
 		return
 	}
-	res, err := h.svc.Update(r.Context(), p.ShopID, pathID(r), in)
+	res, err := h.svc.Update(r.Context(), p.ShopID, pathID(r), in, pc)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -162,8 +185,24 @@ func writeInvalidBody(w http.ResponseWriter) {
 	httpx.WriteError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 }
 
+var errInvalidBody = errors.New("request body is not valid")
+
+func isTooLarge(err error) bool {
+	var mbe *http.MaxBytesError
+	return errors.As(err, &mbe)
+}
+
 func writeError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, errInvalidBody):
+		writeInvalidBody(w)
+	case errors.Is(err, ErrFileTooLarge):
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large", "a photo is larger than 5 MB")
+	case errors.Is(err, ErrUnsupportedMedia):
+		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", err.Error())
+	case errors.Is(err, ErrBusy):
+		w.Header().Set("Retry-After", "2")
+		httpx.WriteError(w, http.StatusServiceUnavailable, "busy", "server is busy processing images, try again shortly")
 	case errors.Is(err, ErrValidation):
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
 	case errors.Is(err, ErrNotFound):
@@ -173,6 +212,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrArchived):
 		httpx.WriteError(w, http.StatusConflict, "product_archived", "archived products cannot be edited")
 	default:
+		slog.Error("product request failed", "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "something went wrong")
 	}
 }

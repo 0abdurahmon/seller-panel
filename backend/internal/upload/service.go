@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -89,25 +88,18 @@ func (s *Service) Delete(ctx context.Context, shopID int64, name string) error {
 	return s.repo.Delete(ctx, shopID, name)
 }
 
-// Owns reports whether url is a file this service stored for the shop: our URL prefix, the shop's id,
-// a generated name, and the file still exists. Anything else, such as an external or another shop's URL, is false.
-func (s *Service) Owns(ctx context.Context, shopID int64, url string) (bool, error) {
+// Remove deletes the file behind a URL this service returned for the shop. A URL that is not ours
+// (another prefix or shop, a foreign name) and a file that is already gone are ErrNotFound.
+func (s *Service) Remove(ctx context.Context, shopID int64, url string) error {
 	rest, ok := strings.CutPrefix(url, s.publicURL+"/")
 	if !ok {
-		return false, nil
+		return ErrNotFound
 	}
 	shop, name, ok := strings.Cut(rest, "/")
 	if !ok || shop != strconv.FormatInt(shopID, 10) {
-		return false, nil
+		return ErrNotFound
 	}
-	f, err := s.Open(ctx, shopID, name)
-	if errors.Is(err, ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, f.Close()
+	return s.Delete(ctx, shopID, name)
 }
 
 func (s *Service) acquire(ctx context.Context) (func(), error) {

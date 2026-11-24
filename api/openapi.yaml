@@ -382,26 +382,72 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Products]
-      summary: Create a product in the current shop
+      summary: Create a product in the current shop, with its photos
+      description: |
+        Two request formats:
+        - `application/json`: the fields only, a product without photos.
+        - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
+          (jpeg, png or webp, 5 MB each). The first image is the cover.
+
+        The product and its photos are saved together: when anything fails (a bad field, a file that is not an
+        image, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP
+        and scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts
+        against the same per shop limit as uploads (20 a minute by default); a JSON request does not.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateProductForm'
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/webp
       responses:
         '201':
-          description: The created product
+          description: The created product, `photos` has the URLs of the stored images
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Product'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: |
+            Invalid field, an unknown or repeated form field, more than 5 photos, an empty file or a file that is not a
+            decodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
           description: SKU already used in this shop (`sku_taken`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: A photo is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: A file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -426,10 +472,18 @@ paths:
           $ref: '#/components/responses/NotFound'
     put:
       tags: [Products]
-      summary: Replace the editable fields of a product
+      summary: Replace the editable fields and change the photos of a product
       description: |
         Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
         Archived products cannot be edited.
+
+        Same two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`
+        request changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order
+        wanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;
+        an empty `keep_photos` removes them all. At most 5 photos in the end.
+
+        All or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are
+        no longer listed are deleted from the server once the product is saved.
       parameters:
         - $ref: '#/components/parameters/ProductId'
       requestBody:
@@ -438,6 +492,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateProductForm'
+            encoding:
+              photos:
+                contentType: image/jpeg, image/png, image/webp
       responses:
         '200':
           description: The updated product
@@ -446,13 +506,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          description: |
+            Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of
+            this product, more than 5 photos in the end, or a file that is not a decodable image (`validation_error`);
+            a body that is not valid JSON or multipart (`invalid_body`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           description: '`sku_taken` or `product_archived`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: A photo is larger than 5 MB (`file_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: A file is not jpeg, png or webp (`unsupported_media_type`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
+          headers:
+            Retry-After:
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -1031,13 +1122,11 @@ components:
     ProductPhotos:
       type: array
       maxItems: 5
-      uniqueItems: true
       items:
         type: string
-        maxLength: 2048
       description: |
-        Photo URLs, the first one is the cover. Each must be the `url` that `POST /uploads` returned for this
-        shop (an external URL, another shop's file or a missing file is `400 validation_error`). `[]` when none.
+        URLs of the product's photos, the first one is the cover. Open them directly (no token), for example
+        `/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp`. `[]` when there are none.
       example: ['/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp']
 
     CreateProductRequest:
@@ -1076,8 +1165,6 @@ components:
           type: string
           enum: [draft, active]
           default: draft
-        photos:
-          $ref: '#/components/schemas/ProductPhotos'
 
     UpdateProductRequest:
       type: object
@@ -1108,11 +1195,91 @@ components:
           type: string
           enum: [draft, active]
           description: Kept as is when omitted
+
+    CreateProductForm:
+      type: object
+      required: [category_id, title, price, sku]
+      description: The fields of `CreateProductRequest` as form fields, plus the images.
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
+        status:
+          type: string
+          enum: [draft, active]
+          default: draft
         photos:
-          allOf:
-            - $ref: '#/components/schemas/ProductPhotos'
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            format: binary
+          description: Images (jpeg, png or webp, 5 MB each). The first one is the cover.
+
+    UpdateProductForm:
+      type: object
+      required: [category_id, title, price, sku]
+      description: The fields of `UpdateProductRequest` as form fields, plus the photo changes.
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 64
+        status:
+          type: string
+          enum: [draft, active]
+          description: Kept as is when omitted
+        keep_photos:
+          type: array
+          items:
+            type: string
           description: |
-            Replaces the list. Kept as is when omitted, `[]` removes all photos.
+            Current photo URLs that stay, in the order wanted. Omit the field to keep all of them,
+            send it empty to remove them all.
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: New images, added after the kept photos. At most 5 photos in the end.
 
     ProductPage:
       type: object
