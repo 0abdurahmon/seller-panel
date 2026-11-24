@@ -61,6 +61,27 @@ check "list finds the product by sku" 1 "$(printf '%s' "$list_response" | grep -
 check "get product" 200 "$(status "$frontend/api/products/${product_id:-0}" -H "$auth")"
 check "archive product" 200 "$(status -X POST "$frontend/api/products/${product_id:-0}/archive" -H "$auth")"
 check "missing product" 404 "$(status "$frontend/api/products/999999999" -H "$auth")"
+guard_email="guard-$(date +%s)-$$@example.com"
+guard_body="{\"email\":\"$guard_email\",\"password\":\"wrong-password\"}"
+guard_failures=0
+for attempt in 1 2 3 4 5; do
+  code="$(status -X POST "$backend/auth/login" -H "$json" -d "$guard_body")"
+  [ "$code" = 401 ] && guard_failures=$((guard_failures + 1))
+done
+check "five failed logins are answered with 401" 5 "$guard_failures"
+blocked="$(curl -s -D - -o /dev/null -X POST "$backend/auth/login" -H "$json" -d "$guard_body")"
+check "sixth login attempt is blocked with 429" 429 "$(printf '%s' "$blocked" | sed -n 's/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p' | head -n 1)"
+check "blocked login says when to retry" 1 "$(printf '%s' "$blocked" | grep -ic '^retry-after:')"
+
+edge_limited=0
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  code="$(status -X POST "$frontend/api/auth/login" -H "$json" -d "$wrong_login_body")"
+  [ "$code" = 429 ] && edge_limited=$((edge_limited + 1))
+done
+check "nginx limits rapid requests to /api/auth/" 1 "$([ "$edge_limited" -ge 1 ] && echo 1 || echo 0)"
+edge_body="$(curl -s -X POST "$frontend/api/auth/login" -H "$json" -d "$wrong_login_body")"
+check "nginx 429 has the standard error body" 1 "$(printf '%s' "$edge_body" | grep -c '"code":"rate_limited"')"
+
 check "docs without credentials" 401 "$(status "$frontend/docs/")"
 check "docs with a wrong password" 401 "$(status -u "$docs_user:wrong-password" "$frontend/docs/")"
 check "docs with credentials" 200 "$(status -u "$docs_user:$docs_password" "$frontend/docs/")"

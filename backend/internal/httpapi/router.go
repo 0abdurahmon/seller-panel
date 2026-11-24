@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
@@ -19,6 +20,8 @@ type Deps struct {
 	Product *product.Handler
 	Tokens  *auth.TokenIssuer
 	Stock   *stock.Handler
+
+	ShopLimiter *httpx.Limiter
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -29,15 +32,22 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /auth/login", d.Auth.Login)
 
 	requireAuth := auth.RequireAuth(d.Tokens)
-	mux.Handle("GET /shop", requireAuth(http.HandlerFunc(d.Shop.Get)))
-	mux.Handle("PUT /shop", requireAuth(http.HandlerFunc(d.Shop.Update)))
-	mux.Handle("GET /categories", requireAuth(http.HandlerFunc(d.Catalog.List)))
-	mux.Handle("GET /products", requireAuth(http.HandlerFunc(d.Product.List)))
-	mux.Handle("POST /products", requireAuth(http.HandlerFunc(d.Product.Create)))
-	mux.Handle("GET /products/{id}", requireAuth(http.HandlerFunc(d.Product.Get)))
-	mux.Handle("PUT /products/{id}", requireAuth(http.HandlerFunc(d.Product.Update)))
-	mux.Handle("POST /products/{id}/archive", requireAuth(http.HandlerFunc(d.Product.Archive)))
-	mux.Handle("PATCH /products/{id}/stock", requireAuth(http.HandlerFunc(d.Stock.Update)))
+	limitPerShop := httpx.RateLimit(d.ShopLimiter, func(r *http.Request) (string, bool) {
+		p, ok := auth.PrincipalFrom(r.Context())
+		return strconv.FormatInt(p.ShopID, 10), ok
+	})
+	protected := func(h http.HandlerFunc) http.Handler {
+		return requireAuth(limitPerShop(h))
+	}
+	mux.Handle("GET /shop", protected(d.Shop.Get))
+	mux.Handle("PUT /shop", protected(d.Shop.Update))
+	mux.Handle("GET /categories", protected(d.Catalog.List))
+	mux.Handle("GET /products", protected(d.Product.List))
+	mux.Handle("POST /products", protected(d.Product.Create))
+	mux.Handle("GET /products/{id}", protected(d.Product.Get))
+	mux.Handle("PUT /products/{id}", protected(d.Product.Update))
+	mux.Handle("POST /products/{id}/archive", protected(d.Product.Archive))
+	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
 	return mux
 }
 

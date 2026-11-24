@@ -163,6 +163,9 @@ cp .env.example .env
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
+| `RATE_LIMIT_SHOP_RPS`, `RATE_LIMIT_SHOP_BURST` | `20`, `40` | Requests per second and burst allowed for each shop on protected routes (see D6) |
+| `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
+| `TRUSTED_PROXIES` | private ranges and loopback | Networks whose `X-Real-IP` header the backend trusts (the nginx container) |
 | `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
 Never commit `.env`. Only `.env.example` is tracked.
@@ -206,6 +209,8 @@ sh scripts/smoke.sh
 ```
 
 `BACKEND_URL` and `FRONTEND_URL` override the default `http://localhost:8080` and `http://localhost:3000` when you changed the ports.
+
+The script also trips the rate limits on purpose (nginx allows 10 auth requests per minute per IP, see D6), so wait about a minute before running it again, or the register and login checks answer `429`.
 
 ### Seed data
 

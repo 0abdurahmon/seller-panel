@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
 func newService(t *testing.T) (*Service, *TokenIssuer) {
@@ -153,9 +155,13 @@ func TestNewTokenIssuerRequiresSecret(t *testing.T) {
 	}
 }
 
+func newTestHandler(svc *Service, guard LoginGuard) *Handler {
+	return NewHandler(svc, guard, func(r *http.Request) string { return r.RemoteAddr })
+}
+
 func TestHandlerRegisterAndLoginStatusCodes(t *testing.T) {
 	svc, _ := newService(t)
-	h := NewHandler(svc)
+	h := newTestHandler(svc, httpx.NewLimiterPer(5, time.Hour))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /auth/register", h.Register)
 	mux.HandleFunc("POST /auth/login", h.Login)
@@ -239,5 +245,73 @@ func TestRequireAuthRejectsMissingOrBadToken(t *testing.T) {
 				t.Fatalf("status = %d, want 401", rec.Code)
 			}
 		})
+	}
+}
+
+func TestLoginIsBlockedAfterFiveFailuresPerIPAndEmail(t *testing.T) {
+	svc, _ := newService(t)
+	register(t, svc, "guard@example.com")
+	register(t, svc, "other@example.com")
+	h := newTestHandler(svc, httpx.NewLimiterPer(5, 15*time.Minute))
+
+	login := func(addr, email, password string) *httptest.ResponseRecorder {
+		body := `{"email":"` + email + `","password":"` + password + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(body))
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		h.Login(rec, req)
+		return rec
+	}
+
+	for i := 1; i <= 5; i++ {
+		if rec := login("1.1.1.1:1000", "guard@example.com", "wrong-password"); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("failure %d status = %d, want 401", i, rec.Code)
+		}
+	}
+	rec := login("1.1.1.1:1000", "guard@example.com", "correct-horse")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("after 5 failures even the right password gets %d, want 429", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("Retry-After header missing")
+	}
+	var e struct{ Code string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil || e.Code != "rate_limited" {
+		t.Fatalf("body = %q, want code rate_limited", rec.Body.String())
+	}
+
+	if rec := login("1.1.1.1:1000", "GUARD@example.com ", "correct-horse"); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("email case and spaces must not dodge the limit, got %d", rec.Code)
+	}
+	if rec := login("1.1.1.1:1000", "other@example.com", "correct-horse"); rec.Code != http.StatusOK {
+		t.Fatalf("another email from the same IP got %d, want 200", rec.Code)
+	}
+	if rec := login("2.2.2.2:2000", "guard@example.com", "correct-horse"); rec.Code != http.StatusOK {
+		t.Fatalf("same email from another IP got %d, want 200", rec.Code)
+	}
+}
+
+func TestSuccessfulLoginResetsFailures(t *testing.T) {
+	svc, _ := newService(t)
+	register(t, svc, "reset@example.com")
+	h := newTestHandler(svc, httpx.NewLimiterPer(3, time.Hour))
+
+	login := func(password string) int {
+		body := `{"email":"reset@example.com","password":"` + password + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(body))
+		req.RemoteAddr = "3.3.3.3:3000"
+		rec := httptest.NewRecorder()
+		h.Login(rec, req)
+		return rec.Code
+	}
+	for round := 0; round < 3; round++ {
+		for i := 0; i < 2; i++ {
+			if code := login("wrong-password"); code != http.StatusUnauthorized {
+				t.Fatalf("round %d: wrong password got %d", round, code)
+			}
+		}
+		if code := login("correct-horse"); code != http.StatusOK {
+			t.Fatalf("round %d: right password got %d, a success must reset the counter", round, code)
+		}
 	}
 }

@@ -5,6 +5,8 @@ info:
   description: |
     Contract for auth, shop, categories, orders, dashboard, balance and the stock change (issues #10, #11, #45-#47, #51, #72, D5).
     Errors are `{code, message}`. Lists take `page` and `page_size`.
+    Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
+    per shop on protected routes, and 5 failed logins per IP and email in 15 minutes (D6).
     All money fields are integers in so'm (no floats).
 servers:
   - url: http://localhost:8080
@@ -32,6 +34,8 @@ paths:
                 $ref: '#/components/schemas/TokenResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '409':
           description: Email already registered (`email_taken`)
           content:
@@ -65,6 +69,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /categories:
     get:
@@ -972,6 +978,17 @@ components:
           type: string
 
   responses:
+    TooManyRequests:
+      description: Rate limit reached (`rate_limited`), retry after the number of seconds in `Retry-After`
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Missing or invalid token
       content:

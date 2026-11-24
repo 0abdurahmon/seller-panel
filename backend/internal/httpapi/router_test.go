@@ -11,12 +11,18 @@ import (
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
+	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
 func newTestRouter(t *testing.T) http.Handler {
+	t.Helper()
+	return newTestRouterWithLimit(t, 1000, 1000)
+}
+
+func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.Handler {
 	t.Helper()
 	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
 	if err != nil {
@@ -32,12 +38,14 @@ func newTestRouter(t *testing.T) http.Handler {
 	}
 	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
-		Auth:    auth.NewHandler(svc),
+		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),
 		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
 		Product: product.NewHandler(product.NewService(fakeProductRepository{}), func(int) string { return "in_stock" }),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
+
+		ShopLimiter: httpx.NewLimiter(shopRPS, shopBurst),
 	})
 }
 
@@ -201,4 +209,45 @@ func (fakeProductRepository) Update(context.Context, int64, product.Product) (pr
 
 func (fakeProductRepository) List(context.Context, int64, product.ListFilter) ([]product.Product, int, error) {
 	return nil, 0, nil
+}
+
+func TestProtectedRoutesAreLimitedPerShop(t *testing.T) {
+	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := newTestRouterWithLimit(t, 0.001, 3)
+
+	get := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/categories", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
+	}
+	shopA, _, _ := tokens.Issue(10, 1)
+	shopB, _, _ := tokens.Issue(20, 2)
+
+	for i := 1; i <= 3; i++ {
+		if rec := get(shopA); rec.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, want 200", i, rec.Code)
+		}
+	}
+	rec := get(shopA)
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("4th request: status %d, Retry-After %q, want 429 with a header", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if rec := get(shopB); rec.Code != http.StatusOK {
+		t.Fatalf("another shop got %d, one shop must not use up the other's budget", rec.Code)
+	}
+
+	bad := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/categories", nil)
+	for i := 0; i < 10; i++ {
+		bad = httptest.NewRecorder()
+		router.ServeHTTP(bad, req)
+	}
+	if bad.Code != http.StatusUnauthorized {
+		t.Fatalf("requests without a token got %d, want 401 and no limiter bucket", bad.Code)
+	}
 }

@@ -3,18 +3,28 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
 // Handler serves the auth endpoints. It only parses requests and maps errors.
+type LoginGuard interface {
+	Check(key string) (bool, time.Duration)
+	Hit(key string)
+	Reset(key string)
+}
+
 type Handler struct {
-	svc *Service
+	svc      *Service
+	guard    LoginGuard
+	clientIP func(*http.Request) string
 }
 
 // NewHandler returns the HTTP handler for auth.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, guard LoginGuard, clientIP func(*http.Request) string) *Handler {
+	return &Handler{svc: svc, guard: guard, clientIP: clientIP}
 }
 
 // Register handles POST /auth/register.
@@ -39,11 +49,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
+	key := h.clientIP(r) + "|" + strings.ToLower(strings.TrimSpace(req.Email))
+	if allowed, wait := h.guard.Check(key); !allowed {
+		httpx.WriteRateLimited(w, wait)
+		return
+	}
 	res, err := h.svc.Login(r.Context(), req)
+	if errors.Is(err, ErrInvalidCredentials) {
+		h.guard.Hit(key)
+	}
 	if err != nil {
 		writeAuthError(w, err)
 		return
 	}
+	h.guard.Reset(key)
 	httpx.WriteJSON(w, http.StatusOK, res)
 }
 
