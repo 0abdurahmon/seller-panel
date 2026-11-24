@@ -94,6 +94,7 @@ func (s *Service) Transition(ctx context.Context, shopID, orderID int64, req Tra
 			return err
 		}
 		from := o.Status
+		now := s.now()
 		if !CanTransition(from, req.To) {
 			return ErrInvalidTransition
 		}
@@ -121,15 +122,14 @@ func (s *Service) Transition(ctx context.Context, shopID, orderID int64, req Tra
 			}
 			commission := o.Total * s.commissionPercent / 100
 			entries := []BalanceEntry{
-				{ShopID: shopID, OrderID: orderID, Type: EntrySale, Amount: o.Total},
-				{ShopID: shopID, OrderID: orderID, Type: EntryCommission, Amount: -commission},
+				{ShopID: shopID, OrderID: orderID, Type: EntrySale, Amount: o.Total, CreatedAt: now},
+				{ShopID: shopID, OrderID: orderID, Type: EntryCommission, Amount: -commission, CreatedAt: now},
 			}
 			if err := tx.AddBalance(ctx, entries); err != nil {
 				return err
 			}
 		}
 
-		now := s.now()
 		var cancelReason *string
 		if req.To == StatusCancelled {
 			cancelReason = &reason
