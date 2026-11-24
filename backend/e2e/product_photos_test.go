@@ -238,7 +238,7 @@ func TestProductJSONRefusesAPhotosList(t *testing.T) {
 }
 
 func TestProductsWithPhotosShareTheUploadLimit(t *testing.T) {
-	s := newServer(t, func(c *config.Config) { c.UploadsPerMinute = 2 })
+	s := newServer(t, func(c *config.Config) { c.ImagesPerMinute = 2 })
 	a, b := s.register(), s.register()
 	cat := s.categoryID(a.token)
 	png := pngFixture(t, 10, 10)

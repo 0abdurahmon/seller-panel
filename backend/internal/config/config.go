@@ -38,7 +38,7 @@ type Config struct {
 	BusinessLocation    *time.Location
 	UploadDir           string
 	UploadPublicURL     string
-	UploadsPerMinute    int
+	ImagesPerMinute     int
 }
 
 func Load() (Config, error) {
@@ -58,7 +58,7 @@ func Load() (Config, error) {
 		TelegramAPIURL:      getEnv("TELEGRAM_API_URL", "https://api.telegram.org"),
 		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
 		UploadPublicURL:     getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
-		UploadsPerMinute:    20,
+		ImagesPerMinute:     20,
 	}
 
 	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
@@ -82,14 +82,14 @@ func Load() (Config, error) {
 	if cfg.LoginAttempts, err = getInt("RATE_LIMIT_LOGIN_ATTEMPTS", cfg.LoginAttempts); err != nil {
 		return Config{}, err
 	}
-	if cfg.UploadsPerMinute, err = getInt("RATE_LIMIT_UPLOADS_PER_MINUTE", cfg.UploadsPerMinute); err != nil {
+	if cfg.ImagesPerMinute, err = getInt("RATE_LIMIT_IMAGES_PER_MINUTE", cfg.ImagesPerMinute); err != nil {
 		return Config{}, err
 	}
 	window := getEnv("RATE_LIMIT_LOGIN_WINDOW", "15m")
 	if cfg.LoginWindow, err = time.ParseDuration(window); err != nil {
 		return Config{}, fmt.Errorf("RATE_LIMIT_LOGIN_WINDOW must be a duration like 15m: %w", err)
 	}
-	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.UploadsPerMinute < 1 {
+	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.ImagesPerMinute < 1 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive")
 	}
 	if cfg.TelegramBotToken != "" && cfg.TelegramBotUsername == "" {

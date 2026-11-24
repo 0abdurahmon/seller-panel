@@ -274,3 +274,8 @@ func randomDigits(n int) (string, error) {
 	}
 	return fmt.Sprintf("%0*d", n, v), nil
 }
+
+// OwnsShop reports whether the seller and shop of a token still exist together.
+func (s *Service) OwnsShop(ctx context.Context, sellerID, shopID int64) (bool, error) {
+	return s.repo.ShopOwnedBy(ctx, sellerID, shopID)
+}

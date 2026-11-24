@@ -213,6 +213,10 @@ func (r *fakeAuthRepository) FindCredentials(_ context.Context, email string) (a
 	return c, nil
 }
 
+func (r *fakeAuthRepository) ShopOwnedBy(context.Context, int64, int64) (bool, error) {
+	return true, nil
+}
+
 type fakeShopRepository struct{}
 
 func (fakeShopRepository) Get(_ context.Context, shopID int64) (shop.Shop, error) {

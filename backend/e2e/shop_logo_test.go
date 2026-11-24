@@ -135,7 +135,7 @@ func TestShopUpdateWithALogoIsAllOrNothing(t *testing.T) {
 }
 
 func TestShopLogoSharesTheUploadLimit(t *testing.T) {
-	s := newServer(t, func(c *config.Config) { c.UploadsPerMinute = 2 })
+	s := newServer(t, func(c *config.Config) { c.ImagesPerMinute = 2 })
 	a := s.register()
 	png := pngFixture(t, 10, 10)
 

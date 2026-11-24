@@ -22,6 +22,8 @@ type LoginCode struct {
 type Repository interface {
 	CreateSellerWithShop(ctx context.Context, email, passwordHash, shopName string) (sellerID, shopID int64, err error)
 	FindCredentials(ctx context.Context, email string) (Credentials, error)
+	// ShopOwnedBy reports whether the shop exists and belongs to the seller.
+	ShopOwnedBy(ctx context.Context, sellerID, shopID int64) (bool, error)
 
 	// FindTelegramChat returns ErrNotFound unless the email belongs to a seller with a linked chat.
 	FindTelegramChat(ctx context.Context, email string) (sellerID, chatID int64, err error)

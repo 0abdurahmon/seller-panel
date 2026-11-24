@@ -167,3 +167,12 @@ func (s *PgRepository) DeleteLoginCode(ctx context.Context, sellerID int64) erro
 	}
 	return nil
 }
+
+func (r *PgRepository) ShopOwnedBy(ctx context.Context, sellerID, shopID int64) (bool, error) {
+	var owned bool
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM shops WHERE id = $1 AND seller_id = $2)`, shopID, sellerID).Scan(&owned)
+	if err != nil {
+		return false, fmt.Errorf("check the shop of a seller: %w", err)
+	}
+	return owned, nil
+}

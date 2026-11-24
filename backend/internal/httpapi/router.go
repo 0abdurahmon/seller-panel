@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
@@ -14,6 +15,9 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
+
+// liveShopFor is how long a shop found for a token is remembered, see auth.RequireLiveShop.
+const liveShopFor = 30 * time.Second
 
 // Deps are the handlers and services the router is wired with.
 type Deps struct {
@@ -28,10 +32,11 @@ type Deps struct {
 
 	Dashboard *dashboard.Handler
 
-	ShopLimiter   *httpx.Limiter
-	UploadLimiter *httpx.Limiter
-	DevEndpoints  bool
-	Spec          http.Handler
+	ShopLimiter  *httpx.Limiter
+	ImageLimiter *httpx.Limiter
+	ShopChecker  auth.ShopChecker
+	DevEndpoints bool
+	Spec         http.Handler
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -48,16 +53,20 @@ func NewRouter(d Deps) http.Handler {
 		p, ok := auth.PrincipalFrom(r.Context())
 		return strconv.FormatInt(p.ShopID, 10), ok
 	})
-	protected := func(h http.HandlerFunc) http.Handler {
-		return requireAuth(limitPerShop(h))
+	liveShop := func(next http.Handler) http.Handler { return next }
+	if d.ShopChecker != nil {
+		liveShop = auth.RequireLiveShop(d.ShopChecker, liveShopFor)
 	}
-	limitUploads := httpx.RateLimit(d.UploadLimiter, func(r *http.Request) (string, bool) {
+	protected := func(h http.HandlerFunc) http.Handler {
+		return requireAuth(liveShop(limitPerShop(h)))
+	}
+	rateLimitImages := httpx.RateLimit(d.ImageLimiter, func(r *http.Request) (string, bool) {
 		p, ok := auth.PrincipalFrom(r.Context())
 		return strconv.FormatInt(p.ShopID, 10), ok
 	})
-	// A product or shop saved with an image costs as much as an upload, so it shares the upload limit; JSON edits do not.
+	// A request that saves an image is expensive, so it has its own per shop limit; JSON edits do not.
 	limitImages := func(next http.HandlerFunc) http.HandlerFunc {
-		limited := limitUploads(next)
+		limited := rateLimitImages(next)
 		return func(w http.ResponseWriter, r *http.Request) {
 			if httpx.IsMultipart(r) {
 				limited.ServeHTTP(w, r)

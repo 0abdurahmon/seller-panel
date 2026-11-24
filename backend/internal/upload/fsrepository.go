@@ -62,6 +62,36 @@ func (r *FSRepository) Save(_ context.Context, shopID int64, name string, data [
 	return nil
 }
 
+func (r *FSRepository) List(ctx context.Context) ([]Stored, error) {
+	root := r.root.FS()
+	shops, err := fs.ReadDir(root, ".")
+	if err != nil {
+		return nil, fmt.Errorf("list upload dir: %w", err)
+	}
+	var out []Stored
+	for _, d := range shops {
+		shopID, err := strconv.ParseInt(d.Name(), 10, 64)
+		if !d.IsDir() || err != nil || shopID < 1 {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		files, err := fs.ReadDir(root, d.Name())
+		if err != nil {
+			return nil, fmt.Errorf("list shop dir %s: %w", d.Name(), err)
+		}
+		for _, f := range files {
+			info, err := f.Info()
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			out = append(out, Stored{ShopID: shopID, Name: f.Name(), ModTime: info.ModTime().UTC()})
+		}
+	}
+	return out, nil
+}
+
 func (r *FSRepository) Delete(_ context.Context, shopID int64, name string) error {
 	if err := r.root.Remove(strconv.FormatInt(shopID, 10) + "/" + name); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
