@@ -2,11 +2,11 @@
 
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
-| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Stock, Balance, Dashboard, Orders (tables, stock effects) |
-| Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, Orders (PostgreSQL, routes), infra (Docker, CI) |
-| Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile, Orders (domain) |
+| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Stock, Balance, Dashboard |
+| Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | Products, infra (Docker, CI) |
+| Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile, Orders |
 
-Orders is shared by all three of us, each owns the part they built: Samandar the domain code (status machine, #71), Akbar the PostgreSQL side and the routes (#97, #99), Nuriddin the tables and the stock effects orders call (#93, #76). A change in someone else's part goes through them, like any other feature.
+Orders is owned by Samandar. Akbar built the PostgreSQL side and the routes (#97, #99) and Nuriddin the tables and the stock effects orders call (#93, #76), so ask them about those parts, but changes go through Samandar.
 
 ## Working agreement
 - Core hours: 10:00–18:00 (Tashkent, UTC+5)
