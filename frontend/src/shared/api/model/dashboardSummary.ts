@@ -29,17 +29,17 @@
 import type { TopProduct } from './topProduct';
 
 export interface DashboardSummary {
-  /** Orders created today in the business time zone, in any status */
-  today_orders: number;
-  /** Orders the seller still has to act on, in status `new`, `accepted` or `packed` */
-  waiting_for_action: number;
-  /** Sum of delivered order totals in the last 7 days (today and 6 days before), so'm */
-  revenue_7d: number;
   /** Sum of delivered order totals in the last 30 days (today and 29 days before), so'm */
   revenue_30d: number;
+  /** Sum of delivered order totals in the last 7 days (today and 6 days before), so'm */
+  revenue_7d: number;
+  /** Orders created today in the business time zone, in any status */
+  today_orders: number;
   /**
      * Best sellers of the last 30 days; `[]` when nothing was delivered
      * @maxItems 5
      */
   top_products: TopProduct[];
+  /** Orders the seller still has to act on, in status `new`, `accepted` or `packed` */
+  waiting_for_action: number;
 }

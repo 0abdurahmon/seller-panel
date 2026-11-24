@@ -32,10 +32,10 @@ import type { OrderStatus } from './orderStatus';
  * Order without items, used in lists
  */
 export interface OrderSummary {
+  buyer_name: string;
+  created_at: string;
   id: number;
   number: string;
   status: OrderStatus;
-  buyer_name: string;
   total: number;
-  created_at: string;
 }

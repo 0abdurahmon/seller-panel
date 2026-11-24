@@ -30,19 +30,19 @@ import type { ProductPhotos } from './productPhotos';
 import type { ProductStatus } from './productStatus';
 
 export interface Product {
-  id: number;
-  shop_id: number;
   category_id: number;
-  title: string;
+  created_at: string;
   description: string;
+  id: number;
+  photos: ProductPhotos;
   /** so'm */
   price: number;
-  sku: string;
-  stock: number;
   reserved: number;
+  shop_id: number;
+  sku: string;
   /** A new product is a `draft`. */
   status: ProductStatus;
-  photos: ProductPhotos;
-  created_at: string;
+  stock: number;
+  title: string;
   updated_at: string;
 }

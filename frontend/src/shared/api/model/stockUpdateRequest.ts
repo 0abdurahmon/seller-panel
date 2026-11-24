@@ -29,15 +29,15 @@
 
 export interface StockUpdateRequest {
   /**
-     * New absolute stock
-     * @minimum 0
-     * @maximum 1000000
-     */
-  stock: number;
-  /**
      * The stock the seller saw before editing
      * @minimum 0
      * @maximum 1000000
      */
   expected_stock: number;
+  /**
+     * New absolute stock
+     * @minimum 0
+     * @maximum 1000000
+     */
+  stock: number;
 }

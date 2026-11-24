@@ -29,6 +29,9 @@
 import type { BalanceEntryType } from './balanceEntryType';
 
 export interface BalanceEntry {
+  /** Signed amount in so'm (sale > 0, commission <= 0, payout < 0) */
+  amount: number;
+  created_at: string;
   id: number;
   /**
      * The order the money belongs to; null for a payout
@@ -36,7 +39,4 @@ export interface BalanceEntry {
      */
   order_id: number | null;
   type: BalanceEntryType;
-  /** Signed amount in so'm (sale > 0, commission <= 0, payout < 0) */
-  amount: number;
-  created_at: string;
 }

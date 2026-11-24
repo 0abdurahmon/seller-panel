@@ -29,10 +29,10 @@
 
 export interface TopProduct {
   product_id: number;
-  /** Current title of the product */
-  title: string;
   /** Units in orders delivered in the last 30 days */
   quantity_sold: number;
   /** Sum of price at the time of the order times quantity for those units, so'm */
   revenue: number;
+  /** Current title of the product */
+  title: string;
 }

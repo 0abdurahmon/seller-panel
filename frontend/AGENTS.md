@@ -26,7 +26,8 @@ src/
 
 ## API
 
-- Every request goes through the client that orval generates from `src/shared/api/schema.json` (`npm run api:download && npm run api:generate`). No `axios`, `fetch` or hand-written URLs outside `src/shared/api`.
+- Every request goes through the client that orval generates from `src/shared/api/schema.json`. No `axios`, `fetch` or hand-written URLs outside `src/shared/api`.
+- Regenerate the client only with the commands, from the spec a running backend serves: `API_SCHEMA_URL=<backend>/swagger npm run api:download && npm run api:generate` (default `http://localhost:8080/swagger`). Never write `schema.json` by hand or convert `api/openapi.yaml` into it: the client follows what the backend actually serves.
 - Do not edit `src/shared/api/generated` or `src/shared/api/model`: regenerate them.
 - Import from `@/shared/api` only: the client factories (`getProducts()`), the types and the error helpers (`parseApiError`, `getApiErrorMessage`, `getErrorStatus`).
 - Server state lives in TanStack Query. Query keys come from the entity (`productKeys`). After a mutation, invalidate the entity's keys.

@@ -31,11 +31,6 @@ import type { UpdateProductRequestStatus } from './updateProductRequestStatus';
 export interface UpdateProductRequest {
   /** @minimum 1 */
   category_id: number;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
   /** @maxLength 5000 */
   description?: string;
   /**
@@ -50,4 +45,9 @@ export interface UpdateProductRequest {
   sku: string;
   /** Kept as is when omitted */
   status?: UpdateProductRequestStatus;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
 }

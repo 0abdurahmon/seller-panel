@@ -31,22 +31,22 @@ import type { OrderItem } from './orderItem';
 import type { OrderStatus } from './orderStatus';
 
 export interface Order {
-  id: number;
-  number: string;
-  status: OrderStatus;
   buyer_name: string;
   buyer_phone: string;
-  delivery_address: string;
-  items: OrderItem[];
-  /** Sum of price × quantity in so'm */
-  total: number;
   /** @nullable */
   cancel_reason?: string | null;
   created_at: string;
-  status_changed_at: string;
+  delivery_address: string;
   /**
      * Every status change, oldest first. An order created by the dev endpoint starts with one row
      * from `null` to `new`; orders that were inserted some other way can have no rows yet.
      */
   history: OrderHistoryEntry[];
+  id: number;
+  items: OrderItem[];
+  number: string;
+  status: OrderStatus;
+  status_changed_at: string;
+  /** Sum of price × quantity in so'm */
+  total: number;
 }

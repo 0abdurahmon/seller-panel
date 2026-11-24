@@ -30,11 +30,6 @@
 export interface CreateProductRequest {
   /** @minimum 1 */
   category_id: number;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
   /** @maxLength 5000 */
   description?: string;
   /**
@@ -54,4 +49,9 @@ export interface CreateProductRequest {
      * @maximum 1000000
      */
   stock?: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
 }

@@ -40,19 +40,6 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
   export const getAuth = () => {
 /**
- * @summary Create a seller with their shop and return a token
- */
-const postAuthRegister = (
-    registerRequest: RegisterRequest,
- options?: SecondParameter<typeof customInstance<TokenResponse>>,) => {
-      return customInstance<TokenResponse>(
-      {url: `/auth/register`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: registerRequest
-    },
-      options);
-    }
-  /**
  * @summary Log in with email and password and return a token
  */
 const postAuthLogin = (
@@ -65,6 +52,19 @@ const postAuthLogin = (
     },
       options);
     }
-  return {postAuthRegister,postAuthLogin}};
-export type PostAuthRegisterResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthRegister']>>>
+  /**
+ * @summary Create a seller with their shop and return a token
+ */
+const postAuthRegister = (
+    registerRequest: RegisterRequest,
+ options?: SecondParameter<typeof customInstance<TokenResponse>>,) => {
+      return customInstance<TokenResponse>(
+      {url: `/auth/register`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: registerRequest
+    },
+      options);
+    }
+  return {postAuthLogin,postAuthRegister}};
 export type PostAuthLoginResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthLogin']>>>
+export type PostAuthRegisterResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthRegister']>>>

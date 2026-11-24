@@ -29,10 +29,10 @@
 import type { OrderStatus } from './orderStatus';
 
 export interface TransitionRequest {
-  to: OrderStatus;
   /**
      * Required when `to` is `cancelled`
      * @minLength 1
      */
   reason?: string;
+  to: OrderStatus;
 }

@@ -27,7 +27,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
-  StockLevel,
+  Product,
   StockUpdateRequest
 } from '../../model';
 
@@ -49,8 +49,8 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 const patchProductsIdStock = (
     id: number,
     stockUpdateRequest: StockUpdateRequest,
- options?: SecondParameter<typeof customInstance<StockLevel>>,) => {
-      return customInstance<StockLevel>(
+ options?: SecondParameter<typeof customInstance<Product>>,) => {
+      return customInstance<Product>(
       {url: `/products/${id}/stock`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
       data: stockUpdateRequest

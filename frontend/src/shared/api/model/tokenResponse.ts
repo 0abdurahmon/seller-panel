@@ -28,7 +28,7 @@
  */
 
 export interface TokenResponse {
+  expires_at: string;
   /** HS256 JWT carrying seller_id and shop_id, sent as `Authorization Bearer` */
   token: string;
-  expires_at: string;
 }

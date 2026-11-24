@@ -30,8 +30,8 @@
 export interface Balance {
   /** Sum of all balance entries, so'm */
   available: number;
-  /** Sum of `sale` entries, so'm */
-  earned: number;
   /** Sum of `commission` entries (negative), so'm */
   commission: number;
+  /** Sum of `sale` entries, so'm */
+  earned: number;
 }

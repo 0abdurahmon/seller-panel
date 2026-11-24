@@ -29,10 +29,10 @@
 import type { UploadedImageContentType } from './uploadedImageContentType';
 
 export interface UploadedImage {
-  url: string;
   content_type: UploadedImageContentType;
+  height: number;
   /** Bytes of the stored file */
   size: number;
+  url: string;
   width: number;
-  height: number;
 }

@@ -34,13 +34,15 @@ import type { UpdateProductFormStatus } from './updateProductFormStatus';
 export interface UpdateProductForm {
   /** @minimum 1 */
   category_id: number;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
   /** @maxLength 5000 */
   description?: string;
+  /**
+     * Current photo URLs that stay, in the order wanted. Omit the field to keep all of them,
+     * send it empty to remove them all.
+     */
+  keep_photos?: string[];
+  /** New images, added after the kept photos. At most 5 photos in the end. */
+  photos?: (Blob | File)[];
   /**
      * @minimum 1
      * @maximum 1000000000000
@@ -54,10 +56,8 @@ export interface UpdateProductForm {
   /** Kept as is when omitted */
   status?: UpdateProductFormStatus;
   /**
-     * Current photo URLs that stay, in the order wanted. Omit the field to keep all of them,
-     * send it empty to remove them all.
+     * @minLength 1
+     * @maxLength 200
      */
-  keep_photos?: string[];
-  /** New images, added after the kept photos. At most 5 photos in the end. */
-  photos?: (Blob | File)[];
+  title: string;
 }

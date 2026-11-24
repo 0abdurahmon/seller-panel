@@ -29,11 +29,11 @@
 
 export interface OrderItem {
   id: number;
-  product_id: number;
-  /** Title snapshot taken at order time */
-  title: string;
   /** Unit price snapshot in so'm */
   price: number;
+  product_id: number;
   /** @minimum 1 */
   quantity: number;
+  /** Title snapshot taken at order time */
+  title: string;
 }

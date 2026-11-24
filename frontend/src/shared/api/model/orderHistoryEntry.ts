@@ -29,12 +29,12 @@
 import type { OrderStatus } from './orderStatus';
 
 export interface OrderHistoryEntry {
+  created_at: string;
   from_status: OrderStatus | null;
-  to_status: OrderStatus;
   /**
      * The cancel reason, null for other changes
      * @nullable
      */
   reason: string | null;
-  created_at: string;
+  to_status: OrderStatus;
 }

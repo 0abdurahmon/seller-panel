@@ -33,13 +33,13 @@
 export interface CreateProductForm {
   /** @minimum 1 */
   category_id: number;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
   /** @maxLength 5000 */
   description?: string;
+  /**
+     * Images (jpeg, png or webp, 5 MB each). The first one is the cover.
+     * @maxItems 5
+     */
+  photos?: (Blob | File)[];
   /**
      * @minimum 1
      * @maximum 1000000000000
@@ -56,8 +56,8 @@ export interface CreateProductForm {
      */
   stock?: number;
   /**
-     * Images (jpeg, png or webp, 5 MB each). The first one is the cover.
-     * @maxItems 5
+     * @minLength 1
+     * @maxLength 200
      */
-  photos?: (Blob | File)[];
+  title: string;
 }

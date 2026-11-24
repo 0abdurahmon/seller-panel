@@ -28,20 +28,20 @@
  */
 
 export interface ShopUpdate {
-  /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  name: string;
+  /** 7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it. */
+  contact_phone?: string;
+  /** @maxLength 2000 */
+  description?: string;
   /**
      * http or https URL. Empty clears it.
      * @maxLength 2048
      */
   logo_url?: string;
-  /** @maxLength 2000 */
-  description?: string;
-  /** 7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it. */
-  contact_phone?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
   /** @maxLength 300 */
   pickup_address?: string;
 }

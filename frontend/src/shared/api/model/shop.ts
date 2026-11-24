@@ -28,18 +28,18 @@
  */
 
 export interface Shop {
+  /** @nullable */
+  contact_phone?: string | null;
+  /** @maxLength 2000 */
+  description: string;
   id: number;
-  /** @maxLength 120 */
-  name: string;
   /**
      * @maxLength 2048
      * @nullable
      */
   logo_url?: string | null;
-  /** @maxLength 2000 */
-  description: string;
-  /** @nullable */
-  contact_phone?: string | null;
+  /** @maxLength 120 */
+  name: string;
   /**
      * @maxLength 300
      * @nullable
