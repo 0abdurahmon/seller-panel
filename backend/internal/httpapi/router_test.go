@@ -11,6 +11,7 @@ import (
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
+	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
@@ -34,6 +35,7 @@ func newTestRouter(t *testing.T) http.Handler {
 		Auth:    auth.NewHandler(svc),
 		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
+		Product: product.NewHandler(product.NewService(fakeProductRepository{}), func(int) string { return "in_stock" }),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 	})
@@ -96,6 +98,35 @@ func TestUnknownRouteIs404(t *testing.T) {
 	}
 }
 
+func TestProtectedRoutesRequireToken(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter(t))
+	defer srv.Close()
+
+	for _, c := range []struct{ method, path string }{
+		{http.MethodGet, "/shop"},
+		{http.MethodPut, "/shop"},
+		{http.MethodGet, "/categories"},
+		{http.MethodGet, "/products"},
+		{http.MethodPost, "/products"},
+		{http.MethodGet, "/products/1"},
+		{http.MethodPut, "/products/1"},
+		{http.MethodPost, "/products/1/archive"},
+	} {
+		req, err := http.NewRequest(c.method, srv.URL+c.path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s %s status = %d, want %d", c.method, c.path, res.StatusCode, http.StatusUnauthorized)
+		}
+	}
+}
+
 func TestCategoriesRequireToken(t *testing.T) {
 	srv := httptest.NewServer(newTestRouter(t))
 	defer srv.Close()
@@ -152,4 +183,22 @@ type fakeStockRepository struct{}
 
 func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (stock.Row, error) {
 	return stock.Row{Stock: qty}, nil
+}
+
+type fakeProductRepository struct{}
+
+func (fakeProductRepository) Create(context.Context, int64, product.Product) (product.Product, error) {
+	return product.Product{}, nil
+}
+
+func (fakeProductRepository) Get(context.Context, int64, int64) (product.Product, error) {
+	return product.Product{}, product.ErrNotFound
+}
+
+func (fakeProductRepository) Update(context.Context, int64, product.Product) (product.Product, error) {
+	return product.Product{}, product.ErrNotFound
+}
+
+func (fakeProductRepository) List(context.Context, int64, product.ListFilter) ([]product.Product, int, error) {
+	return nil, 0, nil
 }

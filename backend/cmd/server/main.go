@@ -16,6 +16,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
+	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
@@ -63,11 +64,13 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
 	router := httpapi.NewRouter(httpapi.Deps{
 		Auth:    auth.NewHandler(authSvc),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool)), stockLabel),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 	})

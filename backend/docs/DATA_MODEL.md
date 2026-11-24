@@ -101,7 +101,7 @@ Each feature owner writes the migration for the tables they own, in the order th
 |-----------|--------|-------|--------|
 | `0001_sellers_shops` | `sellers`, `shops` | Auth, Shop profile | merged |
 | `0002_categories` | `categories` and the seeded tree, read through `GET /categories` (#72) | Products | in progress |
-| `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | planned |
+| `0003_products` | `products` and its enum, constraints, indexes and the `pg_trgm` extension | Products (#46) | in progress |
 | product photos | `product_photos` | Products | planned |
 | orders | `orders`, `order_items`, `order_status_history`, `order_number_seq` | not assigned | planned |
 | balance | `balance_entries` | not assigned | planned |
