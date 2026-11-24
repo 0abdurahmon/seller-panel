@@ -20,7 +20,7 @@ type Execer interface {
 }
 
 // Reserve adds qty to reserved when an order is accepted; never oversells.
-func Reserve(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
+func (s *PgStore) Reserve(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
 	return change(ctx, db, "reserve", ErrInsufficientStock,
 		`UPDATE products SET reserved = reserved + $3, updated_at = now()
 		  WHERE id = $1 AND shop_id = $2 AND stock - reserved >= $3`,
@@ -28,7 +28,7 @@ func Reserve(ctx context.Context, db Execer, shopID, productID int64, qty int) e
 }
 
 // Release returns qty reserved units when an accepted or packed order is cancelled.
-func Release(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
+func (s *PgStore) Release(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
 	return change(ctx, db, "release", ErrReservationMismatch,
 		`UPDATE products SET reserved = reserved - $3, updated_at = now()
 		  WHERE id = $1 AND shop_id = $2 AND reserved >= $3`,
@@ -36,7 +36,7 @@ func Release(ctx context.Context, db Execer, shopID, productID int64, qty int) e
 }
 
 // Commit removes qty from stock and reserved when an order is delivered.
-func Commit(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
+func (s *PgStore) Commit(ctx context.Context, db Execer, shopID, productID int64, qty int) error {
 	return change(ctx, db, "commit", ErrReservationMismatch,
 		`UPDATE products SET stock = stock - $3, reserved = reserved - $3, updated_at = now()
 		  WHERE id = $1 AND shop_id = $2 AND reserved >= $3`,

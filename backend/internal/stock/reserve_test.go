@@ -9,10 +9,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// orderStock is the kind of interface the orders feature declares (ARCHITECTURE rule 4).
+type orderStock interface {
+	Reserve(ctx context.Context, db Execer, shopID, productID int64, qty int) error
+	Release(ctx context.Context, db Execer, shopID, productID int64, qty int) error
+	Commit(ctx context.Context, db Execer, shopID, productID int64, qty int) error
+}
+
+var _ orderStock = (*PgStore)(nil)
+
 func TestReserveRejectsBadQuantityWithoutTouchingDB(t *testing.T) {
 	ctx := context.Background()
+	s := &PgStore{}
 	ops := map[string]func(context.Context, Execer, int64, int64, int) error{
-		"reserve": Reserve, "release": Release, "commit": Commit,
+		"reserve": s.Reserve, "release": s.Release, "commit": s.Commit,
 	}
 	for name, op := range ops {
 		for _, qty := range []int{0, -1, MaxStock + 1} {
@@ -50,33 +60,33 @@ func TestPgReserveReleaseCommit(t *testing.T) {
 		}
 	}
 
-	if err := Reserve(ctx, pool, shop, product, 6); err != nil {
+	if err := store.Reserve(ctx, pool, shop, product, 6); err != nil {
 		t.Fatal(err)
 	}
 	check("order A accepted", 10, 6)
-	if err := Reserve(ctx, pool, shop, product, 5); !errors.Is(err, ErrInsufficientStock) {
+	if err := store.Reserve(ctx, pool, shop, product, 5); !errors.Is(err, ErrInsufficientStock) {
 		t.Fatalf("order B: err = %v, want ErrInsufficientStock", err)
 	}
 	check("order B refused", 10, 6)
-	if err := Release(ctx, pool, shop, product, 6); err != nil {
+	if err := store.Release(ctx, pool, shop, product, 6); err != nil {
 		t.Fatal(err)
 	}
 	check("order A cancelled", 10, 0)
-	if err := Reserve(ctx, pool, shop, product, 5); err != nil {
+	if err := store.Reserve(ctx, pool, shop, product, 5); err != nil {
 		t.Fatal(err)
 	}
-	if err := Commit(ctx, pool, shop, product, 5); err != nil {
+	if err := store.Commit(ctx, pool, shop, product, 5); err != nil {
 		t.Fatal(err)
 	}
 	check("order B delivered", 5, 0)
 
-	if err := Release(ctx, pool, shop, product, 1); !errors.Is(err, ErrReservationMismatch) {
+	if err := store.Release(ctx, pool, shop, product, 1); !errors.Is(err, ErrReservationMismatch) {
 		t.Fatalf("release unreserved: err = %v, want ErrReservationMismatch", err)
 	}
-	if err := Commit(ctx, pool, shop, product, 1); !errors.Is(err, ErrReservationMismatch) {
+	if err := store.Commit(ctx, pool, shop, product, 1); !errors.Is(err, ErrReservationMismatch) {
 		t.Fatalf("commit unreserved: err = %v, want ErrReservationMismatch", err)
 	}
-	if err := Reserve(ctx, pool, otherShop, product, 1); !errors.Is(err, ErrInsufficientStock) {
+	if err := store.Reserve(ctx, pool, otherShop, product, 1); !errors.Is(err, ErrInsufficientStock) {
 		t.Fatalf("other shop: err = %v, want refused", err)
 	}
 	check("refusals changed nothing", 5, 0)
@@ -90,10 +100,10 @@ func TestPgReserveInsideTransactionRollsBack(t *testing.T) {
 	product := seedProduct(t, pool, shop, 10, 0, "active")
 
 	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		if err := Reserve(ctx, tx, shop, product, 4); err != nil {
+		if err := store.Reserve(ctx, tx, shop, product, 4); err != nil {
 			return err
 		}
-		return Reserve(ctx, tx, shop, product, 7) // second item does not fit
+		return store.Reserve(ctx, tx, shop, product, 7) // second item does not fit
 	})
 	if !errors.Is(err, ErrInsufficientStock) {
 		t.Fatalf("err = %v, want ErrInsufficientStock", err)
@@ -115,7 +125,7 @@ func TestPgConcurrentReservesNeverOversell(t *testing.T) {
 	ok, refused := 0, 0
 	for range 6 {
 		wg.Go(func() {
-			err := Reserve(ctx, pool, shop, product, 2)
+			err := store.Reserve(ctx, pool, shop, product, 2)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
