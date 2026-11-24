@@ -27,6 +27,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
       JWT_TTL: ${JWT_TTL:-24h}
       APP_ENV: ${APP_ENV:-development}
+      OPENAPI_FILE: /app/api/openapi.yaml
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
       LOW_STOCK_THRESHOLD: ${LOW_STOCK_THRESHOLD:-5}
       RATE_LIMIT_SHOP_RPS: ${RATE_LIMIT_SHOP_RPS:-20}
@@ -36,6 +37,8 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./api:/app/api:ro
     depends_on:
       db:
         condition: service_healthy

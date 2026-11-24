@@ -69,3 +69,15 @@ func TestLoadAppEnv(t *testing.T) {
 		t.Fatal("an unknown APP_ENV was accepted")
 	}
 }
+
+func TestLoadOpenAPIFile(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.OpenAPIFile != "" {
+		t.Fatalf("default = %q, %v; want empty so the endpoint is off", cfg.OpenAPIFile, err)
+	}
+	t.Setenv("OPENAPI_FILE", "/app/api/openapi.yaml")
+	cfg, err = Load()
+	if err != nil || cfg.OpenAPIFile != "/app/api/openapi.yaml" {
+		t.Fatalf("OpenAPIFile = %q, %v", cfg.OpenAPIFile, err)
+	}
+}
