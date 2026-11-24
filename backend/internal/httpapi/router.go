@@ -5,11 +5,13 @@ import (
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
+	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 )
 
 // Deps are the handlers and services the router is wired with.
 type Deps struct {
 	Auth   *auth.Handler
+	Shop   *shop.Handler
 	Tokens *auth.TokenIssuer
 }
 
@@ -19,6 +21,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("POST /auth/register", d.Auth.Register)
 	mux.HandleFunc("POST /auth/login", d.Auth.Login)
+
+	requireAuth := auth.RequireAuth(d.Tokens)
+	mux.Handle("GET /shop", requireAuth(http.HandlerFunc(d.Shop.Get)))
+	mux.Handle("PUT /shop", requireAuth(http.HandlerFunc(d.Shop.Update)))
 	return mux
 }
 

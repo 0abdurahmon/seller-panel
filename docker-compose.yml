@@ -1,12 +1,15 @@
+name: seller-panel
+
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-seller}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       POSTGRES_DB: ${POSTGRES_DB:-seller}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +20,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     environment:
       BACKEND_PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER:-seller}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-seller}?sslmode=disable
@@ -25,17 +29,38 @@ services:
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
       LOW_STOCK_THRESHOLD: ${LOW_STOCK_THRESHOLD:-5}
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
+    environment:
+      SWAGGER_USER: ${SWAGGER_USER:-alifco}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-alifco26}
+    volumes:
+      - ./api:/usr/share/nginx/html/docs/spec:ro
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-3000}:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:
