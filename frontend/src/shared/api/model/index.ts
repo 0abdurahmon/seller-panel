@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Seller Panel API
  * Seller Panel API: sellers sign up with email and password, manage their shop and products,
- * process orders, see their balance, and (planned) see the dashboard.
+ * process orders, see their balance, and see the dashboard.
  *
  * **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
  * `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -20,10 +20,9 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
- * Planned (it answers 404 until built): dashboard.
  *
  * OpenAPI spec version: 0.1.0
  */
@@ -35,6 +34,7 @@ export * from './balanceEntryType';
 export * from './category';
 export * from './categoryList';
 export * from './conflictResponse';
+export * from './createProductForm';
 export * from './createProductRequest';
 export * from './createProductRequestStatus';
 export * from './dashboardSummary';
@@ -52,8 +52,10 @@ export * from './orderStatus';
 export * from './orderSummary';
 export * from './pageParameter';
 export * from './pageSizeParameter';
+export * from './postUploadsBody';
 export * from './product';
 export * from './productPage';
+export * from './productPhotos';
 export * from './productStatus';
 export * from './registerRequest';
 export * from './shop';
@@ -66,6 +68,10 @@ export * from './tooManyRequestsResponse';
 export * from './topProduct';
 export * from './transitionRequest';
 export * from './unauthorizedResponse';
+export * from './updateProductForm';
+export * from './updateProductFormStatus';
 export * from './updateProductRequest';
 export * from './updateProductRequestStatus';
+export * from './uploadedImage';
+export * from './uploadedImageContentType';
 export * from './validationErrorResponse';

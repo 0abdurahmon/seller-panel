@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Seller Panel API
  * Seller Panel API: sellers sign up with email and password, manage their shop and products,
- * process orders, see their balance, and (planned) see the dashboard.
+ * process orders, see their balance, and see the dashboard.
  *
  * **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
  * `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -20,10 +20,9 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
- * Planned (it answers 404 until built): dashboard.
  *
  * OpenAPI spec version: 0.1.0
  */
@@ -39,7 +38,19 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
   export const getDashboard = () => {
 /**
- * @summary (planned) Home page numbers for the current shop
+ * Days are calendar days in the business time zone (`BUSINESS_TIMEZONE`, `Asia/Tashkent` by default),
+ * not in UTC. "Today" runs from 00:00 to 24:00 in that zone, "last 7 days" is today and the 6 days
+ * before it, and "last 30 days" is today and the 29 days before it.
+ *
+ * - `today_orders`: orders created today, in any status.
+ * - `waiting_for_action`: orders in `new`, `accepted` or `packed`, whatever their age.
+ * - `revenue_7d`, `revenue_30d`: sum of the `total` of orders that became `delivered` in the window,
+ *   before commission. Cancelled orders never count.
+ * - `top_products`: up to 5 products by units in orders delivered in the last 30 days, most units first,
+ *   then most revenue, then lowest `product_id`. `title` is the current title of the product.
+ *
+ * A shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D10).
+ * @summary Home page numbers for the current shop
  */
 const getDashboardSummary = (
 

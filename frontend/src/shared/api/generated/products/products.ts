@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Seller Panel API
  * Seller Panel API: sellers sign up with email and password, manage their shop and products,
- * process orders, see their balance, and (planned) see the dashboard.
+ * process orders, see their balance, and see the dashboard.
  *
  * **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
  * `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -20,18 +20,19 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
- * Planned (it answers 404 until built): dashboard.
  *
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  CreateProductForm,
   CreateProductRequest,
   GetProductsParams,
   Product,
   ProductPage,
+  UpdateProductForm,
   UpdateProductRequest
 } from '../../model';
 
@@ -55,15 +56,25 @@ const getProducts = (
       options);
     }
   /**
- * @summary Create a product in the current shop
+ * A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).
+ *
+ * Two request formats:
+ * - `application/json`: the fields only, a product without photos.
+ * - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
+ *   (jpeg, png or webp, 5 MB each). The first image is the cover.
+ *
+ * The product and its photos are saved together: when anything fails (a bad field, a file that is not an
+ * image, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP
+ * and scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts
+ * against the same per shop limit as uploads (20 a minute by default); a JSON request does not.
+ * @summary Create a product in the current shop, with its photos
  */
 const postProducts = (
-    createProductRequest: CreateProductRequest,
+    postProductsBody: CreateProductRequest | CreateProductForm,
  options?: SecondParameter<typeof customInstance<Product>>,) => {
       return customInstance<Product>(
       {url: `/products`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: createProductRequest
+      data: postProductsBody
     },
       options);
     }
@@ -81,16 +92,23 @@ const getProductsId = (
   /**
  * Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
  * Archived products cannot be edited.
- * @summary Replace the editable fields of a product
+ *
+ * Same two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`
+ * request changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order
+ * wanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;
+ * an empty `keep_photos` removes them all. At most 5 photos in the end.
+ *
+ * All or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are
+ * no longer listed are deleted from the server once the product is saved.
+ * @summary Replace the editable fields and change the photos of a product
  */
 const putProductsId = (
     id: number,
-    updateProductRequest: UpdateProductRequest,
+    putProductsIdBody: UpdateProductRequest | UpdateProductForm,
  options?: SecondParameter<typeof customInstance<Product>>,) => {
       return customInstance<Product>(
       {url: `/products/${id}`, method: 'PUT',
-      headers: {'Content-Type': 'application/json', },
-      data: updateProductRequest
+      data: putProductsIdBody
     },
       options);
     }

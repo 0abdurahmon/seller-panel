@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
-import { Box } from "iconsax-reactjs";
 import { useCategoryName } from "@/entities/category";
 import {
+  getAvailable,
+  getStockLabel,
+  ProductImage,
   ProductStatusBadge,
   StockLabelBadge,
   type Product,
@@ -32,7 +34,7 @@ function ProductDetails({ product }: { product: Product }) {
     <div className="space-y-5">
       <div className="flex items-center gap-2">
         <ProductStatusBadge status={product.status} />
-        <StockLabelBadge label={product.stock_label} />
+        <StockLabelBadge label={getStockLabel(product)} />
       </div>
 
       <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
@@ -46,7 +48,7 @@ function ProductDetails({ product }: { product: Product }) {
           <span className="tabular-nums">{product.reserved}</span>
         </Detail>
         <Detail label="Доступно">
-          <span className="tabular-nums">{product.available}</span>
+          <span className="tabular-nums">{getAvailable(product)}</span>
         </Detail>
       </dl>
 
@@ -78,9 +80,7 @@ export const ProductDetailsModal = () => {
           <>
             <DialogHeader>
               <div className="flex items-center gap-4">
-                <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                  <Box className="size-7" />
-                </div>
+                <ProductImage product={product} className="size-16 rounded-2xl" />
                 <div className="min-w-0 space-y-1">
                   <DialogTitle>{product.title}</DialogTitle>
                   <DialogDescription>Артикул: {product.sku}</DialogDescription>

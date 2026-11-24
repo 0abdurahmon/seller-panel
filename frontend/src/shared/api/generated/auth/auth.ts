@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Seller Panel API
  * Seller Panel API: sellers sign up with email and password, manage their shop and products,
- * process orders, see their balance, and (planned) see the dashboard.
+ * process orders, see their balance, and see the dashboard.
  *
  * **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
  * `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -20,10 +20,9 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
- * Planned (it answers 404 until built): dashboard.
  *
  * OpenAPI spec version: 0.1.0
  */
@@ -41,19 +40,6 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
   export const getAuth = () => {
 /**
- * @summary Log in with email and password and return a token
- */
-const postAuthLogin = (
-    loginRequest: LoginRequest,
- options?: SecondParameter<typeof customInstance<TokenResponse>>,) => {
-      return customInstance<TokenResponse>(
-      {url: `/auth/login`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: loginRequest
-    },
-      options);
-    }
-  /**
  * @summary Create a seller with their shop and return a token
  */
 const postAuthRegister = (
@@ -66,6 +52,19 @@ const postAuthRegister = (
     },
       options);
     }
-  return {postAuthLogin,postAuthRegister}};
-export type PostAuthLoginResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthLogin']>>>
+  /**
+ * @summary Log in with email and password and return a token
+ */
+const postAuthLogin = (
+    loginRequest: LoginRequest,
+ options?: SecondParameter<typeof customInstance<TokenResponse>>,) => {
+      return customInstance<TokenResponse>(
+      {url: `/auth/login`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: loginRequest
+    },
+      options);
+    }
+  return {postAuthRegister,postAuthLogin}};
 export type PostAuthRegisterResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthRegister']>>>
+export type PostAuthLoginResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthLogin']>>>

@@ -7,3 +7,4 @@ export * from './orders/orders';
 export * from './products/products';
 export * from './shop/shop';
 export * from './stock/stock';
+export * from './uploads/uploads';

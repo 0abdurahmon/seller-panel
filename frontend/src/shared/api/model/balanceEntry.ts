@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Seller Panel API
  * Seller Panel API: sellers sign up with email and password, manage their shop and products,
- * process orders, see their balance, and (planned) see the dashboard.
+ * process orders, see their balance, and see the dashboard.
  *
  * **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
  * `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -20,19 +20,15 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
- * Planned (it answers 404 until built): dashboard.
  *
  * OpenAPI spec version: 0.1.0
  */
 import type { BalanceEntryType } from './balanceEntryType';
 
 export interface BalanceEntry {
-  /** Signed amount in so'm (sale > 0, commission <= 0, payout < 0) */
-  amount: number;
-  created_at: string;
   id: number;
   /**
      * The order the money belongs to; null for a payout
@@ -40,4 +36,7 @@ export interface BalanceEntry {
      */
   order_id: number | null;
   type: BalanceEntryType;
+  /** Signed amount in so'm (sale > 0, commission <= 0, payout < 0) */
+  amount: number;
+  created_at: string;
 }

@@ -11,7 +11,13 @@ import {
 import { ArrowDown, ArrowUp, Box, Sort } from "iconsax-reactjs";
 import { Skeleton } from "skullet/react";
 import { useCategoryName } from "@/entities/category";
-import { ProductStatusBadge, StockLabelBadge } from "@/entities/product";
+import {
+  getAvailable,
+  getStockLabel,
+  ProductImage,
+  ProductStatusBadge,
+  StockLabelBadge,
+} from "@/entities/product";
 import { ActivateProductMenuItem } from "@/features/product/activate-product";
 import { ArchiveProductMenuItem } from "@/features/product/archive-product";
 import { EditProductMenuItem } from "@/features/product/edit-product";
@@ -137,9 +143,7 @@ const columns: ColumnDef<Product, any>[] = [
       const product = row.original;
       return (
         <div className="flex items-center gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <Box className="size-5" />
-          </div>
+          <ProductImage product={product} />
           <div className="min-w-48 space-y-0.5">
             {/* A button so the details open from the keyboard too; a mouse click anywhere on the row does the same. */}
             <Button
@@ -169,13 +173,13 @@ const columns: ColumnDef<Product, any>[] = [
       </div>
     ),
   }),
-  columnHelper.accessor("available", {
+  columnHelper.accessor((row) => getAvailable(row), {
     id: "stock",
     header: "Доступно",
-    cell: ({ row }) => (
+    cell: ({ row, getValue }) => (
       <div className="flex items-center gap-2">
-        <span className="tabular-nums">{row.original.available}</span>
-        <StockLabelBadge label={row.original.stock_label} />
+        <span className="tabular-nums">{getValue()}</span>
+        <StockLabelBadge label={getStockLabel(row.original)} />
       </div>
     ),
   }),
@@ -203,8 +207,7 @@ const SAMPLE_PRODUCTS: Product[] = Array.from({ length: 5 }, (_, i) => ({
   price: 4_890_000,
   stock: 24,
   reserved: 0,
-  available: 24,
-  stock_label: "in_stock",
+  photos: [],
   status: "active",
   created_at: "2026-11-24T09:12:00Z",
   updated_at: "2026-11-24T09:12:00Z",
