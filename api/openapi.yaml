@@ -3,7 +3,7 @@ info:
   title: Seller Panel API
   version: 0.1.0
   description: |
-    Draft contract for orders, dashboard and balance (issue #11).
+    Draft contract for orders, dashboard and balance (issue #11), and the stock change (issue #51, D5).
     Auth, shop, categories and products are added by the auth/products issue (#10).
     All money fields are integers in so'm (no floats).
 servers:
@@ -155,6 +155,48 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /products/{id}/stock:
+    patch:
+      tags: [Stock]
+      summary: Set the stock of a product from the product list
+      description: |
+        Rules are in docs/DECISIONS.md (D5).
+        - `stock` is the new absolute quantity (0–1 000 000), so a retried request gives the same result.
+        - `expected_stock` is the stock the seller saw; if it changed meanwhile, nothing is written (409 `stock_changed`).
+        - `stock` cannot go below `reserved` (409 `stock_below_reserved`); archived products are refused (409 `product_archived`).
+        - A product of another shop returns 404, the same as a missing one.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockUpdateRequest'
+      responses:
+        '200':
+          description: The new stock level
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLevel'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            `stock_changed` or `stock_below_reserved` (body has `current` with the real numbers),
+            or `product_archived` (plain error body).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/StockConflict'
+                  - $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -163,6 +205,14 @@ components:
       bearerFormat: JWT
 
   parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     OrderId:
       name: id
       in: path
@@ -372,6 +422,80 @@ components:
           type: integer
         total:
           type: integer
+
+    StockLabel:
+      type: string
+      enum: [in_stock, low_stock, out_of_stock]
+      description: |
+        `out_of_stock` when available is 0, `low_stock` when 0 < available ≤ LOW_STOCK_THRESHOLD (default 5),
+        `in_stock` otherwise.
+
+    StockUpdateRequest:
+      type: object
+      required: [stock, expected_stock]
+      additionalProperties: false
+      properties:
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          description: New absolute stock
+        expected_stock:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          description: The stock the seller saw before editing
+      example:
+        stock: 12
+        expected_stock: 10
+
+    StockLevel:
+      type: object
+      required: [product_id, stock, reserved, available, stock_label, updated_at]
+      properties:
+        product_id:
+          type: integer
+          format: int64
+        stock:
+          type: integer
+        reserved:
+          type: integer
+          description: Units promised to accepted orders
+        available:
+          type: integer
+          description: stock − reserved
+        stock_label:
+          $ref: '#/components/schemas/StockLabel'
+        updated_at:
+          type: string
+          format: date-time
+          description: UTC
+      example:
+        product_id: 1
+        stock: 7
+        reserved: 3
+        available: 4
+        stock_label: low_stock
+        updated_at: '2026-11-23T18:55:34Z'
+
+    StockConflict:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [current]
+          properties:
+            current:
+              $ref: '#/components/schemas/StockLevel'
+      example:
+        code: stock_changed
+        message: stock was changed since you opened it; check the current value and try again
+        current:
+          product_id: 1
+          stock: 3
+          reserved: 3
+          available: 0
+          stock_label: out_of_stock
+          updated_at: '2026-11-23T18:55:34Z'
 
     Error:
       type: object
