@@ -2,6 +2,7 @@ package order
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -21,9 +22,8 @@ func NewHandler(svc *Service) *Handler {
 
 // List handles GET /orders?status=&page=&page_size=.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
+	p, ok := auth.MustPrincipal(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
 		return
 	}
 	var status *Status
@@ -43,7 +43,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.List(r.Context(), p.ShopID, status, page, pageSize)
 	if err != nil {
-		writeOrderError(w, err)
+		writeOrderError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, res)
@@ -51,9 +51,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /orders/{id}.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
+	p, ok := auth.MustPrincipal(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -63,7 +62,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := h.svc.Get(r.Context(), p.ShopID, id)
 	if err != nil {
-		writeOrderError(w, err)
+		writeOrderError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, o)
@@ -71,9 +70,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Transition handles POST /orders/{id}/transition.
 func (h *Handler) Transition(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
+	p, ok := auth.MustPrincipal(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -88,7 +86,7 @@ func (h *Handler) Transition(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := h.svc.Transition(r.Context(), p.ShopID, id, req)
 	if err != nil {
-		writeOrderError(w, err)
+		writeOrderError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, o)
@@ -102,7 +100,7 @@ func intParam(r *http.Request, name string, fallback int) (int, error) {
 	return strconv.Atoi(raw)
 }
 
-func writeOrderError(w http.ResponseWriter, err error) {
+func writeOrderError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, ErrValidation):
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
@@ -115,6 +113,7 @@ func writeOrderError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrProductNotFound):
 		httpx.WriteError(w, http.StatusConflict, "product_not_found", "a product in this order no longer exists")
 	default:
+		slog.ErrorContext(r.Context(), "order request failed", "path", r.URL.Path, "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "something went wrong")
 	}
 }

@@ -57,18 +57,27 @@ type Item struct {
 
 // Order is a full order with items.
 type Order struct {
-	ID              int64     `json:"id"`
-	ShopID          int64     `json:"-"`
-	Number          string    `json:"number"`
-	Status          Status    `json:"status"`
-	BuyerName       string    `json:"buyer_name"`
-	BuyerPhone      string    `json:"buyer_phone"`
-	DeliveryAddress string    `json:"delivery_address"`
-	Items           []Item    `json:"items"`
-	Total           int64     `json:"total"`
-	CancelReason    *string   `json:"cancel_reason"`
-	CreatedAt       time.Time `json:"created_at"`
-	StatusChangedAt time.Time `json:"status_changed_at"`
+	ID              int64          `json:"id"`
+	ShopID          int64          `json:"-"`
+	Number          string         `json:"number"`
+	Status          Status         `json:"status"`
+	BuyerName       string         `json:"buyer_name"`
+	BuyerPhone      string         `json:"buyer_phone"`
+	DeliveryAddress string         `json:"delivery_address"`
+	Items           []Item         `json:"items"`
+	Total           int64          `json:"total"`
+	CancelReason    *string        `json:"cancel_reason"`
+	CreatedAt       time.Time      `json:"created_at"`
+	StatusChangedAt time.Time      `json:"status_changed_at"`
+	History         []HistoryEntry `json:"history"`
+}
+
+// HistoryEntry is one status change of an order; FromStatus is nil for the first row.
+type HistoryEntry struct {
+	FromStatus *Status   `json:"from_status"`
+	ToStatus   Status    `json:"to_status"`
+	Reason     *string   `json:"reason"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // Summary is an order without items, used in lists.

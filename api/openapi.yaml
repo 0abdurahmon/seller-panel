@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     Seller Panel API: sellers sign up with email and password, manage their shop and products,
-    see their balance, and (planned) process orders and see the dashboard.
+    process orders, see their balance, and (planned) see the dashboard.
 
     **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
     `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -14,14 +14,15 @@ info:
     - JSON with `snake_case` fields. Ids are integers. Money is an integer in so'm, never a float.
     - Errors are `{"code": "...", "message": "..."}`, also for unknown routes (`404 not_found`)
       and wrong methods (`405 method_not_allowed`, with an `Allow` header).
-    - Lists take `page` and `page_size` (default 20, max 100) and return `items`, `page`, `page_size`, `total`.
+    - Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.
+      A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer is a 400.
     - An optional value that is not set is `null` when its column can be null (for example `logo_url`),
       and `""` for text that always has a value (for example a product `description`).
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
-    **Status.** Implemented: auth, shop, categories, products, stock, balance.
-    Planned (they answer 404 until built): orders, dashboard, dev simulate-order.
+    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+    Planned (they answer 404 until built): dashboard, dev simulate-order.
 servers:
   - url: /api
     description: Through the proxy, the same address the app uses
@@ -106,7 +107,7 @@ paths:
   /orders:
     get:
       tags: [Orders]
-      summary: (planned) List orders of the current shop
+      summary: List orders of the current shop
       parameters:
         - name: status
           in: query
@@ -128,7 +129,7 @@ paths:
   /orders/{id}:
     get:
       tags: [Orders]
-      summary: (planned) Get one order with its items
+      summary: Get one order with its items and status history
       parameters:
         - $ref: '#/components/parameters/OrderId'
       responses:
@@ -146,8 +147,9 @@ paths:
   /orders/{id}/transition:
     post:
       tags: [Orders]
-      summary: (planned) Move an order to the next status
+      summary: Move an order to the next status
       description: |
+        Runs in one transaction: either the status and every side effect change, or nothing does.
         Allowed transitions follow the status machine in docs/DOMAIN.md:
         `new → accepted → packed → handed_to_courier → delivered`, and `cancelled`
         from `new`, `accepted` or `packed`.
@@ -600,7 +602,7 @@ components:
 
     Order:
       type: object
-      required: [id, number, status, buyer_name, buyer_phone, delivery_address, items, total, created_at, status_changed_at]
+      required: [id, number, status, buyer_name, buyer_phone, delivery_address, items, total, created_at, status_changed_at, history]
       properties:
         id:
           type: integer
@@ -630,6 +632,29 @@ components:
           type: string
           format: date-time
         status_changed_at:
+          type: string
+          format: date-time
+        history:
+          type: array
+          description: Every status change, oldest first. Empty for an order that never changed.
+          items:
+            $ref: '#/components/schemas/OrderHistoryEntry'
+
+    OrderHistoryEntry:
+      type: object
+      required: [from_status, to_status, reason, created_at]
+      properties:
+        from_status:
+          allOf:
+            - $ref: '#/components/schemas/OrderStatus'
+          nullable: true
+        to_status:
+          $ref: '#/components/schemas/OrderStatus'
+        reason:
+          type: string
+          nullable: true
+          description: The cancel reason, null for other changes
+        created_at:
           type: string
           format: date-time
 
@@ -1041,7 +1066,8 @@ components:
             $ref: '#/components/schemas/Error'
     Conflict:
       description: |
-        Business rule violated: `invalid_transition` or `insufficient_stock`.
+        Business rule violated: `invalid_transition`, `insufficient_stock`, or `product_not_found`
+        (a product of the order no longer exists).
       content:
         application/json:
           schema:

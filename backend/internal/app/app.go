@@ -12,6 +12,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
+	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
@@ -32,6 +33,11 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 	}
 	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
+	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
+	if err != nil {
+		return nil, err
+	}
+
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
 		return nil, err
@@ -46,6 +52,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
+		Order:   order.NewHandler(orderSvc),
 
 		ShopLimiter: httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
 	})

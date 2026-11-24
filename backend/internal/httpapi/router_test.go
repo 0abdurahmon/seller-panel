@@ -146,6 +146,9 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		{http.MethodGet, "/products/1"},
 		{http.MethodPut, "/products/1"},
 		{http.MethodPost, "/products/1/archive"},
+		{http.MethodGet, "/orders"},
+		{http.MethodGet, "/orders/1"},
+		{http.MethodPost, "/orders/1/transition"},
 	} {
 		req, err := http.NewRequest(c.method, srv.URL+c.path, nil)
 		if err != nil {

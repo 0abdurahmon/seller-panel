@@ -10,6 +10,7 @@ import (
 const (
 	defaultPageSize = 20
 	maxPageSize     = 100
+	maxPage         = 1_000_000
 )
 
 // Service holds the order rules: the status machine, stock effects and the
@@ -28,26 +29,50 @@ func NewService(repo Repository, commissionPercent int) (*Service, error) {
 	return &Service{repo: repo, commissionPercent: int64(commissionPercent), now: time.Now}, nil
 }
 
-// List returns one page of the shop's orders.
+// List returns one page of the shop's orders, newest first. Paging is clamped like product lists.
 func (s *Service) List(ctx context.Context, shopID int64, status *Status, page, pageSize int) (Page[Summary], error) {
 	if status != nil && !ValidStatus(*status) {
 		return Page[Summary]{}, fmt.Errorf("%w: unknown status", ErrValidation)
 	}
-	if page < 1 {
-		return Page[Summary]{}, fmt.Errorf("%w: page must be at least 1", ErrValidation)
+	if page > maxPage {
+		return Page[Summary]{}, fmt.Errorf("%w: page must be at most %d", ErrValidation, maxPage)
 	}
-	if pageSize == 0 {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
 		pageSize = defaultPageSize
 	}
-	if pageSize < 1 || pageSize > maxPageSize {
-		return Page[Summary]{}, fmt.Errorf("%w: page_size must be 1-%d", ErrValidation, maxPageSize)
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
 	}
-	return s.repo.List(ctx, shopID, Filter{Status: status, Page: page, PageSize: pageSize})
+	res, err := s.repo.List(ctx, shopID, Filter{Status: status, Page: page, PageSize: pageSize})
+	if err != nil {
+		return Page[Summary]{}, err
+	}
+	if res.Items == nil {
+		res.Items = []Summary{}
+	}
+	return res, nil
 }
 
-// Get returns one order with its items.
+// Get returns one order with its items and status history.
 func (s *Service) Get(ctx context.Context, shopID, orderID int64) (Order, error) {
-	return s.repo.Get(ctx, shopID, orderID)
+	o, err := s.repo.Get(ctx, shopID, orderID)
+	if err != nil {
+		return Order{}, err
+	}
+	return withLists(o), nil
+}
+
+func withLists(o Order) Order {
+	if o.Items == nil {
+		o.Items = []Item{}
+	}
+	if o.History == nil {
+		o.History = []HistoryEntry{}
+	}
+	return o
 }
 
 // Transition moves an order to a new status and applies the side effects in
@@ -111,10 +136,11 @@ func (s *Service) Transition(ctx context.Context, shopID, orderID int64, req Tra
 		if err := tx.SetStatus(ctx, shopID, orderID, req.To, cancelReason, now); err != nil {
 			return err
 		}
+		o.History = append(o.History, HistoryEntry{FromStatus: &from, ToStatus: req.To, Reason: cancelReason, CreatedAt: now})
 		o.Status = req.To
 		o.CancelReason = cancelReason
 		o.StatusChangedAt = now
-		result = o
+		result = withLists(o)
 		return nil
 	})
 	if err != nil {

@@ -43,8 +43,8 @@ func (s *server) shopIDOf(sel seller) int64 {
 	return id
 }
 
-// deliverOrder writes what the order feature writes on delivery: a sale and a commission.
-// Orders cannot be delivered through the API yet, so the rows go in directly.
+// deliverOrder writes what delivery writes: a sale and a commission, at an exact time.
+// The balance tests need to control the timestamps (ordering, paging), which the API cannot do.
 func (s *server) deliverOrder(shopID, total int64, at time.Time) {
 	s.t.Helper()
 	var order int64
