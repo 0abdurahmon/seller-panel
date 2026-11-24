@@ -68,6 +68,70 @@ func (r *PgRepository) Get(ctx context.Context, shopID, orderID int64) (Order, e
 	return loadOrder(ctx, r.pool, shopID, orderID, false, "id")
 }
 
+func (r *PgRepository) SimulatableProducts(ctx context.Context, shopID int64) ([]ProductRef, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, title, price, stock - reserved
+		   FROM products
+		  WHERE shop_id = $1 AND status = 'active' AND stock - reserved > 0
+		  ORDER BY id`, shopID)
+	if err != nil {
+		return nil, fmt.Errorf("list products to order: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ProductRef
+	for rows.Next() {
+		var p ProductRef
+		if err := rows.Scan(&p.ID, &p.Title, &p.Price, &p.Available); err != nil {
+			return nil, fmt.Errorf("scan product: %w", err)
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list products to order: %w", err)
+	}
+	return out, nil
+}
+
+func (r *PgRepository) Create(ctx context.Context, shopID int64, n NewOrder, at time.Time) (Order, error) {
+	var created Order
+	err := database.InTx(ctx, r.pool, func(tx pgx.Tx) error {
+		var total int64
+		for _, it := range n.Items {
+			total += it.Price * int64(it.Quantity)
+		}
+		var id int64
+		if err := tx.QueryRow(ctx,
+			`INSERT INTO orders (shop_id, buyer_name, buyer_phone, delivery_address, total, created_at, status_changed_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id`,
+			shopID, n.BuyerName, n.BuyerPhone, n.DeliveryAddress, total, at).Scan(&id); err != nil {
+			return fmt.Errorf("insert order: %w", err)
+		}
+		for _, it := range n.Items {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO order_items (order_id, product_id, title_snapshot, price_snapshot, quantity) VALUES ($1, $2, $3, $4, $5)`,
+				id, it.ProductID, it.Title, it.Price, it.Quantity); err != nil {
+				return fmt.Errorf("insert order item: %w", err)
+			}
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO order_status_history (order_id, from_status, to_status, created_at) VALUES ($1, NULL, 'new', $2)`,
+			id, at); err != nil {
+			return fmt.Errorf("insert first history row: %w", err)
+		}
+		o, err := loadOrder(ctx, tx, shopID, id, false, "id")
+		if err != nil {
+			return err
+		}
+		created = o
+		return nil
+	})
+	if err != nil {
+		return Order{}, err
+	}
+	return created, nil
+}
+
 func (r *PgRepository) InTx(ctx context.Context, fn func(tx TxRepository) error) error {
 	return database.InTx(ctx, r.pool, func(tx pgx.Tx) error {
 		return fn(&pgTx{tx: tx})

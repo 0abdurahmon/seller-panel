@@ -24,6 +24,11 @@ func newTestRouter(t *testing.T) http.Handler {
 
 func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.Handler {
 	t.Helper()
+	return newTestRouterOptions(t, shopRPS, shopBurst, false)
+}
+
+func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpoints bool) http.Handler {
+	t.Helper()
 	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +50,8 @@ func newTestRouterWithLimit(t *testing.T, shopRPS float64, shopBurst int) http.H
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 
-		ShopLimiter: httpx.NewLimiter(shopRPS, shopBurst),
+		ShopLimiter:  httpx.NewLimiter(shopRPS, shopBurst),
+		DevEndpoints: devEndpoints,
 	})
 }
 
@@ -279,5 +285,37 @@ func TestProtectedRoutesAreLimitedPerShop(t *testing.T) {
 	}
 	if bad.Code != http.StatusUnauthorized {
 		t.Fatalf("requests without a token got %d, want 401 and no limiter bucket", bad.Code)
+	}
+}
+
+func TestSimulateOrderRouteExistsOnlyInDevelopment(t *testing.T) {
+	tokens, err := auth.NewTokenIssuer("test-secret", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := tokens.Issue(10, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := func(h http.Handler, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/dev/simulate-order", nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	production := newTestRouterOptions(t, 1000, 1000, false)
+	rec := post(production, token)
+	var e struct{ Code string }
+	if rec.Code != http.StatusNotFound || json.NewDecoder(rec.Body).Decode(&e) != nil || e.Code != "not_found" {
+		t.Fatalf("production: status %d code %q, want the JSON 404", rec.Code, e.Code)
+	}
+
+	development := newTestRouterOptions(t, 1000, 1000, true)
+	if rec := post(development, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("development without a token: status %d, want 401", rec.Code)
 	}
 }

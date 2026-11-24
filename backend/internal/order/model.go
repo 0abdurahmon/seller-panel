@@ -103,3 +103,27 @@ type TransitionRequest struct {
 	To     Status `json:"to"`
 	Reason string `json:"reason"`
 }
+
+// NewOrder is what a simulated buyer sends; the total is computed from the items.
+type NewOrder struct {
+	BuyerName       string
+	BuyerPhone      string
+	DeliveryAddress string
+	Items           []NewItem
+}
+
+// NewItem is one line of a new order with the title and price taken from the product.
+type NewItem struct {
+	ProductID int64
+	Title     string
+	Price     int64
+	Quantity  int
+}
+
+// ProductRef is a product a simulated order may use.
+type ProductRef struct {
+	ID        int64
+	Title     string
+	Price     int64
+	Available int
+}

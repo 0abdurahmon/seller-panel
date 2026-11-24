@@ -32,6 +32,10 @@ type Repository interface {
 	Get(ctx context.Context, shopID, orderID int64) (Order, error)
 	// InTx runs fn in one transaction. Changes are rolled back if fn returns an error.
 	InTx(ctx context.Context, fn func(tx TxRepository) error) error
+	// SimulatableProducts lists the shop's active products that have available stock.
+	SimulatableProducts(ctx context.Context, shopID int64) ([]ProductRef, error)
+	// Create stores a new order with its items and the first history row, and returns it.
+	Create(ctx context.Context, shopID int64, o NewOrder, at time.Time) (Order, error)
 }
 
 // TxRepository holds the writes a transition needs. All writes happen in one transaction.

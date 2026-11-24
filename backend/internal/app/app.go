@@ -54,7 +54,8 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
 
-		ShopLimiter: httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
+		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
+		DevEndpoints: cfg.Env == config.EnvDevelopment,
 	})
 	return httpx.Logging(logger)(router), nil
 }

@@ -26,6 +26,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-seller}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-seller}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
       JWT_TTL: ${JWT_TTL:-24h}
+      APP_ENV: ${APP_ENV:-development}
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
       LOW_STOCK_THRESHOLD: ${LOW_STOCK_THRESHOLD:-5}
       RATE_LIMIT_SHOP_RPS: ${RATE_LIMIT_SHOP_RPS:-20}

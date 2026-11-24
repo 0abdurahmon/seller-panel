@@ -44,6 +44,7 @@ func newAPIWith(t *testing.T, mem *memRepository, repo Repository) *api {
 	mux.Handle("GET /orders", protect(http.HandlerFunc(h.List)))
 	mux.Handle("GET /orders/{id}", protect(http.HandlerFunc(h.Get)))
 	mux.Handle("POST /orders/{id}/transition", protect(http.HandlerFunc(h.Transition)))
+	mux.Handle("POST /dev/simulate-order", protect(http.HandlerFunc(h.Simulate)))
 	return &api{t: t, repo: mem, mux: mux, tokens: tokens}
 }
 
@@ -93,6 +94,7 @@ func TestHandlerRequiresToken(t *testing.T) {
 		{http.MethodGet, "/orders"},
 		{http.MethodGet, "/orders/1"},
 		{http.MethodPost, "/orders/1/transition"},
+		{http.MethodPost, "/dev/simulate-order"},
 	} {
 		if rec := a.do(c.method, c.path, "", `{}`); rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s status = %d, want 401", c.method, c.path, rec.Code)
@@ -251,5 +253,36 @@ func TestHandlerHidesInternalErrors(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "connection reset") {
 		t.Fatalf("internal error leaked: %s", rec.Body.String())
+	}
+}
+
+func TestHandlerSimulateOrder(t *testing.T) {
+	a := newAPI(t)
+	a.repo.AddPricedProduct(7, shopA, 10, 0, "Phone", 2500)
+	a.repo.AddPricedProduct(8, 2, 10, 0, "Other shop", 100)
+
+	rec := a.do(http.MethodPost, "/dev/simulate-order", a.token(shopA), "")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	o := decode[Order](t, rec)
+	if o.Status != StatusNew || len(o.Items) != 1 || o.Items[0].ProductID != 7 || o.Total != o.Items[0].Price*int64(o.Items[0].Quantity) {
+		t.Fatalf("order = %+v", o)
+	}
+	if len(o.History) != 1 || o.History[0].FromStatus != nil {
+		t.Fatalf("history = %+v", o.History)
+	}
+	got := a.do(http.MethodGet, "/orders/"+strconv.FormatInt(o.ID, 10), a.token(shopA), "")
+	if got.Code != http.StatusOK {
+		t.Fatalf("the simulated order cannot be fetched: %d", got.Code)
+	}
+}
+
+func TestHandlerSimulateWithoutProducts(t *testing.T) {
+	a := newAPI(t)
+	a.repo.AddPricedProduct(8, 2, 10, 0, "Other shop", 100)
+	rec := a.do(http.MethodPost, "/dev/simulate-order", a.token(shopA), "")
+	if rec.Code != http.StatusConflict || errorCode(t, rec) != "no_products_to_order" {
+		t.Fatalf("status %d code %q, want 409 no_products_to_order", rec.Code, errorCode(t, rec))
 	}
 }

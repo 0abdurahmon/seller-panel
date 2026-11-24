@@ -2,6 +2,8 @@ package order
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -17,6 +19,8 @@ type memProduct struct {
 	shopID   int64
 	stock    int
 	reserved int
+	title    string
+	price    int64
 }
 
 func newMemRepository() *memRepository {
@@ -30,9 +34,48 @@ func (m *memRepository) AddOrder(o Order) {
 }
 
 func (m *memRepository) AddProduct(id, shopID int64, stock, reserved int) {
+	m.AddPricedProduct(id, shopID, stock, reserved, fmt.Sprintf("Product %d", id), 1000)
+}
+
+func (m *memRepository) AddPricedProduct(id, shopID int64, stock, reserved int, title string, price int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.products[id] = &memProduct{shopID: shopID, stock: stock, reserved: reserved}
+	m.products[id] = &memProduct{shopID: shopID, stock: stock, reserved: reserved, title: title, price: price}
+}
+
+func (m *memRepository) SimulatableProducts(_ context.Context, shopID int64) ([]ProductRef, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []ProductRef
+	for id, p := range m.products {
+		if p.shopID == shopID && p.stock-p.reserved > 0 {
+			out = append(out, ProductRef{ID: id, Title: p.title, Price: p.price, Available: p.stock - p.reserved})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (m *memRepository) Create(_ context.Context, shopID int64, n NewOrder, at time.Time) (Order, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var id int64
+	for existing := range m.orders {
+		if existing > id {
+			id = existing
+		}
+	}
+	id++
+	o := Order{ID: id, ShopID: shopID, Number: fmt.Sprintf("#%d", 100000+id), Status: StatusNew,
+		BuyerName: n.BuyerName, BuyerPhone: n.BuyerPhone, DeliveryAddress: n.DeliveryAddress,
+		Items: []Item{}, CreatedAt: at, StatusChangedAt: at}
+	for i, it := range n.Items {
+		o.Items = append(o.Items, Item{ID: int64(i + 1), ProductID: it.ProductID, Title: it.Title, Price: it.Price, Quantity: it.Quantity})
+		o.Total += it.Price * int64(it.Quantity)
+	}
+	o.History = []HistoryEntry{{ToStatus: StatusNew, CreatedAt: at}}
+	m.orders[id] = o
+	return o, nil
 }
 
 func (m *memRepository) Product(id int64) (stock, reserved int) {

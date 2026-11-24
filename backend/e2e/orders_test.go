@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 )
 
 type orderItemJSON struct {
@@ -495,5 +497,89 @@ func TestOrderListPagingIsClamped(t *testing.T) {
 	s.do(http.MethodGet, "/orders?page=99&page_size=2", sel.token, nil).decode(&page)
 	if len(page.Items) != 0 || page.Items == nil {
 		t.Fatalf("page past the end = %+v", page)
+	}
+}
+
+func TestSimulatedOrderGoesAllTheWayToTheBalance(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+	category := s.categoryID(sel.token)
+	a := s.createProduct(sel.token, category, 10)
+	b := s.createProduct(sel.token, category, 6)
+	owned := map[int64]product{a.ID: a, b.ID: b}
+
+	res := s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil)
+	s.expect(res, http.StatusCreated, "")
+	var o orderJSON
+	res.decode(&o)
+	if o.Status != "new" || len(o.Number) < 7 || o.Number[0] != '#' || o.BuyerName == "" || o.BuyerPhone == "" || o.DeliveryAddress == "" {
+		t.Fatalf("simulated order = %+v", o)
+	}
+	if len(o.Items) < 1 || len(o.Items) > 2 || len(o.History) != 1 || o.History[0].FromStatus != nil || o.History[0].ToStatus != "new" {
+		t.Fatalf("items %d, history %+v", len(o.Items), o.History)
+	}
+	var total int64
+	for _, it := range o.Items {
+		p, ok := owned[it.ProductID]
+		if !ok || it.Quantity < 1 || it.Quantity > 3 || it.Price != p.Price || it.Title != p.Title {
+			t.Fatalf("item %+v does not match the seller's products", it)
+		}
+		total += it.Price * int64(it.Quantity)
+	}
+	if o.Total != total {
+		t.Fatalf("total = %d, want %d", o.Total, total)
+	}
+	before := s.getProduct(sel.token, o.Items[0].ProductID)
+	if before.Reserved != 0 {
+		t.Fatalf("simulating an order reserved %d units", before.Reserved)
+	}
+
+	for _, to := range []string{"accepted", "packed", "handed_to_courier", "delivered"} {
+		s.expect(s.transition(sel.token, o.ID, to, ""), http.StatusOK, "")
+	}
+	after := s.getProduct(sel.token, o.Items[0].ProductID)
+	if after.Stock != before.Stock-o.Items[0].Quantity || after.Reserved != 0 {
+		t.Fatalf("after delivery stock %d reserved %d, want %d and 0", after.Stock, after.Reserved, before.Stock-o.Items[0].Quantity)
+	}
+
+	commission := total * 10 / 100
+	var bal balanceSummary
+	s.do(http.MethodGet, "/balance", sel.token, nil).decode(&bal)
+	if bal.Earned != total || bal.Commission != -commission || bal.Available != total-commission {
+		t.Fatalf("balance = %+v, want earned %d, commission %d", bal, total, -commission)
+	}
+}
+
+func TestSimulateOrderNeedsSellableProducts(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+	s.expect(s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil), http.StatusConflict, "no_products_to_order")
+
+	p := s.createProduct(sel.token, s.categoryID(sel.token), 4)
+	s.expect(s.do(http.MethodPost, productPath(p)+"/archive", sel.token, nil), http.StatusOK, "")
+	s.expect(s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil), http.StatusConflict, "no_products_to_order")
+
+	other := s.register()
+	s.createProduct(other.token, s.categoryID(other.token), 9)
+	s.expect(s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil), http.StatusConflict, "no_products_to_order")
+
+	var page orderPage
+	s.do(http.MethodGet, "/orders", other.token, nil).decode(&page)
+	if page.Total != 0 {
+		t.Fatalf("the refused simulations created %d orders for the other seller", page.Total)
+	}
+}
+
+func TestSimulateOrderIsNotAvailableInProduction(t *testing.T) {
+	s := newServer(t, func(c *config.Config) { c.Env = config.EnvProduction })
+	sel := s.register()
+	s.createProduct(sel.token, s.categoryID(sel.token), 5)
+
+	s.expect(s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil), http.StatusNotFound, "not_found")
+	s.expect(s.do(http.MethodPost, "/dev/simulate-order", "", nil), http.StatusNotFound, "not_found")
+	var page orderPage
+	s.do(http.MethodGet, "/orders", sel.token, nil).decode(&page)
+	if page.Total != 0 {
+		t.Fatalf("production created %d orders", page.Total)
 	}
 }

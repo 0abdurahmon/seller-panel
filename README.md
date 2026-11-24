@@ -162,6 +162,7 @@ cp .env.example .env
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
+| `APP_ENV` | `development` in Docker Compose, `production` when unset | `development` turns on the dev endpoint `POST /dev/simulate-order` (fake buyer orders); in `production` it does not exist |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `RATE_LIMIT_SHOP_RPS`, `RATE_LIMIT_SHOP_BURST` | `20`, `40` | Requests per second and burst allowed for each shop on protected routes (see D6) |
 | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
@@ -220,7 +221,13 @@ The script also trips the rate limits on purpose (nginx allows 10 auth requests 
 
 ### Seed data
 
-Not available yet. The seed script and the dev "simulate order" endpoint come with the database and orders issues; this section will be updated then.
+There is no seed script yet. To get orders to work with, use the dev endpoint (it exists when `APP_ENV=development`, which is the Docker Compose default). Create products first (the app, Swagger at `/docs/`, or the API), then:
+
+```bash
+curl -s -X POST http://localhost:3000/api/dev/simulate-order -H "Authorization: Bearer $TOKEN"
+```
+
+Each call creates one `new` order with 1 to 3 of your active products that have stock. Accept it, pack it, hand it over and deliver it with `POST /orders/{id}/transition`, then look at `GET /balance`. In `production` mode the endpoint does not exist.
 
 ## Live demo
 

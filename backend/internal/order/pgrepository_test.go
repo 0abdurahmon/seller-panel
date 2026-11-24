@@ -462,3 +462,67 @@ func TestPgListPagesAndFilters(t *testing.T) {
 		t.Fatalf("page past the end = %+v, %v", beyond, err)
 	}
 }
+
+func TestPgSimulateCreatesOrderFromSellableProducts(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	svc := newPgService(t, repo)
+	shop, otherShop := seedShop(t, pool), seedShop(t, pool)
+	sellable := seedProduct(t, pool, shop, 10, 2)
+	archived := seedProduct(t, pool, shop, 10, 0)
+	soldOut := seedProduct(t, pool, shop, 5, 5)
+	foreign := seedProduct(t, pool, otherShop, 10, 0)
+	if _, err := pool.Exec(ctx, `UPDATE products SET status = 'archived' WHERE id = $1`, archived); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 20; i++ {
+		o, err := svc.Simulate(ctx, shop)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if o.Status != StatusNew || !strings.HasPrefix(o.Number, "#") || o.CreatedAt.Location() != time.UTC {
+			t.Fatalf("order = %+v", o)
+		}
+		if len(o.Items) != 1 || o.Items[0].ProductID != sellable {
+			t.Fatalf("items = %+v, only the active product with available stock may be used (not %d, %d or %d)", o.Items, archived, soldOut, foreign)
+		}
+		it := o.Items[0]
+		if it.Quantity < 1 || it.Quantity > 3 || it.Quantity > 8 || it.Title != "Phone" || it.Price != 1000 || o.Total != it.Price*int64(it.Quantity) {
+			t.Fatalf("item = %+v, total %d", it, o.Total)
+		}
+		if len(o.History) != 1 || o.History[0].FromStatus != nil || o.History[0].ToStatus != StatusNew {
+			t.Fatalf("history = %+v, want one row from nothing to new", o.History)
+		}
+
+		got, err := repo.Get(ctx, shop, o.ID)
+		if err != nil || got.Total != o.Total || len(got.Items) != 1 || len(got.History) != 1 {
+			t.Fatalf("stored order = %+v, %v", got, err)
+		}
+	}
+	if _, reserved := productStock(t, pool, sellable); reserved != 2 {
+		t.Fatalf("simulating orders reserved stock: reserved = %d, want 2", reserved)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM orders WHERE shop_id = $1`, otherShop); n != 0 {
+		t.Fatalf("the other shop got %d orders", n)
+	}
+}
+
+func TestPgSimulateWithoutSellableProducts(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	svc := newPgService(t, repo)
+	shop := seedShop(t, pool)
+	archived := seedProduct(t, pool, shop, 10, 0)
+	if _, err := pool.Exec(ctx, `UPDATE products SET status = 'archived' WHERE id = $1`, archived); err != nil {
+		t.Fatal(err)
+	}
+	seedProduct(t, pool, shop, 3, 3)
+
+	if _, err := svc.Simulate(ctx, shop); !errors.Is(err, ErrNoProducts) {
+		t.Fatalf("err = %v, want ErrNoProducts", err)
+	}
+	if n := count(t, pool, `SELECT count(*) FROM orders WHERE shop_id = $1`, shop); n != 0 {
+		t.Fatalf("a refused simulation left %d orders", n)
+	}
+}
