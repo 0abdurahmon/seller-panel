@@ -14,6 +14,20 @@ export default defineConfig(({ mode }) => {
       // Aliases come from "paths" in tsconfig.app.json, so they are defined once.
       tsconfigPaths: true,
     },
+    build: {
+      rolldownOptions: {
+        output: {
+          // Libraries change less often than our code: separate chunks stay cached between deploys.
+          codeSplitting: {
+            groups: [
+              { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 3 },
+              { name: 'router', test: /node_modules[\\/]react-router[\\/]/, priority: 2 },
+              { name: 'ui', test: /node_modules[\\/](@base-ui|@floating-ui)[\\/]/, priority: 2 },
+            ],
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         '/api': {

@@ -39,7 +39,7 @@ function getInitials(name: string) {
 }
 
 function PageBreadcrumb({ crumbs, shopName }: { crumbs: Crumb[]; shopName: string }) {
-  // On the home page there is no path to show; greet the seller instead, as tutoria does.
+  // On the home page there is no path to show, so the seller is greeted instead.
   if (crumbs.length <= 1) {
     return <p className="text-sm text-muted-foreground">Добро пожаловать, {shopName}</p>;
   }

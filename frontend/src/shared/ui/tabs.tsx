@@ -2,7 +2,7 @@ import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
-// Styles follow tutoria's tabs; Base UI marks the selected tab with data-active.
+// Base UI marks the selected tab with data-active, so the styles key off that attribute.
 
 function Tabs({
   className,
