@@ -2,8 +2,7 @@ import * as React from "react"
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cn } from "cn"
-import { ArrowRight2 } from "iconsax-reactjs"
-import { MoreHorizontalIcon } from "./icons"
+import { ChevronRightIcon, MoreHorizontalIcon } from "./icons"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -86,7 +85,7 @@ function BreadcrumbSeparator({
       {...props}
     >
       {children ?? (
-        <ArrowRight2 className="text-muted-foreground" />
+        <ChevronRightIcon className="text-muted-foreground" />
       )}
     </li>
   )

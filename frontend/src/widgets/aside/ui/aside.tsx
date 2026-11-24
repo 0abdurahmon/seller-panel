@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useMatch } from 'react-router';
-import { ArrowLeft2, ArrowRight2 } from 'iconsax-reactjs';
 import { cn } from 'cn';
 import { bottomMenuItems, mainMenuItems, type MenuItem } from '@/shared/config';
 import { useSidebarState } from '@/shared/providers';
 import {
   Button,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   Logo,
   LogoMark,
   Tooltip,
@@ -123,7 +124,7 @@ export const Aside = () => {
           aria-expanded={!collapsed}
           className="absolute top-1/2 -right-3 z-10 -translate-y-1/2 rounded-full border-sidebar-border bg-sidebar text-muted-foreground opacity-0 transition-opacity duration-200 group-hover/aside:opacity-100 focus-visible:opacity-100"
         >
-          {collapsed ? <ArrowRight2 /> : <ArrowLeft2 />}
+          {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
         </Button>
       )}
     </div>

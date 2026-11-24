@@ -1,5 +1,4 @@
-import { ArrowLeft2, ArrowRight2 } from "iconsax-reactjs";
-import { Button } from "@/shared/ui";
+import { Button, ChevronLeftIcon, ChevronRightIcon } from "@/shared/ui";
 
 export function ProductsPagination({
   page,
@@ -49,7 +48,7 @@ export function ProductsPagination({
             disabled={disabled || page <= 1}
             onClick={() => onPageChange(page - 1)}
           >
-            <ArrowLeft2 />
+            <ChevronLeftIcon />
           </Button>
           <span className="tabular-nums text-foreground">
             {page} / {pages}
@@ -61,7 +60,7 @@ export function ProductsPagination({
             disabled={disabled || page >= pages}
             onClick={() => onPageChange(page + 1)}
           >
-            <ArrowRight2 />
+            <ChevronRightIcon />
           </Button>
         </div>
       )}
