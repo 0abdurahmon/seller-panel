@@ -11,7 +11,8 @@ Go backend, React + TypeScript + Vite frontend, PostgreSQL, Docker Compose.
 | Task | Command |
 |------|---------|
 | Run everything | `docker compose up --build --wait` |
-| Backend checks | `cd backend && gofmt -l . && go vet ./... && go test -race ./...` |
+| Backend checks | `cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./...` |
+| End-to-end tests | `cd backend && go test -race -tags e2e ./e2e/...` (needs `TEST_DATABASE_URL`) |
 | Database tests | need `DATABASE_URL`, CI runs them against PostgreSQL |
 | Smoke test | `scripts/smoke.sh` |
 | Frontend | `cd frontend && npm ci && npm run build` |
@@ -37,7 +38,7 @@ Rules:
 4. Validate and trim in the service before any SQL. Database `CHECK` and `UNIQUE` constraints are the second line.
 5. Money is `int64` in so'm. No floats. Time is UTC `timestamptz`.
 6. Anything that changes more than one row uses `database.InTx`. New repositories accept `database.DBTX`.
-7. Wire new features only in `cmd/server/main.go` and `internal/httpapi/router.go`. Protected routes are registered with `protected(handler)`, which applies `auth.RequireAuth` and the per shop rate limit. Do not register a protected route any other way.
+7. Wire new features only in `internal/app/app.go` (services and handlers) and `internal/httpapi/router.go` (routes). `cmd/server/main.go` only starts the process. Protected routes are registered with `protected(handler)`, which applies `auth.RequireAuth` and the per shop rate limit. Do not register a protected route any other way.
 8. Fakes live only in `_test.go` files. Production code never contains an in-memory repository.
 
 ## HTTP conventions
@@ -83,6 +84,7 @@ Every new or changed endpoint is described in `api/openapi.yaml` in the same PR 
 - Service: table-driven tests with `memRepository`, including the "other shop gets not found" case.
 - Repository: real PostgreSQL, covers constraints and unique violations.
 - Handler: `httptest`, covers 400, 401, 404 and the success shape.
+- End-to-end: `backend/e2e`, the real router and PostgreSQL through `app.NewHandler`. A feature that adds routes also adds to the journey, the isolation test (another seller gets 404), the error cases and, if it is expensive or sensitive, a limit. Use the helpers in `e2e/helpers_test.go`, files carry `//go:build e2e`.
 - Run the checks above before opening a PR. If you could not run something, say so in the PR.
 
 ## Git and PRs
