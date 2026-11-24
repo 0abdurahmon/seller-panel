@@ -18,8 +18,8 @@ func validReq() UpdateRequest {
 }
 
 func TestUpdateNormalisesAndStoresProfile(t *testing.T) {
-	repo := NewMemRepository()
-	repo.Seed(1, "Old")
+	repo := newMemRepository()
+	repo.seed(1, "Old")
 	svc := NewService(repo)
 
 	got, err := svc.Update(context.Background(), 1, validReq())
@@ -38,8 +38,8 @@ func TestUpdateNormalisesAndStoresProfile(t *testing.T) {
 }
 
 func TestUpdateEmptyOptionalFieldsClearThem(t *testing.T) {
-	repo := NewMemRepository()
-	repo.Seed(1, "Old")
+	repo := newMemRepository()
+	repo.seed(1, "Old")
 	svc := NewService(repo)
 	if _, err := svc.Update(context.Background(), 1, validReq()); err != nil {
 		t.Fatal(err)
@@ -75,8 +75,8 @@ func TestUpdateValidation(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			repo := NewMemRepository()
-			repo.Seed(1, "Old")
+			repo := newMemRepository()
+			repo.seed(1, "Old")
 			req := validReq()
 			mutate(&req)
 			_, err := NewService(repo).Update(context.Background(), 1, req)
@@ -88,7 +88,7 @@ func TestUpdateValidation(t *testing.T) {
 }
 
 func TestUpdateUnknownShopIsNotFound(t *testing.T) {
-	_, err := NewService(NewMemRepository()).Update(context.Background(), 42, validReq())
+	_, err := NewService(newMemRepository()).Update(context.Background(), 42, validReq())
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}

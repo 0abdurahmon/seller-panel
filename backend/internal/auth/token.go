@@ -8,10 +8,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// ErrInvalidToken is returned for any token that is malformed, expired or
-// signed with another key.
-var ErrInvalidToken = errors.New("invalid token")
-
 // Claims are the values every protected request is scoped by.
 type Claims struct {
 	SellerID int64 `json:"seller_id"`

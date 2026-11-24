@@ -27,9 +27,9 @@ func TestLabelFor(t *testing.T) {
 	}
 }
 
-func newService(t *testing.T) (*Service, *MemStore) {
+func newService(t *testing.T) (*Service, *memRepository) {
 	t.Helper()
-	store := NewMemStore()
+	store := newMemRepository()
 	svc, err := NewService(store, 5)
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func newService(t *testing.T) (*Service, *MemStore) {
 }
 
 func TestNewServiceRejectsNegativeThreshold(t *testing.T) {
-	if _, err := NewService(NewMemStore(), -1); err == nil {
+	if _, err := NewService(newMemRepository(), -1); err == nil {
 		t.Fatal("negative threshold accepted")
 	}
 }
