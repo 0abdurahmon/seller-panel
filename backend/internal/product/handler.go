@@ -10,36 +10,20 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
 
-type StockLabeler func(available int) string
-
-type Response struct {
-	Product
-	Available  int    `json:"available"`
-	StockLabel string `json:"stock_label"`
-}
-
-type PageResponse struct {
-	Items    []Response `json:"items"`
-	Page     int        `json:"page"`
-	PageSize int        `json:"page_size"`
-	Total    int        `json:"total"`
-}
-
 type Handler struct {
-	svc   *Service
-	label StockLabeler
+	svc *Service
 }
 
-func NewHandler(svc *Service, label StockLabeler) *Handler {
-	return &Handler{svc: svc, label: label}
+func NewHandler(svc *Service) *Handler {
+	return &Handler{svc: svc}
 }
 
-func (h *Handler) response(p Product) Response {
+// shown makes sure the JSON has "photos": [] and never null.
+func shown(p Product) Product {
 	if p.Photos == nil {
 		p.Photos = []string{}
 	}
-	available := p.Stock - p.Reserved
-	return Response{Product: p, Available: available, StockLabel: h.label(available)}
+	return p
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -71,11 +55,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	items := make([]Response, len(res.Items))
-	for i, it := range res.Items {
-		items[i] = h.response(it)
+	for i := range res.Items {
+		res.Items[i] = shown(res.Items[i])
 	}
-	httpx.WriteJSON(w, http.StatusOK, PageResponse{Items: items, Page: res.Page, PageSize: res.PageSize, Total: res.Total})
+	httpx.WriteJSON(w, http.StatusOK, res)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +87,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, h.response(res))
+	httpx.WriteJSON(w, http.StatusCreated, shown(res))
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +100,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +129,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +142,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(res))
+	httpx.WriteJSON(w, http.StatusOK, shown(res))
 }
 
 func pathID(r *http.Request) int64 {

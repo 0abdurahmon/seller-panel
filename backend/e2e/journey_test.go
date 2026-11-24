@@ -44,7 +44,7 @@ func TestSellerJourney(t *testing.T) {
 	s.expect(created, http.StatusCreated, "")
 	var p product
 	created.decode(&p)
-	if p.ID == 0 || p.Stock != 3 || p.Reserved != 0 || p.Available != 3 || p.StockLabel != "low_stock" || p.Status != "active" {
+	if p.ID == 0 || p.Stock != 3 || p.Reserved != 0 || p.Status != "draft" {
 		t.Fatalf("created product = %+v", p)
 	}
 
@@ -53,18 +53,23 @@ func TestSellerJourney(t *testing.T) {
 	if page.Total != 1 || page.Items[0].ID != p.ID {
 		t.Fatalf("search by sku = %+v", page)
 	}
-	s.do(http.MethodGet, "/products?status=draft", token, nil).decode(&page)
+	s.do(http.MethodGet, "/products?status=active", token, nil).decode(&page)
 	if page.Total != 0 || page.Items == nil {
-		t.Fatalf("draft filter = %+v, want an empty page with items []", page)
+		t.Fatalf("active filter = %+v, want an empty page with items [] (a new product is a draft)", page)
+	}
+	s.do(http.MethodGet, "/products?status=draft", token, nil).decode(&page)
+	if page.Total != 1 || page.Items[0].ID != p.ID {
+		t.Fatalf("draft filter = %+v", page)
 	}
 
 	renamed := productBody(category, sku, 0)
 	delete(renamed, "stock")
 	renamed["title"], renamed["price"] = "Phone Pro", 2_000_000
+	renamed["status"] = "active"
 	res := s.do(http.MethodPut, productPath(p), token, renamed)
 	s.expect(res, http.StatusOK, "")
 	res.decode(&p)
-	if p.Title != "Phone Pro" || p.Price != 2_000_000 || p.Stock != 3 {
+	if p.Title != "Phone Pro" || p.Price != 2_000_000 || p.Stock != 3 || p.Status != "active" {
 		t.Fatalf("after update = %+v, the stock must stay 3", p)
 	}
 
@@ -81,7 +86,7 @@ func TestSellerJourney(t *testing.T) {
 		t.Fatalf("stock level = %+v", level)
 	}
 	s.do(http.MethodGet, productPath(p), token, nil).decode(&p)
-	if p.Stock != 50 || p.StockLabel != "in_stock" {
+	if p.Stock != 50 {
 		t.Fatalf("product after the stock change = %+v", p)
 	}
 

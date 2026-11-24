@@ -462,6 +462,8 @@ paths:
       tags: [Products]
       summary: Create a product in the current shop, with its photos
       description: |
+        A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).
+
         Two request formats:
         - `application/json`: the fields only, a product without photos.
         - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
@@ -1196,7 +1198,7 @@ components:
 
     Product:
       type: object
-      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, available, stock_label, status, photos, created_at, updated_at]
+      required: [id, shop_id, category_id, title, description, price, sku, stock, reserved, status, photos, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -1221,13 +1223,9 @@ components:
           type: integer
         reserved:
           type: integer
-        available:
-          type: integer
-          description: stock minus reserved
-        stock_label:
-          $ref: '#/components/schemas/StockLabel'
         status:
           $ref: '#/components/schemas/ProductStatus'
+          description: A new product is a `draft`.
         photos:
           $ref: '#/components/schemas/ProductPhotos'
         created_at:
@@ -1279,10 +1277,6 @@ components:
           minimum: 0
           maximum: 1000000
           default: 0
-        status:
-          type: string
-          enum: [draft, active]
-          default: draft
 
     UpdateProductRequest:
       type: object
@@ -1344,10 +1338,6 @@ components:
           minimum: 0
           maximum: 1000000
           default: 0
-        status:
-          type: string
-          enum: [draft, active]
-          default: draft
         photos:
           type: array
           maxItems: 5

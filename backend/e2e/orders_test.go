@@ -171,8 +171,8 @@ func TestOrderJourneyFromNewToBalance(t *testing.T) {
 	}
 
 	s.expect(s.transition(sel.token, id, "accepted", ""), http.StatusOK, "")
-	if got := s.getProduct(sel.token, p.ID); got.Stock != 10 || got.Reserved != 3 || got.Available != 7 {
-		t.Fatalf("after accept product = stock %d reserved %d available %d, want 10/3/7", got.Stock, got.Reserved, got.Available)
+	if got := s.getProduct(sel.token, p.ID); got.Stock != 10 || got.Reserved != 3 || (got.Stock-got.Reserved) != 7 {
+		t.Fatalf("after accept product = stock %d reserved %d available %d, want 10/3/7", got.Stock, got.Reserved, (got.Stock - got.Reserved))
 	}
 	s.expect(s.transition(sel.token, id, "packed", ""), http.StatusOK, "")
 	s.expect(s.transition(sel.token, id, "handed_to_courier", ""), http.StatusOK, "")
@@ -182,8 +182,8 @@ func TestOrderJourneyFromNewToBalance(t *testing.T) {
 	if o.Status != "delivered" || len(o.History) != 4 {
 		t.Fatalf("delivered order = status %s, %d history rows", o.Status, len(o.History))
 	}
-	if got := s.getProduct(sel.token, p.ID); got.Stock != 7 || got.Reserved != 0 || got.Available != 7 {
-		t.Fatalf("after delivery product = stock %d reserved %d available %d, want 7/0/7", got.Stock, got.Reserved, got.Available)
+	if got := s.getProduct(sel.token, p.ID); got.Stock != 7 || got.Reserved != 0 || (got.Stock-got.Reserved) != 7 {
+		t.Fatalf("after delivery product = stock %d reserved %d available %d, want 7/0/7", got.Stock, got.Reserved, (got.Stock - got.Reserved))
 	}
 
 	history := s.getOrder(sel.token, id).History
@@ -331,8 +331,8 @@ func TestAcceptNeedsEnoughStock(t *testing.T) {
 	level := s.do(http.MethodPatch, productPath(scarce)+"/stock", sel.token, map[string]int{"stock": 5, "expected_stock": 2})
 	s.expect(level, http.StatusOK, "")
 	s.expect(s.transition(sel.token, id, "accepted", ""), http.StatusOK, "")
-	if got := s.getProduct(sel.token, scarce.ID); got.Reserved != 3 || got.Available != 2 {
-		t.Fatalf("scarce product reserved %d available %d, want 3 and 2", got.Reserved, got.Available)
+	if got := s.getProduct(sel.token, scarce.ID); got.Reserved != 3 || (got.Stock-got.Reserved) != 2 {
+		t.Fatalf("scarce product reserved %d available %d, want 3 and 2", got.Reserved, (got.Stock - got.Reserved))
 	}
 }
 
@@ -368,8 +368,8 @@ func TestConcurrentAcceptsCannotOversell(t *testing.T) {
 	if ok != 1 || refused != 1 {
 		t.Fatalf("%d accepted and %d refused, want exactly one of each for 6 + 6 units on stock 10", ok, refused)
 	}
-	if got := s.getProduct(sel.token, p.ID); got.Reserved != 6 || got.Available != 4 {
-		t.Fatalf("reserved %d available %d, want 6 and 4", got.Reserved, got.Available)
+	if got := s.getProduct(sel.token, p.ID); got.Reserved != 6 || (got.Stock-got.Reserved) != 4 {
+		t.Fatalf("reserved %d available %d, want 6 and 4", got.Reserved, (got.Stock - got.Reserved))
 	}
 }
 

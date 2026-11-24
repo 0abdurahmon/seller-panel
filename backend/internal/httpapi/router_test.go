@@ -47,7 +47,7 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),
 		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
-		Product: product.NewHandler(product.NewService(fakeProductRepository{}, fakePhotoStore{}), func(int) string { return "in_stock" }),
+		Product: product.NewHandler(product.NewService(fakeProductRepository{}, fakePhotoStore{})),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 

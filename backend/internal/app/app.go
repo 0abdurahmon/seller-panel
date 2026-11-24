@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -39,9 +40,11 @@ func (a *App) Start(ctx context.Context) {
 
 // NewApp wires every feature. Telegram polling only runs when a bot token is set.
 func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, error) {
+// NewHandler wires the API. The returned Closer releases the upload directory and must be closed after the server stops.
+func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (http.Handler, io.Closer, error) {
 	tokens, err := auth.NewTokenIssuer(cfg.JWTSecret, cfg.JWTTTL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var tg auth.Telegram
 	var bot *telegram.Client
@@ -51,32 +54,32 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	}
 	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens, tg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dashboardSvc, err := dashboard.NewService(dashboard.NewPgRepository(pool), cfg.BusinessLocation)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uploadRepo, err := upload.NewFSRepository(cfg.UploadDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	uploadSvc := upload.NewService(uploadRepo, cfg.UploadPublicURL)
 
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
-		return nil, err
+		_ = uploadRepo.Close()
+		return nil, nil, err
 	}
 	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
 
@@ -89,7 +92,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc}), stockLabel),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc})),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
@@ -107,5 +110,5 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	if bot != nil {
 		app.poll = func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) }
 	}
-	return app, nil
+	return httpx.Logging(logger)(router), uploadRepo, nil
 }
