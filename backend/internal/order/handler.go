@@ -68,6 +68,20 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, o)
 }
 
+// Simulate handles POST /dev/simulate-order: a fake buyer order from the shop's own products.
+func (h *Handler) Simulate(w http.ResponseWriter, r *http.Request) {
+	p, ok := auth.MustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	o, err := h.svc.Simulate(r.Context(), p.ShopID)
+	if err != nil {
+		writeOrderError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, withLists(o))
+}
+
 // Transition handles POST /orders/{id}/transition.
 func (h *Handler) Transition(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.MustPrincipal(w, r)
@@ -110,6 +124,8 @@ func writeOrderError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, http.StatusConflict, "invalid_transition", "this status change is not allowed")
 	case errors.Is(err, ErrInsufficientStock):
 		httpx.WriteError(w, http.StatusConflict, "insufficient_stock", "not enough stock for this order")
+	case errors.Is(err, ErrNoProducts):
+		httpx.WriteError(w, http.StatusConflict, "no_products_to_order", "the shop has no active product with available stock")
 	case errors.Is(err, ErrProductNotFound):
 		httpx.WriteError(w, http.StatusConflict, "product_not_found", "a product in this order no longer exists")
 	default:

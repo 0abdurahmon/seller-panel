@@ -53,3 +53,19 @@ func TestLoadRejectsBadRateLimitSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAppEnv(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.Env != EnvProduction {
+		t.Fatalf("default env = %q, %v; want production so dev endpoints stay off", cfg.Env, err)
+	}
+	t.Setenv("APP_ENV", "development")
+	cfg, err = Load()
+	if err != nil || cfg.Env != EnvDevelopment {
+		t.Fatalf("env = %q, %v; want development", cfg.Env, err)
+	}
+	t.Setenv("APP_ENV", "staging")
+	if _, err := Load(); err == nil {
+		t.Fatal("an unknown APP_ENV was accepted")
+	}
+}

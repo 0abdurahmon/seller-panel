@@ -25,7 +25,8 @@ type Deps struct {
 	Balance *balance.Handler
 	Order   *order.Handler
 
-	ShopLimiter *httpx.Limiter
+	ShopLimiter  *httpx.Limiter
+	DevEndpoints bool
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -57,6 +58,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders", protected(d.Order.List))
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
+	if d.DevEndpoints {
+		mux.Handle("POST /dev/simulate-order", protected(d.Order.Simulate))
+	}
 	return httpx.JSONErrors(mux)
 }
 

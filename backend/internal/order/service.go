@@ -19,6 +19,7 @@ type Service struct {
 	repo              Repository
 	commissionPercent int64
 	now               func() time.Time
+	intn              func(n int) int
 }
 
 // NewService builds the order service. commissionPercent is 0–100.
@@ -26,7 +27,7 @@ func NewService(repo Repository, commissionPercent int) (*Service, error) {
 	if commissionPercent < 0 || commissionPercent > 100 {
 		return nil, fmt.Errorf("commission percent must be between 0 and 100")
 	}
-	return &Service{repo: repo, commissionPercent: int64(commissionPercent), now: time.Now}, nil
+	return &Service{repo: repo, commissionPercent: int64(commissionPercent), now: time.Now, intn: randomIntn}, nil
 }
 
 // List returns one page of the shop's orders, newest first. Paging is clamped like product lists.

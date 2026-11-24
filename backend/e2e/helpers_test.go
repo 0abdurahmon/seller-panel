@@ -35,6 +35,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	t.Helper()
 	pool := dbtest.NewPool(t, "e2e")
 	cfg := config.Config{
+		Env:               config.EnvDevelopment,
 		Port:              "0",
 		JWTSecret:         jwtSecret,
 		JWTTTL:            time.Hour,

@@ -22,7 +22,9 @@ info:
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
     **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
-    Planned (they answer 404 until built): dashboard, dev simulate-order.
+    `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
+    Compose default); otherwise it answers 404 like any unknown route.
+    Planned (it answers 404 until built): dashboard.
 servers:
   - url: /api
     description: Through the proxy, the same address the app uses
@@ -238,11 +240,15 @@ paths:
   /dev/simulate-order:
     post:
       tags: [Dev]
-      summary: (planned) Create a random `new` order from the shop's active products
-      description: Development only. Not available when the server runs in production mode (returns 404).
+      summary: Create a random `new` order from the shop's active products
+      description: |
+        Development only, there is no buyer app, so this stands in for one. It picks 1 to 3 of the shop's
+        active products that have available stock, a quantity of at most 3 (and at most what is available)
+        for each, and a fake buyer. It does not reserve stock: accepting the order does.
+        Not available when `APP_ENV` is `production`: the route does not exist and the answer is 404.
       responses:
         '201':
-          description: The created order
+          description: The created order, with its first history row (from `null` to `new`)
           content:
             application/json:
               schema:
@@ -252,7 +258,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: The shop has no active product with available stock (`no_products_to_order`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /shop:
     get:
@@ -636,7 +646,9 @@ components:
           format: date-time
         history:
           type: array
-          description: Every status change, oldest first. Empty for an order that never changed.
+          description: |
+            Every status change, oldest first. An order created by the dev endpoint starts with one row
+            from `null` to `new`; orders that were inserted some other way can have no rows yet.
           items:
             $ref: '#/components/schemas/OrderHistoryEntry'
 

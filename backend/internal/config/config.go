@@ -8,9 +8,15 @@ import (
 	"time"
 )
 
+const (
+	EnvProduction  = "production"
+	EnvDevelopment = "development"
+)
+
 const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 type Config struct {
+	Env               string
 	Port              string
 	DatabaseURL       string
 	JWTSecret         string
@@ -26,6 +32,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
+		Env:               getEnv("APP_ENV", EnvProduction),
 		Port:              getEnv("BACKEND_PORT", "8080"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
@@ -35,6 +42,10 @@ func Load() (Config, error) {
 		ShopBurst:         40,
 		LoginAttempts:     5,
 		TrustedProxies:    strings.Split(getEnv("TRUSTED_PROXIES", defaultTrustedProxies), ","),
+	}
+
+	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
+		return Config{}, fmt.Errorf("APP_ENV must be %q or %q, got %q", EnvProduction, EnvDevelopment, cfg.Env)
 	}
 
 	var err error
