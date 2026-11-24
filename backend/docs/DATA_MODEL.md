@@ -1,6 +1,6 @@
 # Data model and schema
 
-Entities, relations, constraints and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](DOMAIN.md); every change from it is listed in section 8. Conventions and layers are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Entities, relations, constraints and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](../../docs/DOMAIN.md); every change from it is listed in section 8. Conventions and layers are in [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 **Source of truth:** the SQL files in `backend/migrations`. This document and [`schema.dbml`](schema.dbml) explain them and show the target schema. When they disagree, the migration wins and the docs get fixed. A merged migration is never edited, a change is a new migration.
 
@@ -120,7 +120,7 @@ SET reserved = reserved + $qty, updated_at = now()
 WHERE id = $product_id AND shop_id = $shop_id AND stock - reserved >= $qty;
 ```
 
-**Status machine.** Allowed transitions and their side effects are in [`DOMAIN.md`](DOMAIN.md). Every transition runs in one transaction: lock the order with `SELECT ... FOR UPDATE`, validate in the service, update the order, write one history row. `accepted` reserves, `cancelled` releases, `delivered` commits stock and writes the balance entries. Any other transition is rejected with `409 invalid_transition`.
+**Status machine.** Allowed transitions and their side effects are in [`DOMAIN.md`](../../docs/DOMAIN.md). Every transition runs in one transaction: lock the order with `SELECT ... FOR UPDATE`, validate in the service, update the order, write one history row. `accepted` reserves, `cancelled` releases, `delivered` commits stock and writes the balance entries. Any other transition is rejected with `409 invalid_transition`.
 
 **Money.** `commission = total * COMMISSION_PERCENT / 100`, integer division, config default 10. A `sale` entry of `+total` and a `commission` entry of `-commission` are written once, when the order becomes `delivered`. Cancelled orders create no entries. Example: `total 12345` gives commission `1234` and net `11111`; the entries sum to exactly `11111`, no so'm is lost or invented.
 

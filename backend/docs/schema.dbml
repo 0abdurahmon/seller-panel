@@ -2,7 +2,7 @@ Project seller_panel {
   database_type: 'PostgreSQL'
   Note: '''
     Seller Panel database schema. Paste this file into https://dbdiagram.io/d to see the diagram.
-    Documentation only: the source of truth is backend/migrations, explained in docs/DATA_MODEL.md.
+    Documentation only: the source of truth is backend/migrations, explained in backend/docs/DATA_MODEL.md.
     Not expressible in DBML: partial index orders_shop_delivered_idx (WHERE status = 'delivered'),
     DESC sort direction of some indexes, and the pg_trgm GIN indexes on products.title and products.sku.
   '''
