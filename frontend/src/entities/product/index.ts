@@ -7,8 +7,10 @@ export {
 } from './model/queries';
 export {
   emptyProductForm,
+  PHOTO_LIMITS,
   productFormSchema,
   productToForm,
+  type PhotoItem,
   type ProductFormInput,
   type ProductFormValues,
 } from './model/form-schema';

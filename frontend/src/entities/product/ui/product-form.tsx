@@ -1,10 +1,11 @@
-import { Controller, useForm, type FieldError as FormFieldError } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Alert,
   AlertDescription,
   Button,
   Field,
+  FieldDescription,
   FieldError,
   FieldLabel,
   Input,
@@ -22,6 +23,7 @@ import {
   type ProductFormInput,
   type ProductFormValues,
 } from "../model/form-schema";
+import { PhotosField } from "./photos-field";
 
 type FieldName = keyof ProductFormInput;
 
@@ -62,8 +64,12 @@ export const ProductForm = ({
 
   const { errors } = form.formState;
   // A client error wins; an API error shows until the form is submitted again.
-  const errorOf = (name: FieldName): FormFieldError | undefined =>
-    errors[name] ?? (fieldErrors?.[name] ? { type: "server", message: fieldErrors[name] } : undefined);
+  const errorOf = (name: FieldName): { message: string } | undefined => {
+    // For the photos array, zod's array-level message sits on the field itself or on `root`.
+    const error = errors[name] as { message?: string; root?: { message?: string } } | undefined;
+    const message = error?.message ?? error?.root?.message ?? fieldErrors?.[name];
+    return message ? { message } : undefined;
+  };
 
   const placeholder =
     categoriesStatus === "pending"
@@ -74,6 +80,28 @@ export const ProductForm = ({
 
   return (
     <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <Controller
+        name="photos"
+        control={form.control}
+        render={({ field }) => (
+          <Field data-invalid={!!errorOf("photos")}>
+            <FieldLabel htmlFor="product-photos">Фото</FieldLabel>
+            <PhotosField
+              id="product-photos"
+              value={field.value}
+              onChange={field.onChange}
+              invalid={!!errorOf("photos")}
+            />
+            {errorOf("photos") ? (
+              <FieldError errors={[errorOf("photos")]} />
+            ) : (
+              <FieldDescription>
+                До 5 фото: JPEG, PNG или WebP, не больше 5 МБ. Первое станет обложкой.
+              </FieldDescription>
+            )}
+          </Field>
+        )}
+      />
       <Controller
         name="category_id"
         control={form.control}

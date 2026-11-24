@@ -42,6 +42,16 @@ AXIOS_INSTANCE.interceptors.response.use(
 
 export type CustomInstanceConfig = AxiosRequestConfig;
 
+/**
+ * Options for a generated request that sends files (`postProducts(body, multipart)`).
+ * Axios builds the multipart body from the object; repeated fields keep their plain name
+ * (`photos`, `keep_photos`), which is how the backend reads them, not `photos[]`.
+ */
+export const multipart: AxiosRequestConfig = {
+  headers: { 'Content-Type': 'multipart/form-data' },
+  formSerializer: { indexes: null },
+};
+
 export const customInstance = <T>(
   config: CustomInstanceConfig,
   options?: AxiosRequestConfig,

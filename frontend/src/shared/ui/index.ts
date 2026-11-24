@@ -10,6 +10,7 @@ export * from './dropdown-menu';
 export * from './empty';
 export * from './field';
 export * from './icons';
+export * from './image-picker';
 export * from './input';
 export * from './input-group';
 export * from './label';

@@ -7,3 +7,4 @@ export {
   parseApiError,
   type ParsedApiError,
 } from './http/error';
+export { multipart } from './http';

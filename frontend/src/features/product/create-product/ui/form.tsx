@@ -6,8 +6,7 @@ import {
   productKeys,
   type ProductFormValues,
 } from "@/entities/product";
-import { getProducts } from "@/shared/api";
-import { parseApiError } from "@/shared/api";
+import { getProducts, multipart, parseApiError } from "@/shared/api";
 
 const api = getProducts();
 
@@ -16,7 +15,11 @@ export const CreateProductForm = ({ onDone }: { onDone: () => void }) => {
   const categories = useCategoryOptions();
 
   const create = useMutation({
-    mutationFn: (values: ProductFormValues) => api.postProducts(values),
+    mutationFn: ({ photos, ...values }: ProductFormValues) =>
+      api.postProducts(
+        { ...values, photos: photos.flatMap((photo) => (photo.file ? [photo.file] : [])) },
+        multipart,
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: productKeys.all });
       onDone();

@@ -19,6 +19,8 @@ const MESSAGES: Record<string, string> = {
   insufficient_stock: 'Недостаточно товара на складе',
   invalid_transition: 'Такой переход статуса невозможен',
   rate_limited: 'Слишком много запросов. Подождите немного',
+  file_too_large: 'Фото больше 5 МБ',
+  unsupported_media_type: 'Такой формат не подходит: нужен JPEG, PNG или WebP',
   internal: 'Ошибка на сервере. Попробуйте позже',
 };
 

@@ -7,8 +7,7 @@ import {
   type Product,
   type ProductFormValues,
 } from "@/entities/product";
-import { getProducts } from "@/shared/api";
-import { parseApiError } from "@/shared/api";
+import { getProducts, multipart, parseApiError } from "@/shared/api";
 import {
   Dialog,
   DialogContent,
@@ -26,8 +25,16 @@ function EditProductForm({ product, onDone }: { product: Product; onDone: () => 
 
   const update = useMutation({
     // Stock is left out: PUT does not change it, PATCH /products/{id}/stock does.
-    mutationFn: ({ stock: _stock, ...values }: ProductFormValues) =>
-      api.putProductsId(product.id, values),
+    mutationFn: ({ stock: _stock, photos, ...values }: ProductFormValues) => {
+      const keep = photos.flatMap((photo) => (photo.url ? [photo.url] : []));
+      const added = photos.flatMap((photo) => (photo.file ? [photo.file] : []));
+      return api.putProductsId(
+        product.id,
+        // An empty keep_photos value removes every current photo; a missing field would keep them.
+        { ...values, keep_photos: keep.length ? keep : [""], photos: added },
+        multipart,
+      );
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: productKeys.all });
       onDone();
