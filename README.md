@@ -208,7 +208,7 @@ The end-to-end tests (`backend/e2e`, build tag `e2e`) run the whole API against 
 cd backend && TEST_DATABASE_URL='postgres://seller:change-me@localhost:5432/seller?sslmode=disable' go test -race -tags e2e ./e2e/...
 ```
 
-CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. You can run the same check locally while the stack is up:
+CI also builds the images, starts the stack and runs `scripts/smoke.sh` against it. The smoke test checks the running stack only: containers and migrations are up, nginx proxies `/api` and passes the `Authorization` header, security headers, the nginx rate limits and the `/docs` password. Business behaviour (products, stock, isolation between sellers, login blocking) is tested by the Go end-to-end tests in `backend/e2e`. You can run the smoke test locally while the stack is up:
 
 ```bash
 sh scripts/smoke.sh
@@ -216,7 +216,7 @@ sh scripts/smoke.sh
 
 `BACKEND_URL` and `FRONTEND_URL` override the default `http://localhost:8080` and `http://localhost:3000` when you changed the ports.
 
-The script also trips the rate limits on purpose (nginx allows 10 auth requests per minute per IP, see D6), so wait about a minute before running it again, or the register and login checks answer `429`.
+The script also trips the rate limits on purpose (nginx allows 10 auth requests per minute per IP, see D6), so wait about a minute before running it again, or the register, login and protected route checks answer `429`.
 
 ### Seed data
 
