@@ -2,6 +2,7 @@ package stock
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,8 +20,16 @@ func newMux(t *testing.T) (*http.ServeMux, *memRepository, *auth.TokenIssuer) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The real loader returns the product feature's JSON; this one reads the same numbers from the fake store.
+	load := func(_ context.Context, shopID, productID int64) (any, error) {
+		row, ok := store.row(shopID, productID)
+		if !ok {
+			return nil, ErrNotFound
+		}
+		return map[string]any{"id": productID, "shop_id": shopID, "stock": row.Stock, "reserved": row.Reserved}, nil
+	}
 	mux := http.NewServeMux()
-	mux.Handle("PATCH /products/{id}/stock", auth.RequireAuth(tokens)(http.HandlerFunc(NewHandler(svc).Update)))
+	mux.Handle("PATCH /products/{id}/stock", auth.RequireAuth(tokens)(http.HandlerFunc(NewHandler(svc, load).Update)))
 	return mux, store, tokens
 }
 
@@ -55,12 +64,17 @@ func TestHandlerUpdateStock(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body %s", rec.Code, rec.Body)
 	}
-	var got Level
+	var got map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ProductID != 10 || got.Stock != 6 || got.Available != 4 || got.Label != LowStock {
-		t.Fatalf("body = %+v, want stock 6 available 4 low_stock", got)
+	if got["id"] != float64(10) || got["stock"] != float64(6) || got["reserved"] != float64(2) {
+		t.Fatalf("body = %v, want the product the loader returned, with the new stock 6", got)
+	}
+	for _, key := range []string{"available", "stock_label"} {
+		if _, ok := got[key]; ok {
+			t.Fatalf("body has %q, the answer is the product and a product has no derived stock fields", key)
+		}
 	}
 
 	cases := []struct {

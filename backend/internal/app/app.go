@@ -92,13 +92,15 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		spec = apispec.NewHandler(cfg.OpenAPIFile)
 	}
 
+	productHandler := product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc}))
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
-		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
+		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool), shopLogos{uploads: uploadSvc})),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc})),
+		Product: productHandler,
 		Tokens:  tokens,
-		Stock:   stock.NewHandler(stockSvc),
+		Stock:   stock.NewHandler(stockSvc, productHandler.Load),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
 		Upload:  upload.NewHandler(uploadSvc),

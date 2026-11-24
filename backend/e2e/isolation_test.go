@@ -70,7 +70,7 @@ func TestEachSellerSeesOnlyTheirOwnShop(t *testing.T) {
 	}
 
 	s.expect(s.do(http.MethodPut, "/shop", b.token, map[string]string{
-		"name": "B changed it", "description": "", "logo_url": "", "contact_phone": "", "pickup_address": "",
+		"name": "B changed it", "description": "", "contact_phone": "", "pickup_address": "",
 	}), http.StatusOK, "")
 	if again := s.do(http.MethodGet, "/shop", a.token, nil); strings.Contains(string(again.body), "B changed it") {
 		t.Fatalf("seller B's update leaked into seller A's shop: %s", again.body)

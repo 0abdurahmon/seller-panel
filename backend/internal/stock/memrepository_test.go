@@ -50,3 +50,13 @@ func (s *memRepository) SetStock(_ context.Context, shopID, productID int64, sto
 	it.updatedAt = s.now()
 	return Row{Stock: it.stock, Reserved: it.reserved, UpdatedAt: it.updatedAt}, nil
 }
+
+func (s *memRepository) row(shopID, productID int64) (Row, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	it, ok := s.items[memKey{shopID, productID}]
+	if !ok {
+		return Row{}, false
+	}
+	return Row{Stock: it.stock, Reserved: it.reserved, UpdatedAt: it.updatedAt}, true
+}

@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"mime"
 	"net/http"
 	"strconv"
 
@@ -58,11 +57,11 @@ func NewRouter(d Deps) http.Handler {
 		p, ok := auth.PrincipalFrom(r.Context())
 		return strconv.FormatInt(p.ShopID, 10), ok
 	})
-	// A product saved with photos costs as much as an upload, so it shares the upload limit; JSON edits do not.
+	// A product or shop saved with an image costs as much as an upload, so it shares the upload limit; JSON edits do not.
 	limitImages := func(next http.HandlerFunc) http.HandlerFunc {
 		limited := limitUploads(next)
 		return func(w http.ResponseWriter, r *http.Request) {
-			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "multipart/form-data" {
+			if httpx.IsMultipart(r) {
 				limited.ServeHTTP(w, r)
 				return
 			}
@@ -71,7 +70,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 	mux.Handle("POST /auth/telegram/link", protected(d.Auth.LinkTelegram))
 	mux.Handle("GET /shop", protected(d.Shop.Get))
-	mux.Handle("PUT /shop", protected(d.Shop.Update))
+	mux.Handle("PUT /shop", protected(limitImages(d.Shop.Update)))
 	mux.Handle("GET /categories", protected(d.Catalog.List))
 	mux.Handle("GET /products", protected(d.Product.List))
 	mux.Handle("POST /products", protected(limitImages(d.Product.Create)))

@@ -30,7 +30,7 @@ func TestSellerJourney(t *testing.T) {
 		t.Fatalf("shop = %s, want the name %q chosen at sign up", shop.body, sel.shopName)
 	}
 	update := s.do(http.MethodPut, "/shop", token, map[string]string{
-		"name": "Renamed shop", "description": "We sell phones", "logo_url": "",
+		"name": "Renamed shop", "description": "We sell phones",
 		"contact_phone": "+998901234567", "pickup_address": "Tashkent",
 	})
 	s.expect(update, http.StatusOK, "")
@@ -75,19 +75,15 @@ func TestSellerJourney(t *testing.T) {
 
 	res = s.do(http.MethodPatch, productPath(p)+"/stock", token, map[string]int{"stock": 50, "expected_stock": 3})
 	s.expect(res, http.StatusOK, "")
-	var level struct {
-		ProductID  int64  `json:"product_id"`
-		Stock      int    `json:"stock"`
-		Available  int    `json:"available"`
-		StockLabel string `json:"stock_label"`
-	}
+	var level product
 	res.decode(&level)
-	if level.ProductID != p.ID || level.Stock != 50 || level.Available != 50 || level.StockLabel != "in_stock" {
-		t.Fatalf("stock level = %+v", level)
+	if level.ID != p.ID || level.Stock != 50 {
+		t.Fatalf("the stock change answered %+v, want the product with stock 50", level)
 	}
-	s.do(http.MethodGet, productPath(p), token, nil).decode(&p)
-	if p.Stock != 50 {
-		t.Fatalf("product after the stock change = %+v", p)
+	got := s.do(http.MethodGet, productPath(p), token, nil)
+	got.decode(&p)
+	if p.Stock != 50 || string(got.body) != string(res.body) {
+		t.Fatalf("product after the stock change = %+v; the stock answer must equal GET /products/{id}:\n%s\n%s", p, res.body, got.body)
 	}
 
 	for i := 0; i < 2; i++ {

@@ -45,11 +45,11 @@ func newTestRouterOptions(t *testing.T, shopRPS float64, shopBurst int, devEndpo
 	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
 		Auth:    auth.NewHandler(svc, httpx.NewLimiterPer(5, time.Hour), func(r *http.Request) string { return r.RemoteAddr }),
-		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
+		Shop:    shop.NewHandler(shop.NewService(shopRepo, fakePhotoStore{})),
 		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
 		Product: product.NewHandler(product.NewService(fakeProductRepository{}, fakePhotoStore{})),
 		Tokens:  tokens,
-		Stock:   stock.NewHandler(stockSvc),
+		Stock:   stock.NewHandler(stockSvc, func(context.Context, int64, int64) (any, error) { return nil, nil }),
 
 		ShopLimiter:  httpx.NewLimiter(shopRPS, shopBurst),
 		DevEndpoints: devEndpoints,

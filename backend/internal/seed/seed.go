@@ -86,7 +86,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, o Options) (Result, error) {
 		Description:   "Phones, laptops, clothing and home goods with delivery across Uzbekistan.",
 		ContactPhone:  "+998712000000",
 		PickupAddress: "Tashkent, Amir Temur 15",
-	}); err != nil {
+	}, shop.LogoChange{}); err != nil {
 		return Result{}, fmt.Errorf("fill the shop profile: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 	return &services{
 		auth:    authSvc,
 		tokens:  tokens,
-		shop:    shop.NewService(shop.NewPgRepository(pool)),
+		shop:    shop.NewService(shop.NewPgRepository(pool), noPhotos{}),
 		catalog: catalog.NewService(catalog.NewPgRepository(pool)),
 		product: product.NewService(product.NewPgRepository(pool), noPhotos{}),
 		stock:   stockSvc,
@@ -154,7 +154,7 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 	}, nil
 }
 
-// noPhotos is the photo store of the seed: demo products have no photos, so nothing is ever saved.
+// noPhotos is the image store of the seed: demo products and the shop have no images, so nothing is ever saved.
 type noPhotos struct{}
 
 func (noPhotos) Save(context.Context, int64, io.Reader) (string, error) {

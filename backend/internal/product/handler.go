@@ -1,6 +1,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -16,6 +17,15 @@ type Handler struct {
 
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// Load returns a product ready to be written as JSON, for endpoints of other features that answer with a product.
+func (h *Handler) Load(ctx context.Context, shopID, id int64) (any, error) {
+	p, err := h.svc.Get(ctx, shopID, id)
+	if err != nil {
+		return nil, err
+	}
+	return shown(p), nil
 }
 
 // shown makes sure the JSON has "photos": [] and never null.
@@ -68,8 +78,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	var in CreateInput
 	var add [][]byte
-	if isMultipart(r) {
-		f, err := readForm(w, r, createFields)
+	if httpx.IsMultipart(r) {
+		f, err := readForm(w, r, false)
 		if err == nil {
 			in, err = f.createInput()
 		}
@@ -110,8 +120,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	var in UpdateInput
 	var pc PhotoChange
-	if isMultipart(r) {
-		f, err := readForm(w, r, updateFields)
+	if httpx.IsMultipart(r) {
+		f, err := readForm(w, r, true)
 		if err == nil {
 			in, err = f.updateInput()
 		}
@@ -169,11 +179,6 @@ func writeInvalidBody(w http.ResponseWriter) {
 }
 
 var errInvalidBody = errors.New("request body is not valid")
-
-func isTooLarge(err error) bool {
-	var mbe *http.MaxBytesError
-	return errors.As(err, &mbe)
-}
 
 func writeError(w http.ResponseWriter, err error) {
 	switch {
