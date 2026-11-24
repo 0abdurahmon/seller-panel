@@ -17,6 +17,18 @@ export function ProductsPagination({
   const pages = Math.max(1, Math.ceil(total / pageSize));
   if (total === 0) return null;
 
+  // An old link or a shrunk list can point past the end (?page=3 of 1).
+  if (page > pages) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+        <span>На странице {page} товаров нет, всего страниц: {pages}.</span>
+        <Button variant="outline" size="sm" onClick={() => onPageChange(pages)}>
+          К последней странице
+        </Button>
+      </div>
+    );
+  }
+
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
 

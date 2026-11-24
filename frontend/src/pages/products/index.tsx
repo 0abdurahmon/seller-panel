@@ -11,6 +11,10 @@ import {
 import { ActivateProductDialog } from "@/features/product/activate-product";
 import { ArchiveProductDialog } from "@/features/product/archive-product";
 import { EditProductModal } from "@/features/product/edit-product";
+import {
+  CategoryFilter,
+  ProductSearch,
+} from "@/features/product/filter-products";
 import { ProductDetailsModal } from "@/features/product/product-details";
 import { getApiErrorMessage } from "@/shared/api/http/error";
 import {
@@ -46,32 +50,51 @@ function parsePage(value: string | null) {
   return Number.isInteger(page) && page >= 1 ? page : 1;
 }
 
+function parseCategory(value: string | null) {
+  const id = Number(value);
+  return value && Number.isInteger(id) && id >= 1 ? id : null;
+}
+
+type ParamsUpdate = {
+  status?: ProductStatusFilter;
+  page?: number;
+  q?: string;
+  category?: number | null;
+};
+
 export const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = parseStatus(searchParams.get("status"));
   const page = parsePage(searchParams.get("page"));
+  const q = searchParams.get("q") ?? "";
+  const category = parseCategory(searchParams.get("category"));
+  const hasFilters = q !== "" || category !== null;
 
-  function updateParams(next: { status?: ProductStatusFilter; page?: number }) {
+  function updateParams(next: ParamsUpdate) {
     const params = new URLSearchParams(searchParams);
-    if (next.status !== undefined) {
-      if (next.status === "all") params.delete("status");
-      else params.set("status", next.status);
-      // A new tab starts from its first page.
-      params.delete("page");
-    }
-    if (next.page !== undefined) {
-      if (next.page <= 1) params.delete("page");
-      else params.set("page", String(next.page));
-    }
+    const setOrDelete = (key: string, value: string | null) =>
+      value ? params.set(key, value) : params.delete(key);
+
+    if (next.status !== undefined) setOrDelete("status", next.status === "all" ? null : next.status);
+    if (next.q !== undefined) setOrDelete("q", next.q);
+    if (next.category !== undefined) setOrDelete("category", next.category ? String(next.category) : null);
+    // Any new filter starts from the first page; only an explicit page change keeps one.
+    setOrDelete("page", next.page && next.page > 1 ? String(next.page) : null);
+
     setSearchParams(params, { replace: true });
   }
 
+  const filters = {
+    ...(q ? { q } : {}),
+    ...(category ? { category } : {}),
+  };
   const products = useProducts({
+    ...filters,
     page,
     page_size: PAGE_SIZE,
     ...(status === "all" ? {} : { status }),
   });
-  const counts = useProductCounts();
+  const counts = useProductCounts(filters);
 
   return (
     <div className="flex min-h-full flex-col space-y-6">
@@ -102,6 +125,18 @@ export const ProductsPage = () => {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <ProductSearch
+          value={q}
+          // The same search again (a trailing space was typed) must not reset the page.
+          onChange={(next) => next !== q && updateParams({ q: next })}
+        />
+        <CategoryFilter
+          value={category}
+          onChange={(next) => updateParams({ category: next })}
+        />
+      </div>
+
       {products.isError ? (
         <Alert variant="destructive">
           <AlertTitle>Не удалось загрузить товары</AlertTitle>
@@ -117,6 +152,9 @@ export const ProductsPage = () => {
           <ProductsTable
             products={products.data?.items}
             isLoading={products.isPending}
+            onResetFilters={
+              hasFilters ? () => updateParams({ q: "", category: null }) : undefined
+            }
           />
           {products.data && (
             <ProductsPagination

@@ -8,7 +8,8 @@ const api = getProducts();
 export const productKeys = {
   all: ['products'] as const,
   list: (params: GetProductsParams) => [...productKeys.all, 'list', params] as const,
-  count: (status: ProductStatusFilter) => [...productKeys.all, 'count', status] as const,
+  count: (status: ProductStatusFilter, filters: ProductSearchFilters) =>
+    [...productKeys.all, 'count', status, filters] as const,
 };
 
 export function useProducts(params: GetProductsParams) {
@@ -22,13 +23,25 @@ export function useProducts(params: GetProductsParams) {
 
 const COUNTED: ProductStatusFilter[] = ['all', 'active', 'draft', 'archived'];
 
-/** Totals for the status tabs: one request per tab with page_size=1, only `total` is used. */
-export function useProductCounts(): Partial<Record<ProductStatusFilter, number>> {
+/** Search and category, the filters the status tabs count within. */
+export type ProductSearchFilters = Pick<GetProductsParams, 'q' | 'category'>;
+
+/**
+ * Totals for the status tabs, within the current search and category:
+ * one request per tab with page_size=1, only `total` is used.
+ */
+export function useProductCounts(
+  filters: ProductSearchFilters = {},
+): Partial<Record<ProductStatusFilter, number>> {
   return useQueries({
     queries: COUNTED.map((status) => ({
-      queryKey: productKeys.count(status),
+      queryKey: productKeys.count(status, filters),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        api.getProducts({ page_size: 1, ...(status === 'all' ? {} : { status }) }, { signal }),
+        api.getProducts(
+          { ...filters, page_size: 1, ...(status === 'all' ? {} : { status }) },
+          { signal },
+        ),
+      placeholderData: keepPreviousData,
     })),
     combine: (results) =>
       Object.fromEntries(COUNTED.map((status, i) => [status, results[i].data?.total])),

@@ -10,7 +10,6 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, Box, More } from "iconsax-reactjs";
 import { Skeleton } from "skullet/react";
-import { cn } from "cn";
 import { useCategoryName } from "@/entities/category";
 import { ProductStatusBadge, StockLabelBadge } from "@/entities/product";
 import { ActivateProductMenuItem } from "@/features/product/activate-product";
@@ -38,23 +37,28 @@ import {
 } from "@/shared/ui";
 import type { Product } from "@/shared/api/model";
 
-function ProductsEmptyState({ className }: { className?: string }) {
+function ProductsEmptyState({ onResetFilters }: { onResetFilters?: () => void }) {
+  // With filters on, "nothing found" is about the filters, not about an empty shop.
+  const filtered = Boolean(onResetFilters);
+
   return (
-    <Empty
-      className={cn(
-        "flex-1 h-full min-h-0 w-full rounded-3xl border border-dashed border-border bg-card p-12",
-        className,
-      )}
-    >
+    <Empty className="flex-1 h-full min-h-0 w-full rounded-3xl border border-dashed border-border bg-card p-12">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Box className="size-5 text-primary" />
         </EmptyMedia>
-        <EmptyTitle>Товары не найдены</EmptyTitle>
+        <EmptyTitle>{filtered ? "Ничего не найдено" : "Товары не найдены"}</EmptyTitle>
         <EmptyDescription>
-          Попробуйте другую вкладку или добавьте товар.
+          {filtered
+            ? "Ни один товар не подходит под поиск и фильтры."
+            : "Попробуйте другую вкладку или добавьте товар."}
         </EmptyDescription>
       </EmptyHeader>
+      {filtered && (
+        <Button variant="outline" onClick={onResetFilters}>
+          Сбросить фильтры
+        </Button>
+      )}
     </Empty>
   );
 }
@@ -258,9 +262,12 @@ function ProductsTableView({ products }: { products: Product[] }) {
 export function ProductsTable({
   products,
   isLoading,
+  onResetFilters,
 }: {
   products: Product[] | undefined;
   isLoading?: boolean;
+  /** Set when search or filters are on; the empty state then offers to reset them. */
+  onResetFilters?: () => void;
 }) {
   return (
     <Skeleton
@@ -269,7 +276,7 @@ export function ProductsTable({
       data={isLoading ? null : products}
       sample={SAMPLE_PRODUCTS}
       empty={!isLoading && products?.length === 0}
-      emptyMessage={<ProductsEmptyState />}
+      emptyMessage={<ProductsEmptyState onResetFilters={onResetFilters} />}
     >
       {(rows) => <ProductsTableView products={rows} />}
     </Skeleton>
