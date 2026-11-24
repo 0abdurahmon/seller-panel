@@ -7,6 +7,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
+	"github.com/0abdurahmon/seller-panel/backend/internal/dashboard"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
@@ -24,6 +25,8 @@ type Deps struct {
 	Stock   *stock.Handler
 	Balance *balance.Handler
 	Order   *order.Handler
+
+	Dashboard *dashboard.Handler
 
 	ShopLimiter  *httpx.Limiter
 	DevEndpoints bool
@@ -58,6 +61,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders", protected(d.Order.List))
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
+	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))
 	if d.DevEndpoints {
 		mux.Handle("POST /dev/simulate-order", protected(d.Order.Simulate))
 	}

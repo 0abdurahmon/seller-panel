@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     Seller Panel API: sellers sign up with email and password, manage their shop and products,
-    process orders, see their balance, and (planned) see the dashboard.
+    process orders, see their balance, and see the dashboard.
 
     **Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as
     `Authorization: Bearer <token>`. Every other endpoint needs it, and a seller only ever sees
@@ -21,10 +21,9 @@ info:
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
-    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders.
+    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
     `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
     Compose default); otherwise it answers 404 like any unknown route.
-    Planned (it answers 404 until built): dashboard.
 servers:
   - url: /api
     description: Through the proxy, the same address the app uses
@@ -186,7 +185,20 @@ paths:
   /dashboard/summary:
     get:
       tags: [Dashboard]
-      summary: (planned) Home page numbers for the current shop
+      summary: Home page numbers for the current shop
+      description: |
+        Days are calendar days in the business time zone (`BUSINESS_TIMEZONE`, `Asia/Tashkent` by default),
+        not in UTC. "Today" runs from 00:00 to 24:00 in that zone, "last 7 days" is today and the 6 days
+        before it, and "last 30 days" is today and the 29 days before it.
+
+        - `today_orders`: orders created today, in any status.
+        - `waiting_for_action`: orders in `new`, `accepted` or `packed`, whatever their age.
+        - `revenue_7d`, `revenue_30d`: sum of the `total` of orders that became `delivered` in the window,
+          before commission. Cancelled orders never count.
+        - `top_products`: up to 5 products by units in orders delivered in the last 30 days, most units first,
+          then most revenue, then lowest `product_id`. `title` is the current title of the product.
+
+        A shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D9).
       responses:
         '200':
           description: Dashboard summary
@@ -194,8 +206,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardSummary'
+              examples:
+                shopWithSales:
+                  summary: A shop with orders
+                  value:
+                    today_orders: 4
+                    waiting_for_action: 2
+                    revenue_7d: 4500000
+                    revenue_30d: 12000000
+                    top_products:
+                      - product_id: 12
+                        title: Phone Pro
+                        quantity_sold: 5
+                        revenue: 7500000
+                      - product_id: 7
+                        title: Phone case
+                        quantity_sold: 3
+                        revenue: 150000
+                newShop:
+                  summary: A shop without orders
+                  value:
+                    today_orders: 0
+                    waiting_for_action: 0
+                    revenue_7d: 0
+                    revenue_30d: 0
+                    top_products: []
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /balance:
     get:
@@ -725,12 +764,15 @@ components:
           format: int64
         title:
           type: string
+          description: Current title of the product
         quantity_sold:
           type: integer
-          description: Units in delivered orders in the last 30 days
+          format: int64
+          description: Units in orders delivered in the last 30 days
         revenue:
           type: integer
-          description: so'm
+          format: int64
+          description: Sum of price at the time of the order times quantity for those units, so'm
 
     DashboardSummary:
       type: object
@@ -738,19 +780,22 @@ components:
       properties:
         today_orders:
           type: integer
-          description: Orders created today
+          description: Orders created today in the business time zone, in any status
         waiting_for_action:
           type: integer
           description: Orders the seller still has to act on, in status `new`, `accepted` or `packed`
         revenue_7d:
           type: integer
-          description: Sum of delivered order totals in the last 7 days, so'm
+          format: int64
+          description: Sum of delivered order totals in the last 7 days (today and 6 days before), so'm
         revenue_30d:
           type: integer
-          description: Sum of delivered order totals in the last 30 days, so'm
+          format: int64
+          description: Sum of delivered order totals in the last 30 days (today and 29 days before), so'm
         top_products:
           type: array
           maxItems: 5
+          description: Best sellers of the last 30 days; `[]` when nothing was delivered
           items:
             $ref: '#/components/schemas/TopProduct'
 

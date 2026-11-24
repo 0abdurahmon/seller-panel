@@ -10,6 +10,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
+	"github.com/0abdurahmon/seller-panel/backend/internal/dashboard"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
@@ -38,6 +39,11 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		return nil, err
 	}
 
+	dashboardSvc, err := dashboard.NewService(dashboard.NewPgRepository(pool), cfg.BusinessLocation)
+	if err != nil {
+		return nil, err
+	}
+
 	ipResolver, err := httpx.NewIPResolver(cfg.TrustedProxies)
 	if err != nil {
 		return nil, err
@@ -53,6 +59,8 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
 		Order:   order.NewHandler(orderSvc),
+
+		Dashboard: dashboard.NewHandler(dashboardSvc),
 
 		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
 		DevEndpoints: cfg.Env == config.EnvDevelopment,
