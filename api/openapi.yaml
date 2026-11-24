@@ -3,8 +3,9 @@ info:
   title: Seller Panel API
   version: 0.1.0
   description: |
-    Draft contract for orders, dashboard and balance (issue #11), and the stock change (issue #51, D5).
-    Auth, shop, categories and products are added by the auth/products issue (#10).
+    Contract for auth, shop, orders, dashboard, balance and the stock change (issues #10, #11, #51, D5).
+    Categories and products are added with their features.
+    Errors are `{code, message}`. Lists take `page` and `page_size`.
     All money fields are integers in so'm (no floats).
 servers:
   - url: http://localhost:8080
@@ -12,6 +13,60 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a seller with their shop and return a token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Seller and shop created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already registered (`email_taken`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password and return a token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Token for the seller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Wrong email or password (`invalid_credentials`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /orders:
     get:
       tags: [Orders]
@@ -269,7 +324,7 @@ components:
         minimum: 1
         default: 1
     PageSize:
-      name: pageSize
+      name: page_size
       in: query
       required: false
       schema:
@@ -279,6 +334,45 @@ components:
         default: 20
 
   schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, shop_name]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: At most 72 bytes, bcrypt ignores the rest
+        shop_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    TokenResponse:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token:
+          type: string
+          description: HS256 JWT carrying seller_id and shop_id, sent as `Authorization Bearer`
+        expires_at:
+          type: string
+          format: date-time
+
     OrderStatus:
       type: string
       enum: [new, accepted, packed, handed_to_courier, delivered, cancelled]

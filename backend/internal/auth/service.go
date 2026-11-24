@@ -10,12 +10,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Business errors. The handler maps them to HTTP status codes.
-var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrValidation         = errors.New("validation failed")
-)
-
 const (
 	minPasswordLen = 8
 	maxPasswordLen = 72 // bcrypt only uses the first 72 bytes
@@ -24,7 +18,7 @@ const (
 
 // Service holds the auth rules: validation, password hashing and token issue.
 type Service struct {
-	store  store
+	repo   Repository
 	tokens *TokenIssuer
 	// dummyHash is compared on unknown emails so that login takes about the
 	// same time whether or not the account exists.
@@ -32,12 +26,12 @@ type Service struct {
 }
 
 // NewService builds the auth service.
-func NewService(s store, tokens *TokenIssuer) (*Service, error) {
+func NewService(repo Repository, tokens *TokenIssuer) (*Service, error) {
 	dummy, err := bcrypt.GenerateFromPassword([]byte("dummy-password"), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("prepare dummy hash: %w", err)
 	}
-	return &Service{store: s, tokens: tokens, dummyHash: dummy}, nil
+	return &Service{repo: repo, tokens: tokens, dummyHash: dummy}, nil
 }
 
 // Register creates a seller and their shop, then returns a token.
@@ -59,7 +53,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 		return TokenResponse{}, fmt.Errorf("hash password: %w", err)
 	}
 
-	sellerID, shopID, err := s.store.CreateSellerWithShop(ctx, email, string(hash), shopName)
+	sellerID, shopID, err := s.repo.CreateSellerWithShop(ctx, email, string(hash), shopName)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -70,7 +64,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 func (s *Service) Login(ctx context.Context, req LoginRequest) (TokenResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 
-	c, err := s.store.FindCredentials(ctx, email)
+	c, err := s.repo.FindCredentials(ctx, email)
 	if errors.Is(err, ErrNotFound) {
 		_ = bcrypt.CompareHashAndPassword(s.dummyHash, []byte(req.Password))
 		return TokenResponse{}, ErrInvalidCredentials

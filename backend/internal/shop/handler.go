@@ -21,9 +21,8 @@ func NewHandler(svc *Service) *Handler {
 
 // Get handles GET /shop.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
+	p, ok := auth.MustPrincipal(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
 		return
 	}
 	s, err := h.svc.Get(r.Context(), p.ShopID)
@@ -36,9 +35,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /shop.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFrom(r.Context())
+	p, ok := auth.MustPrincipal(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing principal")
 		return
 	}
 	var req UpdateRequest
