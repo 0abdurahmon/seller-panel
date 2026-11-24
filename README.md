@@ -162,7 +162,7 @@ cp .env.example .env
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
-| `LOW_STOCK_THRESHOLD` | `5` | Stock level that shows the low-stock warning |
+| `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
 Never commit `.env`. Only `.env.example` is tracked.
 
