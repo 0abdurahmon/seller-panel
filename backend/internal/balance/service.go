@@ -1,10 +1,14 @@
 package balance
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 const (
 	defaultPageSize = 20
 	maxPageSize     = 100
+	maxPage         = 1_000_000
 )
 
 // Service reads the shop's balance. Entries are written by the order feature.
@@ -22,8 +26,11 @@ func (s *Service) Summary(ctx context.Context, shopID int64) (Summary, error) {
 	return s.repo.Summary(ctx, shopID)
 }
 
-// Entries returns one page of history; page and pageSize are clamped like product lists.
+// Entries returns one page of history; page size is clamped like product lists.
 func (s *Service) Entries(ctx context.Context, shopID int64, page, pageSize int) (Page, error) {
+	if page > maxPage {
+		return Page{}, fmt.Errorf("%w: page must be at most %d", ErrValidation, maxPage)
+	}
 	if page < 1 {
 		page = 1
 	}

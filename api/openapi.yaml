@@ -185,7 +185,8 @@ paths:
       summary: Current balance of the shop
       description: |
         `available` is the sum of all balance entries (sale + commission + payout).
-        Commission is 10% of each delivered order total.
+        Commission is `COMMISSION_PERCENT` (10 by default) of each delivered order total.
+        A shop with no entries gets zeros. Rules are in docs/DECISIONS.md (D7).
       responses:
         '200':
           description: Balance
@@ -200,6 +201,9 @@ paths:
     get:
       tags: [Balance]
       summary: Balance history (newest first)
+      description: |
+        Entries are ordered by `created_at`, then `id`, newest first. `page_size` above 100 is
+        lowered to 100. A `page` above 1 000 000 or a value that is not an integer is a 400.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -210,6 +214,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BalanceEntryPage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -709,15 +715,20 @@ components:
       required: [id, order_id, type, amount, created_at]
       properties:
         id:
-          type: string
+          type: integer
+          format: int64
         order_id:
-          type: string
+          type: integer
+          format: int64
+          nullable: true
+          description: The order the money belongs to; null for a payout
         type:
           type: string
           enum: [sale, commission, payout]
         amount:
           type: integer
-          description: Signed amount in so'm (sale > 0, commission < 0)
+          format: int64
+          description: Signed amount in so'm (sale > 0, commission <= 0, payout < 0)
         created_at:
           type: string
           format: date-time

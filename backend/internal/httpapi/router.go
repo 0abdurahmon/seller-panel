@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
@@ -20,6 +21,7 @@ type Deps struct {
 	Product *product.Handler
 	Tokens  *auth.TokenIssuer
 	Stock   *stock.Handler
+	Balance *balance.Handler
 
 	ShopLimiter *httpx.Limiter
 }
@@ -48,6 +50,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PUT /products/{id}", protected(d.Product.Update))
 	mux.Handle("POST /products/{id}/archive", protected(d.Product.Archive))
 	mux.Handle("PATCH /products/{id}/stock", protected(d.Stock.Update))
+	mux.Handle("GET /balance", protected(d.Balance.Summary))
+	mux.Handle("GET /balance/entries", protected(d.Balance.Entries))
 	return mux
 }
 
