@@ -258,7 +258,7 @@ func (a *api) multipart(method, path, token string, fields [][2]string, files []
 }
 
 var baseFields = func() [][2]string {
-	return [][2]string{{"category_id", "1"}, {"title", "Phone X"}, {"description", "Good"}, {"price", "1000000"}, {"sku", "PX-1"}, {"stock", "10"}, {"status", "active"}}
+	return [][2]string{{"category_id", "1"}, {"title", "Phone X"}, {"description", "Good"}, {"price", "1000000"}, {"sku", "PX-1"}, {"stock", "10"}}
 }
 
 func photo(n int) formFile { return formFile{"photos", "p.jpg", img(n)} }
@@ -271,12 +271,9 @@ func TestHandlerMultipartCreate(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
-	got := decode[productJSON](t, rec)
-	if got.Title != "Phone X" || got.Price != 1_000_000 || got.Stock != 10 || got.Status != StatusActive || len(got.Photos) != 2 {
+	got := decode[Product](t, rec)
+	if got.Title != "Phone X" || got.Price != 1_000_000 || got.Stock != 10 || got.Status != StatusDraft || len(got.Photos) != 2 {
 		t.Fatalf("created = %+v", got)
-	}
-	if got.Available != 10 || got.StockLabel == "" {
-		t.Fatalf("derived fields missing: %+v", got)
 	}
 
 	plain := a.multipart(http.MethodPost, "/products", tok, append(baseFields()[:4:4], [2]string{"sku", "PX-2"}), nil)
@@ -302,6 +299,7 @@ func TestHandlerMultipartErrors(t *testing.T) {
 		{"price is not a number", [][2]string{{"category_id", "1"}, {"title", "T"}, {"price", "abc"}, {"sku", "S"}}, nil, 400, "validation_error"},
 		{"missing title", [][2]string{{"category_id", "1"}, {"price", "5"}, {"sku", "S"}}, nil, 400, "validation_error"},
 		{"unknown field", with([2]string{"color", "red"}), nil, 400, "validation_error"},
+		{"status on create", with([2]string{"status", "active"}), nil, 400, "validation_error"},
 		{"keep_photos on create", with([2]string{"keep_photos", "x"}), nil, 400, "validation_error"},
 		{"field sent twice", with([2]string{"title", "Again"}), nil, 400, "validation_error"},
 		{"file in a wrong field", baseFields(), []formFile{{"image", "a.jpg", img(1)}}, 400, "validation_error"},
@@ -378,7 +376,7 @@ func TestHandlerJSONIsStillAccepted(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"photos":[]`) {
 		t.Fatalf("a product without photos must show \"photos\":[], got %s", rec.Body)
 	}
-	withPhotos := strings.Replace(createBody, `"status":"active"`, `"status":"active","photos":["/x.webp"]`, 1)
+	withPhotos := strings.Replace(createBody, `"stock":10`, `"stock":10,"photos":["/x.webp"]`, 1)
 	if rec := a.do(http.MethodPost, "/products", tok, withPhotos); rec.Code != http.StatusBadRequest {
 		t.Fatalf("a photos list in JSON must be refused, got %d", rec.Code)
 	}
@@ -387,7 +385,7 @@ func TestHandlerJSONIsStillAccepted(t *testing.T) {
 func TestHandlerMultipartUpdate(t *testing.T) {
 	a := newAPI(t)
 	tok := a.token(1)
-	created := decode[productJSON](t, a.multipart(http.MethodPost, "/products", tok, baseFields(), []formFile{photo(1), photo(2)}))
+	created := decode[Product](t, a.multipart(http.MethodPost, "/products", tok, baseFields(), []formFile{photo(1), photo(2)}))
 	path := "/products/" + strconv.FormatInt(created.ID, 10)
 	fields := func(extra ...[2]string) [][2]string {
 		return append([][2]string{{"category_id", "1"}, {"title", "Phone Z"}, {"price", "2000000"}, {"sku", "PX-1"}}, extra...)
@@ -395,7 +393,7 @@ func TestHandlerMultipartUpdate(t *testing.T) {
 
 	t.Run("no keep_photos keeps all and adds", func(t *testing.T) {
 		rec := a.multipart(http.MethodPut, path, tok, fields(), []formFile{photo(3)})
-		got := decode[productJSON](t, rec)
+		got := decode[Product](t, rec)
 		if rec.Code != 200 || len(got.Photos) != 3 || got.Photos[0] != created.Photos[0] || got.Title != "Phone Z" {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -403,7 +401,7 @@ func TestHandlerMultipartUpdate(t *testing.T) {
 	})
 	t.Run("keep_photos picks the survivors", func(t *testing.T) {
 		rec := a.multipart(http.MethodPut, path, tok, fields([2]string{"keep_photos", created.Photos[2]}, [2]string{"keep_photos", created.Photos[0]}), nil)
-		got := decode[productJSON](t, rec)
+		got := decode[Product](t, rec)
 		if rec.Code != 200 || len(got.Photos) != 2 || got.Photos[0] != created.Photos[2] || got.Photos[1] != created.Photos[0] {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}

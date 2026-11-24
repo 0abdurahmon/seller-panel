@@ -166,12 +166,6 @@ func TestArchive(t *testing.T) {
 	}
 }
 
-func TestAvailable(t *testing.T) {
-	if got := (Product{Stock: 10, Reserved: 3}).Available(); got != 7 {
-		t.Fatalf("available = %d, want 7", got)
-	}
-}
-
 func seedList(t *testing.T) *Service {
 	t.Helper()
 	svc := newService()

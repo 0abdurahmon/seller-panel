@@ -35,7 +35,6 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 	if err != nil {
 		return nil, err
 	}
-	stockLabel := func(available int) string { return string(stockSvc.Label(available)) }
 
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
 	if err != nil {
@@ -67,7 +66,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
-		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc}), stockLabel),
+		Product: product.NewHandler(product.NewService(product.NewPgRepository(pool), productPhotos{uploads: uploadSvc})),
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),

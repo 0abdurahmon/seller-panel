@@ -2,25 +2,17 @@ package product
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 )
-
-func testLabel(available int) string {
-	switch {
-	case available == 0:
-		return "out_of_stock"
-	case available <= 5:
-		return "low_stock"
-	}
-	return "in_stock"
-}
 
 type api struct {
 	t      *testing.T
@@ -38,7 +30,7 @@ func newAPI(t *testing.T) *api {
 	}
 	photos := newFakePhotos()
 	svc := NewService(newMemRepository(), photos)
-	h := NewHandler(svc, testLabel)
+	h := NewHandler(svc)
 	protect := auth.RequireAuth(tokens)
 	mux := http.NewServeMux()
 	mux.Handle("GET /products", protect(http.HandlerFunc(h.List)))
@@ -87,13 +79,7 @@ func errorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 
 const updateBody = `{"category_id":1,"title":"Phone Z","description":"Good","price":1000000,"sku":"PX-1","status":"active"}`
 
-const createBody = `{"category_id":1,"title":"Phone X","description":"Good","price":1000000,"sku":"PX-1","stock":10,"status":"active"}`
-
-type productJSON struct {
-	Product
-	Available  int    `json:"available"`
-	StockLabel string `json:"stock_label"`
-}
+const createBody = `{"category_id":1,"title":"Phone X","description":"Good","price":1000000,"sku":"PX-1","stock":10}`
 
 func (a *api) create(token, body string) Product {
 	a.t.Helper()
@@ -122,11 +108,15 @@ func TestHandlerRequiresToken(t *testing.T) {
 func TestHandlerCreateTakesShopFromToken(t *testing.T) {
 	a := newAPI(t)
 	p := a.create(a.token(7), createBody)
-	if p.ShopID != 7 || p.ID == 0 || p.Stock != 10 || p.Reserved != 0 || p.Status != StatusActive {
+	if p.ShopID != 7 || p.ID == 0 || p.Stock != 10 || p.Reserved != 0 || p.Status != StatusDraft {
 		t.Fatalf("created = %+v", p)
 	}
 	if rec := a.do(http.MethodPost, "/products", a.token(7), `{"shop_id":99,"title":"x"}`); rec.Code != http.StatusBadRequest || errorCode(t, rec) != "invalid_body" {
 		t.Fatalf("shop_id in body: status %d code %q, want 400 invalid_body", rec.Code, errorCode(t, rec))
+	}
+	withStatus := strings.Replace(createBody, `"stock":10`, `"stock":10,"status":"active"`, 1)
+	if rec := a.do(http.MethodPost, "/products", a.token(7), withStatus); rec.Code != http.StatusBadRequest || errorCode(t, rec) != "invalid_body" {
+		t.Fatalf("status in a create body: status %d code %q, want 400 invalid_body, a product starts as a draft", rec.Code, errorCode(t, rec))
 	}
 }
 
@@ -205,7 +195,7 @@ func TestHandlerShopsAreIsolated(t *testing.T) {
 			t.Errorf("shop B %s %s status = %d, want 404", c.method, c.path, rec.Code)
 		}
 	}
-	if rec := a.do(http.MethodGet, path, tokA, ""); decode[Product](t, rec).Status != StatusActive {
+	if rec := a.do(http.MethodGet, path, tokA, ""); decode[Product](t, rec).Status != StatusDraft {
 		t.Fatal("shop B's calls changed shop A's product")
 	}
 
@@ -221,9 +211,15 @@ func TestHandlerShopsAreIsolated(t *testing.T) {
 func TestHandlerListFiltersAndPaging(t *testing.T) {
 	a := newAPI(t)
 	tok := a.token(1)
-	a.create(tok, `{"category_id":1,"title":"Phone Alpha","price":100,"sku":"A","status":"active"}`)
-	a.create(tok, `{"category_id":2,"title":"Phone Beta","price":100,"sku":"B","status":"draft"}`)
-	a.create(tok, `{"category_id":2,"title":"Lamp","price":100,"sku":"C","status":"active"}`)
+	for _, in := range []CreateInput{
+		{CategoryID: 1, Title: "Phone Alpha", Price: 100, SKU: "A", Status: StatusActive},
+		{CategoryID: 2, Title: "Phone Beta", Price: 100, SKU: "B", Status: StatusDraft},
+		{CategoryID: 2, Title: "Lamp", Price: 100, SKU: "C", Status: StatusActive},
+	} {
+		if _, err := a.svc.Create(context.Background(), 1, in, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	list := func(query string) Page {
 		t.Helper()
@@ -250,35 +246,37 @@ func TestHandlerListFiltersAndPaging(t *testing.T) {
 	}
 }
 
-func TestHandlerReturnsAvailableAndStockLabel(t *testing.T) {
+func TestHandlerProductHasNoDerivedStockFields(t *testing.T) {
 	a := newAPI(t)
 	tok := a.token(1)
+	p := a.create(tok, createBody)
 
-	cases := []struct {
-		stock     int
-		available int
-		label     string
-	}{{0, 0, "out_of_stock"}, {3, 3, "low_stock"}, {40, 40, "in_stock"}}
-	for i, c := range cases {
-		body := `{"category_id":1,"title":"T","price":1,"sku":"S` + strconv.Itoa(i) + `","stock":` + strconv.Itoa(c.stock) + `}`
-		rec := a.do(http.MethodPost, "/products", tok, body)
-		got := decode[productJSON](t, rec)
-		if got.Available != c.available || got.StockLabel != c.label {
-			t.Errorf("stock %d: available %d label %q, want %d %q", c.stock, got.Available, got.StockLabel, c.available, c.label)
+	check := func(name, body string) {
+		t.Helper()
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(body), &m); err != nil {
+			t.Fatalf("%s: %v", name, err)
 		}
-		rec = a.do(http.MethodGet, "/products/"+strconv.FormatInt(got.ID, 10), tok, "")
-		if again := decode[productJSON](t, rec); again.StockLabel != c.label {
-			t.Errorf("get stock %d: label %q, want %q", c.stock, again.StockLabel, c.label)
+		for _, key := range []string{"available", "stock_label"} {
+			if _, ok := m[key]; ok {
+				t.Errorf("%s has the derived field %q", name, key)
+			}
+		}
+		for _, key := range []string{"stock", "reserved", "status", "photos"} {
+			if _, ok := m[key]; !ok {
+				t.Errorf("%s has no %q", name, key)
+			}
 		}
 	}
+	path := "/products/" + strconv.FormatInt(p.ID, 10)
+	check("get", a.do(http.MethodGet, path, tok, "").Body.String())
+	check("update", a.do(http.MethodPut, path, tok, updateBody).Body.String())
 
 	var page struct {
-		Items []productJSON `json:"items"`
+		Items []json.RawMessage `json:"items"`
 	}
-	if err := json.Unmarshal(a.do(http.MethodGet, "/products", tok, "").Body.Bytes(), &page); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(a.do(http.MethodGet, "/products", tok, "").Body.Bytes(), &page); err != nil || len(page.Items) != 1 {
+		t.Fatalf("list: %v %+v", err, page)
 	}
-	if len(page.Items) != 3 || page.Items[0].StockLabel != "in_stock" || page.Items[2].StockLabel != "out_of_stock" {
-		t.Fatalf("list labels = %+v", page.Items)
-	}
+	check("list item", string(page.Items[0]))
 }

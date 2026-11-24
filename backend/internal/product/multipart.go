@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	createFields = map[string]bool{"category_id": true, "title": true, "description": true, "price": true, "sku": true, "stock": true, "status": true}
+	createFields = map[string]bool{"category_id": true, "title": true, "description": true, "price": true, "sku": true, "stock": true}
 	updateFields = map[string]bool{"category_id": true, "title": true, "description": true, "price": true, "sku": true, "status": true, keepPhotosField: true}
 )
 
@@ -145,7 +145,6 @@ func (f form) createInput() (CreateInput, error) {
 	}
 	in.Stock = int(stock)
 	in.Title, in.Description, in.SKU = f.values["title"], f.values["description"], f.values["sku"]
-	in.Status = Status(f.values["status"])
 	return in, nil
 }
 
