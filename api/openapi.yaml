@@ -284,14 +284,14 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: |
-            `stock_changed` or `stock_below_reserved` (body has `current` with the real numbers),
-            or `product_archived` (plain error body).
+            `stock_changed` (reload the product and try again), `stock_below_reserved` or `product_archived`.
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/StockConflict'
-                  - $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/Error'
+              example:
+                code: stock_changed
+                message: stock was changed since you opened it; reload and try again
 
 components:
   securitySchemes:
@@ -660,25 +660,6 @@ components:
         available: 4
         stock_label: low_stock
         updated_at: '2026-11-23T18:55:34Z'
-
-    StockConflict:
-      allOf:
-        - $ref: '#/components/schemas/Error'
-        - type: object
-          required: [current]
-          properties:
-            current:
-              $ref: '#/components/schemas/StockLevel'
-      example:
-        code: stock_changed
-        message: stock was changed since you opened it; check the current value and try again
-        current:
-          product_id: 1
-          stock: 3
-          reserved: 3
-          available: 0
-          stock_label: out_of_stock
-          updated_at: '2026-11-23T18:55:34Z'
 
     Error:
       type: object

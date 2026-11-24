@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
+	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
 func newTestRouter(t *testing.T) http.Handler {
@@ -22,12 +24,36 @@ func newTestRouter(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stockSvc, err := stock.NewService(fakeStockRepository{}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
 		Auth:   auth.NewHandler(svc),
 		Shop:   shop.NewHandler(shop.NewService(shopRepo)),
 		Tokens: tokens,
+		Stock:  stock.NewHandler(stockSvc),
 	})
+}
+
+func TestStockRouteRequiresAuth(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter(t))
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodPatch, srv.URL+"/products/1/stock", strings.NewReader(`{"stock": 5, "expected_stock": 0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusUnauthorized)
+	}
 }
 
 func TestHealth(t *testing.T) {
@@ -97,4 +123,10 @@ func (fakeShopRepository) Get(_ context.Context, shopID int64) (shop.Shop, error
 
 func (fakeShopRepository) Update(_ context.Context, shopID int64, p shop.Profile) (shop.Shop, error) {
 	return shop.Shop{ID: shopID, Name: p.Name}, nil
+}
+
+type fakeStockRepository struct{}
+
+func (fakeStockRepository) SetStock(_ context.Context, _, _ int64, qty, _ int) (stock.Row, error) {
+	return stock.Row{Stock: qty}, nil
 }

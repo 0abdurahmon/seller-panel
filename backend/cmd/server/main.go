@@ -16,6 +16,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
+	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -57,11 +58,16 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), cfg.LowStockThreshold)
+	if err != nil {
+		return err
+	}
 
 	router := httpapi.NewRouter(httpapi.Deps{
 		Auth:   auth.NewHandler(authSvc),
 		Shop:   shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
 		Tokens: tokens,
+		Stock:  stock.NewHandler(stockSvc),
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
