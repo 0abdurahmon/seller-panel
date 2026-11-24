@@ -40,6 +40,7 @@ func newServer(t *testing.T, mutate ...func(*config.Config)) *server {
 	}
 	cfg := config.Config{
 		Env:               config.EnvDevelopment,
+		OpenAPIFile:       "../../api/openapi.yaml",
 		Port:              "0",
 		JWTSecret:         jwtSecret,
 		JWTTTL:            time.Hour,

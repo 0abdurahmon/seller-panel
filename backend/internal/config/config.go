@@ -14,7 +14,7 @@ const (
 	EnvDevelopment = "development"
 )
 
-// DefaultBusinessTimeZone defines "today" on the dashboard (see D9).
+// DefaultBusinessTimeZone defines "today" on the dashboard (see D10).
 const DefaultBusinessTimeZone = "Asia/Tashkent"
 
 const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -22,6 +22,7 @@ const defaultTrustedProxies = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192
 type Config struct {
 	Env               string
 	Port              string
+	OpenAPIFile       string
 	DatabaseURL       string
 	JWTSecret         string
 	JWTTTL            time.Duration
@@ -39,6 +40,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		Env:               getEnv("APP_ENV", EnvProduction),
 		Port:              getEnv("BACKEND_PORT", "8080"),
+		OpenAPIFile:       os.Getenv("OPENAPI_FILE"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		CommissionPercent: 10,

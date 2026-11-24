@@ -198,7 +198,7 @@ paths:
         - `top_products`: up to 5 products by units in orders delivered in the last 30 days, most units first,
           then most revenue, then lowest `product_id`. `title` is the current title of the product.
 
-        A shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D9).
+        A shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D10).
       responses:
         '200':
           description: Dashboard summary

@@ -30,6 +30,7 @@ type Deps struct {
 
 	ShopLimiter  *httpx.Limiter
 	DevEndpoints bool
+	Spec         http.Handler
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -62,6 +63,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
 	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))
+	if d.Spec != nil {
+		mux.Handle("GET /openapi.json", d.Spec)
+	}
 	if d.DevEndpoints {
 		mux.Handle("POST /dev/simulate-order", protected(d.Order.Simulate))
 	}

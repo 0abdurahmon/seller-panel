@@ -64,6 +64,11 @@ check "nginx limits bursts on /api/" 1 "$([ "$global_limited" -ge 1 ] && echo 1 
 check "docs without credentials" 401 "$(status "$frontend/docs/")"
 check "docs with a wrong password" 401 "$(status -u "$docs_user:wrong-password" "$frontend/docs/")"
 check "docs with credentials" 200 "$(status -u "$docs_user:$docs_password" "$frontend/docs/")"
+check "spec JSON without credentials" 401 "$(status "$frontend/swagger")"
+check "spec JSON at /swagger with credentials" 200 "$(status -u "$docs_user:$docs_password" "$frontend/swagger")"
+check "spec JSON next to the YAML" 200 "$(status -u "$docs_user:$docs_password" "$frontend/docs/spec/openapi.json")"
+check "spec JSON is the OpenAPI document" 1 "$(curl -s -u "$docs_user:$docs_password" "$frontend/swagger" | grep -c '^  "openapi":')"
+check "spec JSON is not public under /api" 404 "$(status "$frontend/api/openapi.json")"
 
 if [ "$failures" -ne 0 ]; then
   printf '%s check(s) failed\n' "$failures" >&2

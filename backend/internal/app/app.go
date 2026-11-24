@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/0abdurahmon/seller-panel/backend/internal/apispec"
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/balance"
 	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
@@ -50,6 +51,11 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 	}
 	loginGuard := httpx.NewLimiterPer(cfg.LoginAttempts, cfg.LoginWindow)
 
+	var spec http.Handler
+	if cfg.OpenAPIFile != "" {
+		spec = apispec.NewHandler(cfg.OpenAPIFile)
+	}
+
 	router := httpapi.NewRouter(httpapi.Deps{
 		Auth:    auth.NewHandler(authSvc, loginGuard, ipResolver.Of),
 		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
@@ -64,6 +70,7 @@ func NewHandler(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (htt
 
 		ShopLimiter:  httpx.NewLimiter(cfg.ShopRPS, cfg.ShopBurst),
 		DevEndpoints: cfg.Env == config.EnvDevelopment,
+		Spec:         spec,
 	})
 	return httpx.Logging(logger)(router), nil
 }

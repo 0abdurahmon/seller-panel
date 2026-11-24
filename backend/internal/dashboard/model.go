@@ -1,4 +1,4 @@
-// Package dashboard builds the home page numbers of a shop (see D9).
+// Package dashboard builds the home page numbers of a shop (see D10).
 package dashboard
 
 import "time"

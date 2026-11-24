@@ -163,10 +163,11 @@ cp .env.example .env
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `APP_ENV` | `development` in Docker Compose, `production` when unset | `development` turns on the dev endpoint `POST /dev/simulate-order` (fake buyer orders); in `production` it does not exist |
+| `OPENAPI_FILE` | empty (off); `/app/api/openapi.yaml` in Docker Compose | Path of the OpenAPI file the backend turns into JSON at `GET /openapi.json`. Running the backend from `backend/` use `../api/openapi.yaml` |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `RATE_LIMIT_SHOP_RPS`, `RATE_LIMIT_SHOP_BURST` | `20`, `40` | Requests per second and burst allowed for each shop on protected routes (see D6) |
 | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
-| `BUSINESS_TIMEZONE` | `Asia/Tashkent` | Time zone that defines "today", "last 7 days" and "last 30 days" on the dashboard (see D9) |
+| `BUSINESS_TIMEZONE` | `Asia/Tashkent` | Time zone that defines "today", "last 7 days" and "last 30 days" on the dashboard (see D10) |
 | `TRUSTED_PROXIES` | private ranges and loopback | Networks whose `X-Real-IP` header the backend trusts (the nginx container) |
 | `LOW_STOCK_THRESHOLD` | `5` | Available stock at or below this shows the low-stock warning (`0` turns it off, see D5) |
 
@@ -176,7 +177,9 @@ Never commit `.env`. Only `.env.example` is tracked.
 
 With the stack running, open http://localhost:3000/docs/ and sign in with `SWAGGER_USER` and `SWAGGER_PASSWORD` (defaults in the table above). It shows `api/openapi.yaml`.
 
-- The `api/` folder is mounted read-only into the frontend container: edit the spec, refresh the browser, no rebuild.
+- The `api/` folder is mounted read-only into the frontend and the backend container: edit the spec, refresh the browser, no rebuild.
+- The same spec as JSON, for type and client generators or Postman: `GET /swagger` (also `GET /docs/spec/openapi.json`), same login as the UI. For example `curl -u "$SWAGGER_USER:$SWAGGER_PASSWORD" http://localhost:3000/swagger -o openapi.json`. The backend makes the JSON from `api/openapi.yaml` on request and notices edits at once (no restart). The YAML is at `/docs/spec/openapi.yaml`, and generators can also read `api/openapi.yaml` straight from the repository.
+- The backend serves the JSON itself at `GET /openapi.json` (no login, reachable on the backend port on your machine only). nginx publishes it only behind the docs login, `/api/openapi.json` answers 404 there.
 - The password is hashed when the container starts; it is not stored in the image. Basic auth sends the password with every request, so use HTTPS in front of any shared deployment.
 - Swagger UI is only part of the Docker setup, `npm run dev` does not serve it.
 

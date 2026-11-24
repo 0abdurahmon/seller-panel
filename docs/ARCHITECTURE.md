@@ -115,7 +115,7 @@ Photos: `POST /uploads` accepts jpeg, png or webp up to 5 MB, stores the file un
 - **Logging:** `log/slog` JSON to stdout, one line per request (method, path, status, duration), no passwords or tokens.
 - **Rate limiting:** nginx limits per IP, the backend limits per shop on protected routes and guards login against password guessing, see D6. Every protected route goes through `protected(...)` in `httpapi/router.go`, so a new route is limited without extra code.
 - **Shutdown:** `http.Server.Shutdown` on SIGTERM, then close the pool.
-- **Time zone:** "today", "last 7 days" and "last 30 days" on the dashboard use one fixed business time zone, `BUSINESS_TIMEZONE`, default `Asia/Tashkent` (see D9).
+- **Time zone:** "today", "last 7 days" and "last 30 days" on the dashboard use one fixed business time zone, `BUSINESS_TIMEZONE`, default `Asia/Tashkent` (see D10).
 
 ## 7. Frontend structure
 
@@ -152,7 +152,7 @@ Reviewers: please answer these in the PR. A recommendation is given for each.
 
 1. **Token storage.** `localStorage` with `Authorization: Bearer` (simple, exposed to XSS) or an httpOnly cookie (safer, needs CSRF thinking). *Recommend:* Bearer + `localStorage` for this project, noted as a known trade-off.
 2. **Integration test database.** GitHub Actions `services: postgres` in CI plus the compose `db` locally, or `testcontainers-go`. *Recommend:* CI service container, fewer moving parts.
-3. **Business time zone** for the dashboard. *Recommend:* `Asia/Tashkent`, a constant in config. *Decided in D9:* `Asia/Tashkent` by default, set with `BUSINESS_TIMEZONE`.
+3. **Business time zone** for the dashboard. *Recommend:* `Asia/Tashkent`, a constant in config. *Decided in D10:* `Asia/Tashkent` by default, set with `BUSINESS_TIMEZONE`.
 4. **Order number.** A global sequence starting at 100000 (`#100245`) or per-shop numbering. *Recommend:* global sequence, unique and simple.
 5. **Photos on disk vs object storage.** *Recommend:* local volume for the MVP, object storage is out of scope.
 6. **Frontend libraries.** TanStack Query, React Router and generated OpenAPI types as above. Any objection or a UI kit the team prefers?
