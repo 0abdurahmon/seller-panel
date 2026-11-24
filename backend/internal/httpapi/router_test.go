@@ -22,7 +22,7 @@ func newTestRouter(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shopRepo := shop.NewMemRepository()
+	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
 		Auth:   auth.NewHandler(svc),
 		Shop:   shop.NewHandler(shop.NewService(shopRepo)),
@@ -87,4 +87,14 @@ func (r *fakeAuthRepository) FindCredentials(_ context.Context, email string) (a
 		return auth.Credentials{}, auth.ErrNotFound
 	}
 	return c, nil
+}
+
+type fakeShopRepository struct{}
+
+func (fakeShopRepository) Get(_ context.Context, shopID int64) (shop.Shop, error) {
+	return shop.Shop{ID: shopID, Name: "Test shop"}, nil
+}
+
+func (fakeShopRepository) Update(_ context.Context, shopID int64, p shop.Profile) (shop.Shop, error) {
+	return shop.Shop{ID: shopID, Name: p.Name}, nil
 }

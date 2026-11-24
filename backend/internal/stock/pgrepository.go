@@ -9,18 +9,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PgStore changes stock in the products table, always filtered by shop_id.
-type PgStore struct {
+// PgRepository changes stock in the products table, always filtered by shop_id.
+type PgRepository struct {
 	pool *pgxpool.Pool
 }
 
-// NewPgStore returns the PostgreSQL stock store.
-func NewPgStore(pool *pgxpool.Pool) *PgStore {
-	return &PgStore{pool: pool}
+// NewPgRepository returns the PostgreSQL stock repository.
+func NewPgRepository(pool *pgxpool.Pool) *PgRepository {
+	return &PgRepository{pool: pool}
 }
 
 // SetStock checks all rules in one UPDATE; a follow-up read only explains refusals.
-func (s *PgStore) SetStock(ctx context.Context, shopID, productID int64, stock, expected int) (Row, error) {
+func (s *PgRepository) SetStock(ctx context.Context, shopID, productID int64, stock, expected int) (Row, error) {
 	var row Row
 	err := s.pool.QueryRow(ctx,
 		`UPDATE products

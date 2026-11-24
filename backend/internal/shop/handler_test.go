@@ -18,9 +18,9 @@ func TestHandlerScopesEachSellerToOwnShop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMemRepository()
-	repo.Seed(1, "Shop A")
-	repo.Seed(2, "Shop B")
+	repo := newMemRepository()
+	repo.seed(1, "Shop A")
+	repo.seed(2, "Shop B")
 	h := NewHandler(NewService(repo))
 
 	mux := http.NewServeMux()
@@ -67,8 +67,8 @@ func TestHandlerScopesEachSellerToOwnShop(t *testing.T) {
 
 func TestHandlerStatusCodes(t *testing.T) {
 	tokens, _ := auth.NewTokenIssuer("test-secret", time.Hour)
-	repo := NewMemRepository()
-	repo.Seed(1, "Shop A")
+	repo := newMemRepository()
+	repo.seed(1, "Shop A")
 	h := NewHandler(NewService(repo))
 	mux := http.NewServeMux()
 	mux.Handle("PUT /shop", auth.RequireAuth(tokens)(http.HandlerFunc(h.Update)))

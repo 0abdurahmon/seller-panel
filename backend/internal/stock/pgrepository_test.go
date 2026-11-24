@@ -20,7 +20,7 @@ import (
 )
 
 // Needs TEST_DATABASE_URL and the products table; runs in its own database.
-func newPgStore(t *testing.T) (*PgStore, *pgxpool.Pool) {
+func newPgRepository(t *testing.T) (*PgRepository, *pgxpool.Pool) {
 	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
@@ -44,7 +44,7 @@ func newPgStore(t *testing.T) (*PgStore, *pgxpool.Pool) {
 	if !exists {
 		t.Skip("products table does not exist yet (products migration not merged)")
 	}
-	return NewPgStore(pool), pool
+	return NewPgRepository(pool), pool
 }
 
 // ownDatabase returns a separate "<name>_stock" database; other packages' tests truncate tables.
@@ -126,7 +126,7 @@ func readStock(t *testing.T, pool *pgxpool.Pool, productID int64) int {
 }
 
 func TestPgSetStockRules(t *testing.T) {
-	store, pool := newPgStore(t)
+	store, pool := newPgRepository(t)
 	ctx := context.Background()
 	shop := seedShop(t, pool)
 	otherShop := seedShop(t, pool)
@@ -162,7 +162,7 @@ func TestPgSetStockRules(t *testing.T) {
 }
 
 func TestPgSetStockStaleExpected(t *testing.T) {
-	store, pool := newPgStore(t)
+	store, pool := newPgRepository(t)
 	ctx := context.Background()
 	shop := seedShop(t, pool)
 	product := seedProduct(t, pool, shop, 10, 0, "draft")
@@ -181,7 +181,7 @@ func TestPgSetStockStaleExpected(t *testing.T) {
 
 // Eight tabs that saw 10 save at once: exactly one wins.
 func TestPgConcurrentEditsDoNotOverwriteEachOther(t *testing.T) {
-	store, pool := newPgStore(t)
+	store, pool := newPgRepository(t)
 	ctx := context.Background()
 	shop := seedShop(t, pool)
 	product := seedProduct(t, pool, shop, 10, 0, "active")
