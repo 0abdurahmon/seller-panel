@@ -52,7 +52,7 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 ### products
 `id`, `shop_id`, `category_id`, `title`, `description`, `price`, `sku`, `stock`, `reserved`, `status` (`draft`, `active`, `archived`), `created_at`, `updated_at`.
 
-Derived, not stored: `available = stock - reserved`, and the stock label: `out_of_stock` when `available = 0`, `low_stock` when `available <= LOW_STOCK_THRESHOLD`, `in_stock` otherwise.
+Derived, not stored: `available = stock - reserved`. The API returns `stock` and `reserved`; a screen derives `available` and its own low stock warning (D16).
 
 ### product_photos
 `id`, `product_id`, `url`, `position` (0 is the cover, at most 5 photos). A table rather than an array so order and removal are simple. `url` is the public URL of a WebP file the product endpoints stored for the product's shop; the service writes the rows and the files together and never accepts a URL from the client. `(product_id, position)` and `(product_id, url)` are unique, the position key is deferrable.

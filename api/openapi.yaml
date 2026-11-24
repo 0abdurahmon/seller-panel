@@ -21,7 +21,7 @@ info:
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
 
-    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+    **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
     `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
     Compose default); otherwise it answers 404 like any unknown route.
 servers:
@@ -409,10 +409,12 @@ paths:
           (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.
 
         The profile and the logo are saved together: when anything fails nothing changes and no file stays on
-        the server; the old logo file is deleted once the new one is saved. The logo is converted to WebP and
-        scaled to at most 2048 px, see `POST /uploads`. A request with a logo counts against the same per shop
-        limit as uploads (20 a minute by default); a JSON request does not. `logo_url` is not an input, the
-        server writes it.
+        the server; the old logo file is deleted once the new one is saved. The image type is checked from the file
+        content, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most
+        2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:
+        the `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.
+        A request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_UPLOADS_PER_MINUTE`);
+        a JSON request does not. `logo_url` is not an input, the server writes it.
       requestBody:
         required: true
         content:
@@ -518,9 +520,12 @@ paths:
           (jpeg, png or webp, 5 MB each). The first image is the cover.
 
         The product and its photos are saved together: when anything fails (a bad field, a file that is not an
-        image, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP
-        and scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts
-        against the same per shop limit as uploads (20 a minute by default); a JSON request does not.
+        image, a taken SKU) nothing is created and no file stays on the server. The image type is checked from
+        the file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),
+        scaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.
+        The files are public: a photo URL opens in a browser without a token, nginx serves it straight from the
+        uploads volume. A request with images counts against a per shop limit of 20 a minute by default
+        (`RATE_LIMIT_UPLOADS_PER_MINUTE`); a JSON request does not.
       requestBody:
         required: true
         content:
@@ -737,72 +742,6 @@ paths:
               example:
                 code: stock_changed
                 message: stock was changed since you opened it; reload and try again
-
-  /uploads:
-    post:
-      tags: [Uploads]
-      summary: Upload an image, it is stored as WebP
-      description: |
-        `multipart/form-data` with one image in the field `file`: jpeg, png or webp, at most 5 MB and 20 megapixels.
-        The type is checked from the file content, not from its name or `Content-Type`.
-        The image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,
-        and re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.
-        This endpoint only stores one image and returns its URL. Product photos and the shop logo are saved by
-        their own endpoints (`POST /products`, `PUT /products/{id}`, `PUT /shop`); none of them accepts a URL
-        from here. Opening the `url` in a browser needs no token: nginx serves the files straight from the
-        uploads volume, the API does not.
-        Limited per shop (20 uploads a minute by default); when the server is processing many images
-        at once the answer is 503 `busy` with `Retry-After`.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-      responses:
-        '201':
-          description: The stored image
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UploadedImage'
-        '400':
-          description: No `file` field, empty file, a file that is not a decodable image, or more than 20 megapixels (`validation_error`); a broken multipart body (`invalid_body`)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '413':
-          description: The file is larger than 5 MB (`file_too_large`)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '415':
-          description: The request is not `multipart/form-data`, or the file is not jpeg, png or webp (`unsupported_media_type`)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '503':
-          description: Too many images are being processed (`busy`), retry after the seconds in `Retry-After`
-          headers:
-            Retry-After:
-              schema:
-                type: integer
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
 components:
   securitySchemes:
@@ -1202,24 +1141,6 @@ components:
           type: string
           nullable: true
           maxLength: 300
-
-    UploadedImage:
-      type: object
-      required: [url, content_type, size, width, height]
-      properties:
-        url:
-          type: string
-          example: /api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp
-        content_type:
-          type: string
-          enum: [image/webp]
-        size:
-          type: integer
-          description: Bytes of the stored file
-        width:
-          type: integer
-        height:
-          type: integer
 
     ShopUpdate:
       type: object

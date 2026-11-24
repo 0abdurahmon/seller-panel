@@ -33,7 +33,6 @@ type Options struct {
 	// Loc is the business time zone that defines the days orders are placed on.
 	Loc               *time.Location
 	CommissionPercent int
-	LowStockThreshold int
 }
 
 // Result tells what a run did.
@@ -135,10 +134,7 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 	if err != nil {
 		return nil, err
 	}
-	stockSvc, err := stock.NewService(stock.NewPgRepository(pool), o.LowStockThreshold)
-	if err != nil {
-		return nil, err
-	}
+	stockSvc := stock.NewService(stock.NewPgRepository(pool))
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), o.CommissionPercent)
 	if err != nil {
 		return nil, err
@@ -266,7 +262,7 @@ func setFinalStock(ctx context.Context, svc *services, shopID int64, items map[s
 		if err != nil {
 			return fmt.Errorf("read product %s: %w", spec.sku, err)
 		}
-		if _, err := svc.stock.SetStock(ctx, shopID, current.ID, current.Reserved+spec.finalAvailable, current.Stock); err != nil {
+		if err := svc.stock.SetStock(ctx, shopID, current.ID, current.Reserved+spec.finalAvailable, current.Stock); err != nil {
 			return fmt.Errorf("set the stock of %s: %w", spec.sku, err)
 		}
 	}

@@ -3,7 +3,6 @@ package upload
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestFSRepositorySaveAndOpen(t *testing.T) {
+func TestFSRepositorySave(t *testing.T) {
 	dir := t.TempDir()
 	repo, err := NewFSRepository(dir)
 	if err != nil {
@@ -24,14 +23,9 @@ func TestFSRepositorySaveAndOpen(t *testing.T) {
 	if err := repo.Save(ctx, 5, name, []byte("data")); err != nil {
 		t.Fatal(err)
 	}
-	f, err := repo.Open(ctx, 5, name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, _ := io.ReadAll(f)
-	f.Close()
-	if string(got) != "data" {
-		t.Fatalf("read %q", got)
+	got, err := os.ReadFile(filepath.Join(dir, "5", name))
+	if err != nil || string(got) != "data" {
+		t.Fatalf("read %q, %v", got, err)
 	}
 	entries, _ := os.ReadDir(filepath.Join(dir, "5"))
 	if len(entries) != 1 {
@@ -49,7 +43,7 @@ func TestFSRepositorySaveAndOpen(t *testing.T) {
 	}
 }
 
-func TestFSRepositoryIsolatesShopsAndRejectsEscapes(t *testing.T) {
+func TestFSRepositoryDoesNotWriteOutsideTheUploadDir(t *testing.T) {
 	dir := t.TempDir()
 	repo, err := NewFSRepository(dir)
 	if err != nil {
@@ -58,35 +52,20 @@ func TestFSRepositoryIsolatesShopsAndRejectsEscapes(t *testing.T) {
 	defer repo.Close()
 	ctx := context.Background()
 	name := strings.Repeat("b", 32) + ".webp"
-	if err := repo.Save(ctx, 1, name, []byte("x")); err != nil {
-		t.Fatal(err)
+
+	if err := repo.Save(ctx, 1, "../../x.webp", []byte("x")); err == nil {
+		t.Fatal("a name with .. must not be saved")
 	}
-	if _, err := repo.Open(ctx, 2, name); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("other shop: err = %v", err)
-	}
-	if _, err := repo.Open(ctx, 1, "../../../etc/passwd"); err == nil {
-		t.Fatal("path escape must fail")
-	}
-	outside := filepath.Join(t.TempDir(), "secret")
-	_ = os.WriteFile(outside, []byte("secret"), 0o600)
-	if err := os.Symlink(outside, filepath.Join(dir, "1", "link.webp")); err != nil {
+
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "9")); err != nil {
 		t.Skipf("cannot create a symlink here (Windows needs a privilege): %v", err)
 	}
-	if f, err := repo.Open(ctx, 1, "link.webp"); err == nil {
-		f.Close()
-		t.Fatal("symlink out of the upload dir must not open")
+	if err := repo.Save(ctx, 9, name, []byte("x")); err == nil {
+		t.Fatal("a shop directory that is a symlink out of the upload dir must not be written")
 	}
-}
-
-func TestFSRepositoryOpenDirectoryIsNotFound(t *testing.T) {
-	repo, err := NewFSRepository(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer repo.Close()
-	_ = repo.Save(context.Background(), 1, strings.Repeat("c", 32)+".webp", []byte("x"))
-	if _, err := repo.Open(context.Background(), 1, "."); err == nil {
-		t.Fatal("opening a directory must fail")
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("a file was written outside the upload dir: %v", entries)
 	}
 }
 
@@ -111,8 +90,8 @@ func TestFSRepositoryDelete(t *testing.T) {
 	if err := repo.Delete(ctx, 1, name); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Open(ctx, 1, name); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("after delete: err = %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "1", name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("after delete: err = %v, want the file gone", err)
 	}
 	if err := repo.Delete(ctx, 1, name); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second delete: err = %v", err)

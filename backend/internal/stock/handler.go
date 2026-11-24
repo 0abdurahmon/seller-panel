@@ -46,7 +46,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "stock and expected_stock are required")
 		return
 	}
-	if _, err := h.svc.SetStock(r.Context(), p.ShopID, productID, *req.Stock, *req.ExpectedStock); err != nil {
+	if err := h.svc.SetStock(r.Context(), p.ShopID, productID, *req.Stock, *req.ExpectedStock); err != nil {
 		writeStockError(w, r, err)
 		return
 	}

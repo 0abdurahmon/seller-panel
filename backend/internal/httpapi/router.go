@@ -13,7 +13,6 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
-	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 // Deps are the handlers and services the router is wired with.
@@ -26,7 +25,6 @@ type Deps struct {
 	Stock   *stock.Handler
 	Balance *balance.Handler
 	Order   *order.Handler
-	Upload  *upload.Handler
 
 	Dashboard *dashboard.Handler
 
@@ -84,7 +82,6 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
 	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))
-	mux.Handle("POST /uploads", protected(limitUploads(http.HandlerFunc(d.Upload.Create)).ServeHTTP))
 	if d.Spec != nil {
 		mux.Handle("GET /openapi.json", d.Spec)
 	}
