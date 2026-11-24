@@ -8,11 +8,8 @@ export const AXIOS_INSTANCE = Axios.create({
   baseURL: API_URL,
 });
 
-// Until the login page exists, a local dev token can come from VITE_DEV_AUTH_TOKEN in .env.local (git ignores it).
-const DEV_AUTH_TOKEN = import.meta.env.DEV ? import.meta.env.VITE_DEV_AUTH_TOKEN : undefined;
-
 AXIOS_INSTANCE.interceptors.request.use((config) => {
-  const token = readAuthToken() ?? DEV_AUTH_TOKEN;
+  const token = readAuthToken();
   if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }

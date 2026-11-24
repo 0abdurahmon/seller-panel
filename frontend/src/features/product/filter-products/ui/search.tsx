@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { SearchNormal1 } from "iconsax-reactjs";
-import { Button, CloseIcon, Input } from "@/shared/ui";
+import {
+  Button,
+  CloseIcon,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/shared/ui";
 
 const SEARCH_DELAY_MS = 300;
 /** Same limit as the `q` parameter in api/openapi.yaml. */
@@ -36,9 +42,11 @@ export const ProductSearch = ({
   }
 
   return (
-    <div className="relative w-full sm:w-72">
-      <SearchNormal1 className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
+    <InputGroup className="sm:w-72">
+      <InputGroupAddon>
+        <SearchNormal1 />
+      </InputGroupAddon>
+      <InputGroupInput
         type="text"
         inputMode="search"
         enterKeyHint="search"
@@ -50,22 +58,23 @@ export const ProductSearch = ({
         }}
         placeholder="Название или артикул"
         aria-label="Поиск товаров по названию или артикулу"
-        className="pr-10 pl-10"
       />
       {text && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => {
-            setText("");
-            report("", 0);
-          }}
-          aria-label="Очистить поиск"
-          className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full text-muted-foreground"
-        >
-          <CloseIcon />
-        </Button>
+        <InputGroupAddon align="end">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              setText("");
+              report("", 0);
+            }}
+            aria-label="Очистить поиск"
+            className="rounded-full text-muted-foreground"
+          >
+            <CloseIcon />
+          </Button>
+        </InputGroupAddon>
       )}
-    </div>
+    </InputGroup>
   );
 };
