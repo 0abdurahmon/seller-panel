@@ -36,6 +36,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("POST /auth/register", d.Auth.Register)
 	mux.HandleFunc("POST /auth/login", d.Auth.Login)
+	mux.HandleFunc("POST /auth/request-code", d.Auth.RequestCode)
+	mux.HandleFunc("POST /auth/verify", d.Auth.Verify)
 
 	requireAuth := auth.RequireAuth(d.Tokens)
 	limitPerShop := httpx.RateLimit(d.ShopLimiter, func(r *http.Request) (string, bool) {
@@ -45,6 +47,7 @@ func NewRouter(d Deps) http.Handler {
 	protected := func(h http.HandlerFunc) http.Handler {
 		return requireAuth(limitPerShop(h))
 	}
+	mux.Handle("POST /auth/telegram/link", protected(d.Auth.LinkTelegram))
 	mux.Handle("GET /shop", protected(d.Shop.Get))
 	mux.Handle("PUT /shop", protected(d.Shop.Update))
 	mux.Handle("GET /categories", protected(d.Catalog.List))

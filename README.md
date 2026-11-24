@@ -161,6 +161,9 @@ cp .env.example .env
 | `POSTGRES_PORT`, `BACKEND_PORT`, `FRONTEND_PORT` | `5432`, `8080`, `3000` | Ports on your machine (change if one is taken) |
 | `JWT_SECRET` | `change-me-to-a-long-random-string` | Token signing key, always change outside local use |
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
+| `TELEGRAM_BOT_TOKEN` | empty | Bot token from @BotFather. Empty turns off sign-in by Telegram code (`503 telegram_unavailable`) |
+| `TELEGRAM_BOT_USERNAME` | empty | The bot's username without `@`, required when the token is set |
+| `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, change only for a test double |
 | `SWAGGER_USER`, `SWAGGER_PASSWORD` | `alifco`, `alifco26` | Login for the API docs at `/docs/`, change both outside local use |
 | `APP_ENV` | `development` in Docker Compose, `production` when unset | `development` turns on the dev endpoint `POST /dev/simulate-order` (fake buyer orders); in `production` it does not exist |
 | `OPENAPI_FILE` | empty (off); `/app/api/openapi.yaml` in Docker Compose | Path of the OpenAPI file the backend turns into JSON at `GET /openapi.json`. Running the backend from `backend/` use `../api/openapi.yaml` |

@@ -35,7 +35,13 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 ## 3. Tables
 
 ### sellers
-`id`, `email` (unique, lower-case), `password_hash` (bcrypt), `created_at`.
+`id`, `email` (unique, lower-case), `password_hash` (bcrypt), `telegram_chat_id` (nullable, unique: one Telegram chat belongs to one seller), `created_at`.
+
+### telegram_link_tokens (pending Telegram links)
+`token_hash` (primary key, SHA-256 of the link token), `seller_id` (unique: one pending link per seller), `expires_at`. Deleted when used. Expired rows are replaced by the next link request.
+
+### login_codes (sign-in codes)
+`seller_id` (primary key: one active code per seller), `code_hash` (SHA-256 of the 6-digit code), `attempts` (0 or more), `created_at`, `expires_at`. Deleted on success or after too many wrong attempts. The code is never stored in plain text.
 
 ### shops (exactly one per seller)
 `id`, `seller_id` (unique), `name` (required), `logo_url`, `description`, `contact_phone`, `pickup_address`, `created_at`. An empty shop is created together with the seller at sign up, so every authenticated seller has a `shop_id`.

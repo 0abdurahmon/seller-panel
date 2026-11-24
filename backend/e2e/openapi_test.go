@@ -33,7 +33,8 @@ func TestOpenAPIJSONDescribesTheImplementedAPI(t *testing.T) {
 		{"/auth/register", "post"}, {"/auth/login", "post"}, {"/shop", "put"}, {"/categories", "get"},
 		{"/products", "post"}, {"/products/{id}/archive", "post"}, {"/products/{id}/stock", "patch"},
 		{"/orders", "get"}, {"/orders/{id}/transition", "post"}, {"/balance", "get"}, {"/balance/entries", "get"},
-		{"/dev/simulate-order", "post"},
+		{"/dev/simulate-order", "post"}, {"/auth/request-code", "post"}, {"/auth/verify", "post"},
+		{"/auth/telegram/link", "post"},
 	} {
 		if _, ok := doc.Paths[op.path][op.method]; !ok {
 			t.Errorf("the spec has no %s %s", strings.ToUpper(op.method), op.path)

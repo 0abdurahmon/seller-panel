@@ -33,10 +33,29 @@ Table sellers {
   id bigint [pk, increment]
   email text [not null, unique, note: 'stored lower-case']
   password_hash text [not null, note: 'bcrypt']
+  telegram_chat_id bigint [unique, note: 'one chat per seller; null until linked']
   created_at timestamptz [not null, default: `now()`]
 
   checks {
     `email = lower(email) AND email <> ''` [name: 'sellers_email_check']
+  }
+}
+
+Table telegram_link_tokens {
+  token_hash text [pk, note: 'SHA-256 of the one-time link token']
+  seller_id bigint [not null, unique, note: 'one pending link per seller']
+  expires_at timestamptz [not null]
+}
+
+Table login_codes {
+  seller_id bigint [pk, note: 'one active sign-in code per seller']
+  code_hash text [not null, note: 'SHA-256 of the 6-digit code']
+  attempts integer [not null, default: 0]
+  created_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz [not null]
+
+  checks {
+    `attempts >= 0` [name: 'login_codes_attempts_check']
   }
 }
 
@@ -202,6 +221,8 @@ Table balance_entries {
 }
 
 Ref: shops.seller_id - sellers.id
+Ref: telegram_link_tokens.seller_id > sellers.id [delete: cascade]
+Ref: login_codes.seller_id > sellers.id [delete: cascade]
 Ref: categories.parent_id > categories.id
 Ref: products.shop_id > shops.id
 Ref: products.category_id > categories.id

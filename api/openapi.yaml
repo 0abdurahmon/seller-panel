@@ -89,6 +89,84 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
 
+  /auth/request-code:
+    post:
+      tags: [Auth]
+      summary: Send a sign-in code to the seller's linked Telegram chat
+      description: |
+        Always answers `202` with the same body, so the API does not reveal which emails exist.
+        Nothing is sent for unknown emails, sellers without a linked chat, or a code requested less
+        than 60 seconds ago. The code is valid for 5 minutes.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCodeRequest'
+      responses:
+        '202':
+          description: Request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Accepted'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/TelegramUnavailable'
+
+  /auth/verify:
+    post:
+      tags: [Auth]
+      summary: Exchange a Telegram sign-in code for a token
+      description: A code works once and stops working after 5 wrong attempts.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Token for the seller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Code wrong, expired, used or locked (`invalid_code`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/telegram/link:
+    post:
+      tags: [Auth]
+      summary: Create a one-time link that connects the seller's Telegram chat
+      description: |
+        Open the returned `url` in Telegram and press Start. The link is valid for 10 minutes and works once.
+        Afterwards the seller gets sign-in codes in that chat. Re-linking replaces the chat.
+      responses:
+        '201':
+          description: Link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLink'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/TelegramUnavailable'
+
   /categories:
     get:
       tags: [Catalog]
@@ -574,6 +652,46 @@ components:
           format: email
         password:
           type: string
+
+    RequestCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    VerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          example: '491806'
+
+    Accepted:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [sent]
+
+    TelegramLink:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://t.me/seller_panel_bot?start=Qx1bH3lVt0a5Wk8oP2yZcA
+        expires_at:
+          type: string
+          format: date-time
 
     TokenResponse:
       type: object
@@ -1072,6 +1190,12 @@ components:
             $ref: '#/components/schemas/Error'
     ValidationError:
       description: Invalid request body (for example, missing `reason` on cancel)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TelegramUnavailable:
+      description: Sign-in by Telegram code is not set up on this server (`telegram_unavailable`)
       content:
         application/json:
           schema:
