@@ -1,0 +1,2003 @@
+{
+  "components": {
+    "parameters": {
+      "OrderId": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "format": "int64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "Page": {
+        "in": "query",
+        "name": "page",
+        "required": false,
+        "schema": {
+          "default": 1,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "PageSize": {
+        "in": "query",
+        "name": "page_size",
+        "required": false,
+        "schema": {
+          "default": 20,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "ProductId": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "format": "int64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "responses": {
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Business rule violated: `invalid_transition`, `insufficient_stock`, or `product_not_found`\n(a product of the order no longer exists).\n"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Not found, or not owned by the current shop"
+      },
+      "TooManyRequests": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Rate limit reached (`rate_limited`), retry after the number of seconds in `Retry-After`",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds to wait",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Missing or invalid token"
+      },
+      "ValidationError": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Invalid request body (for example, missing `reason` on cancel)"
+      }
+    },
+    "schemas": {
+      "Balance": {
+        "properties": {
+          "available": {
+            "description": "Sum of all balance entries, so'm",
+            "type": "integer"
+          },
+          "commission": {
+            "description": "Sum of `commission` entries (negative), so'm",
+            "type": "integer"
+          },
+          "earned": {
+            "description": "Sum of `sale` entries, so'm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "available",
+          "earned",
+          "commission"
+        ],
+        "type": "object"
+      },
+      "BalanceEntry": {
+        "properties": {
+          "amount": {
+            "description": "Signed amount in so'm (sale \u003e 0, commission \u003c= 0, payout \u003c 0)",
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "order_id": {
+            "description": "The order the money belongs to; null for a payout",
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "sale",
+              "commission",
+              "payout"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "type",
+          "amount",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BalanceEntryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BalanceEntry"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "type": "object"
+      },
+      "Category": {
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "description": "Null for a top-level category, two levels in total",
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parent_id"
+        ],
+        "type": "object"
+      },
+      "CategoryList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CreateProductForm": {
+        "description": "The fields of `CreateProductRequest` as form fields, plus the images.",
+        "properties": {
+          "category_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "photos": {
+            "description": "Images (jpeg, png or webp, 5 MB each). The first one is the cover.",
+            "items": {
+              "format": "binary",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "price": {
+            "format": "int64",
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sku": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "stock": {
+            "default": 0,
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "title",
+          "price",
+          "sku"
+        ],
+        "type": "object"
+      },
+      "CreateProductRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "price": {
+            "description": "so'm",
+            "format": "int64",
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sku": {
+            "description": "Unique within the shop",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "stock": {
+            "default": 0,
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "title",
+          "price",
+          "sku"
+        ],
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "properties": {
+          "revenue_30d": {
+            "description": "Sum of delivered order totals in the last 30 days (today and 29 days before), so'm",
+            "format": "int64",
+            "type": "integer"
+          },
+          "revenue_7d": {
+            "description": "Sum of delivered order totals in the last 7 days (today and 6 days before), so'm",
+            "format": "int64",
+            "type": "integer"
+          },
+          "today_orders": {
+            "description": "Orders created today in the business time zone, in any status",
+            "type": "integer"
+          },
+          "top_products": {
+            "description": "Best sellers of the last 30 days; `[]` when nothing was delivered",
+            "items": {
+              "$ref": "#/components/schemas/TopProduct"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "waiting_for_action": {
+            "description": "Orders the seller still has to act on, in status `new`, `accepted` or `packed`",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "today_orders",
+          "waiting_for_action",
+          "revenue_7d",
+          "revenue_30d",
+          "top_products"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "code": {
+            "example": "invalid_transition",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "Order": {
+        "properties": {
+          "buyer_name": {
+            "type": "string"
+          },
+          "buyer_phone": {
+            "type": "string"
+          },
+          "cancel_reason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivery_address": {
+            "type": "string"
+          },
+          "history": {
+            "description": "Every status change, oldest first. An order created by the dev endpoint starts with one row\nfrom `null` to `new`; orders that were inserted some other way can have no rows yet.\n",
+            "items": {
+              "$ref": "#/components/schemas/OrderHistoryEntry"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array"
+          },
+          "number": {
+            "example": "#100245",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "status_changed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total": {
+            "description": "Sum of price × quantity in so'm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "buyer_name",
+          "buyer_phone",
+          "delivery_address",
+          "items",
+          "total",
+          "created_at",
+          "status_changed_at",
+          "history"
+        ],
+        "type": "object"
+      },
+      "OrderHistoryEntry": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "from_status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "reason": {
+            "description": "The cancel reason, null for other changes",
+            "nullable": true,
+            "type": "string"
+          },
+          "to_status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          }
+        },
+        "required": [
+          "from_status",
+          "to_status",
+          "reason",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "OrderItem": {
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "price": {
+            "description": "Unit price snapshot in so'm",
+            "type": "integer"
+          },
+          "product_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": {
+            "description": "Title snapshot taken at order time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "title",
+          "price",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "OrderPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderSummary"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "type": "object"
+      },
+      "OrderStatus": {
+        "enum": [
+          "new",
+          "accepted",
+          "packed",
+          "handed_to_courier",
+          "delivered",
+          "cancelled"
+        ],
+        "type": "string"
+      },
+      "OrderSummary": {
+        "description": "Order without items, used in lists",
+        "properties": {
+          "buyer_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "buyer_name",
+          "total",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "Product": {
+        "properties": {
+          "category_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "photos": {
+            "$ref": "#/components/schemas/ProductPhotos"
+          },
+          "price": {
+            "description": "so'm",
+            "format": "int64",
+            "type": "integer"
+          },
+          "reserved": {
+            "type": "integer"
+          },
+          "shop_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProductStatus",
+            "description": "A new product is a `draft`."
+          },
+          "stock": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shop_id",
+          "category_id",
+          "title",
+          "description",
+          "price",
+          "sku",
+          "stock",
+          "reserved",
+          "status",
+          "photos",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ProductPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ProductPhotos": {
+        "description": "URLs of the product's photos, the first one is the cover. Open them directly (no token), for example\n`/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp`. `[]` when there are none.\n",
+        "example": [
+          "/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 5,
+        "type": "array"
+      },
+      "ProductStatus": {
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "description": "At most 72 bytes, bcrypt ignores the rest",
+            "maxLength": 72,
+            "minLength": 8,
+            "type": "string"
+          },
+          "shop_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "shop_name"
+        ],
+        "type": "object"
+      },
+      "Shop": {
+        "properties": {
+          "contact_phone": {
+            "example": "+998901234567",
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "logo_url": {
+            "maxLength": 2048,
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "pickup_address": {
+            "maxLength": 300,
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description"
+        ],
+        "type": "object"
+      },
+      "ShopUpdate": {
+        "properties": {
+          "contact_phone": {
+            "description": "7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it.",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "logo_url": {
+            "description": "http or https URL. Empty clears it.",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "pickup_address": {
+            "maxLength": 300,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "StockUpdateRequest": {
+        "additionalProperties": false,
+        "example": {
+          "expected_stock": 10,
+          "stock": 12
+        },
+        "properties": {
+          "expected_stock": {
+            "description": "The stock the seller saw before editing",
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stock": {
+            "description": "New absolute stock",
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stock",
+          "expected_stock"
+        ],
+        "type": "object"
+      },
+      "TokenResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "description": "HS256 JWT carrying seller_id and shop_id, sent as `Authorization Bearer`",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "TopProduct": {
+        "properties": {
+          "product_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "quantity_sold": {
+            "description": "Units in orders delivered in the last 30 days",
+            "format": "int64",
+            "type": "integer"
+          },
+          "revenue": {
+            "description": "Sum of price at the time of the order times quantity for those units, so'm",
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "description": "Current title of the product",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "title",
+          "quantity_sold",
+          "revenue"
+        ],
+        "type": "object"
+      },
+      "TransitionRequest": {
+        "properties": {
+          "reason": {
+            "description": "Required when `to` is `cancelled`",
+            "minLength": 1,
+            "type": "string"
+          },
+          "to": {
+            "$ref": "#/components/schemas/OrderStatus"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "type": "object"
+      },
+      "UpdateProductForm": {
+        "description": "The fields of `UpdateProductRequest` as form fields, plus the photo changes.",
+        "properties": {
+          "category_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "keep_photos": {
+            "description": "Current photo URLs that stay, in the order wanted. Omit the field to keep all of them,\nsend it empty to remove them all.\n",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "photos": {
+            "description": "New images, added after the kept photos. At most 5 photos in the end.",
+            "items": {
+              "format": "binary",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "price": {
+            "format": "int64",
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sku": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "description": "Kept as is when omitted",
+            "enum": [
+              "draft",
+              "active"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "title",
+          "price",
+          "sku"
+        ],
+        "type": "object"
+      },
+      "UpdateProductRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "price": {
+            "format": "int64",
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sku": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "description": "Kept as is when omitted",
+            "enum": [
+              "draft",
+              "active"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "title",
+          "price",
+          "sku"
+        ],
+        "type": "object"
+      },
+      "UploadedImage": {
+        "properties": {
+          "content_type": {
+            "enum": [
+              "image/webp"
+            ],
+            "type": "string"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "size": {
+            "description": "Bytes of the stored file",
+            "type": "integer"
+          },
+          "url": {
+            "example": "/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp",
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "url",
+          "content_type",
+          "size",
+          "width",
+          "height"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Seller Panel API: sellers sign up with email and password, manage their shop and products,\nprocess orders, see their balance, and see the dashboard.\n\n**Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as\n`Authorization: Bearer \u003ctoken\u003e`. Every other endpoint needs it, and a seller only ever sees\nthe data of their own shop.\n\n**Conventions.**\n- JSON with `snake_case` fields. Ids are integers. Money is an integer in so'm, never a float.\n- Errors are `{\"code\": \"...\", \"message\": \"...\"}`, also for unknown routes (`404 not_found`)\n  and wrong methods (`405 method_not_allowed`, with an `Allow` header).\n- Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.\n  A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer is a 400.\n- An optional value that is not set is `null` when its column can be null (for example `logo_url`),\n  and `\"\"` for text that always has a value (for example a product `description`).\n- Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,\n  per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.\n\n**Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.\n`POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker\nCompose default); otherwise it answers 404 like any unknown route.\n",
+    "title": "Seller Panel API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Token for the seller"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Wrong email or password (`invalid_credentials`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [],
+        "summary": "Log in with email and password and return a token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Seller and shop created"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Email already registered (`email_taken`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [],
+        "summary": "Create a seller with their shop and return a token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/balance": {
+      "get": {
+        "description": "`available` is the sum of all balance entries (sale + commission + payout).\nCommission is `COMMISSION_PERCENT` (10 by default) of each delivered order total.\nA shop with no entries gets zeros. Rules are in docs/DECISIONS.md (D7).\n",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description": "Balance"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "Current balance of the shop",
+        "tags": [
+          "Balance"
+        ]
+      }
+    },
+    "/balance/entries": {
+      "get": {
+        "description": "Entries are ordered by `created_at`, then `id`, newest first. `page_size` above 100 is\nlowered to 100. A `page` above 1 000 000 or a value that is not an integer is a 400.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceEntryPage"
+                }
+              }
+            },
+            "description": "A page of balance entries"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "Balance history (newest first)",
+        "tags": [
+          "Balance"
+        ]
+      }
+    },
+    "/categories": {
+      "get": {
+        "description": "Read only and the same for every seller. Top-level categories have `parent_id: null`.\nEach parent comes before its children.\n",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryList"
+                }
+              }
+            },
+            "description": "All categories"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "The category tree as a flat list",
+        "tags": [
+          "Catalog"
+        ]
+      }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "description": "Days are calendar days in the business time zone (`BUSINESS_TIMEZONE`, `Asia/Tashkent` by default),\nnot in UTC. \"Today\" runs from 00:00 to 24:00 in that zone, \"last 7 days\" is today and the 6 days\nbefore it, and \"last 30 days\" is today and the 29 days before it.\n\n- `today_orders`: orders created today, in any status.\n- `waiting_for_action`: orders in `new`, `accepted` or `packed`, whatever their age.\n- `revenue_7d`, `revenue_30d`: sum of the `total` of orders that became `delivered` in the window,\n  before commission. Cancelled orders never count.\n- `top_products`: up to 5 products by units in orders delivered in the last 30 days, most units first,\n  then most revenue, then lowest `product_id`. `title` is the current title of the product.\n\nA shop with no orders gets zeros and `top_products: []`, not 404. Rules are in docs/DECISIONS.md (D10).\n",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "newShop": {
+                    "summary": "A shop without orders",
+                    "value": {
+                      "revenue_30d": 0,
+                      "revenue_7d": 0,
+                      "today_orders": 0,
+                      "top_products": [],
+                      "waiting_for_action": 0
+                    }
+                  },
+                  "shopWithSales": {
+                    "summary": "A shop with orders",
+                    "value": {
+                      "revenue_30d": 12000000,
+                      "revenue_7d": 4500000,
+                      "today_orders": 4,
+                      "top_products": [
+                        {
+                          "product_id": 12,
+                          "quantity_sold": 5,
+                          "revenue": 7500000,
+                          "title": "Phone Pro"
+                        },
+                        {
+                          "product_id": 7,
+                          "quantity_sold": 3,
+                          "revenue": 150000,
+                          "title": "Phone case"
+                        }
+                      ],
+                      "waiting_for_action": 2
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            },
+            "description": "Dashboard summary"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "summary": "Home page numbers for the current shop",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/dev/simulate-order": {
+      "post": {
+        "description": "Development only, there is no buyer app, so this stands in for one. It picks 1 to 3 of the shop's\nactive products that have available stock, a quantity of at most 3 (and at most what is available)\nfor each, and a fake buyer. It does not reserve stock: accepting the order does.\nNot available when `APP_ENV` is `production`: the route does not exist and the answer is 404.\n",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            },
+            "description": "The created order, with its first history row (from `null` to `new`)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The shop has no active product with available stock (`no_products_to_order`)"
+          }
+        },
+        "summary": "Create a random `new` order from the shop's active products",
+        "tags": [
+          "Dev"
+        ]
+      }
+    },
+    "/orders": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OrderStatus"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderPage"
+                }
+              }
+            },
+            "description": "A page of orders"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "List orders of the current shop",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrderId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            },
+            "description": "The order"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Get one order with its items and status history",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}/transition": {
+      "post": {
+        "description": "Runs in one transaction: either the status and every side effect change, or nothing does.\nAllowed transitions follow the status machine in docs/DOMAIN.md:\n`new → accepted → packed → handed_to_courier → delivered`, and `cancelled`\nfrom `new`, `accepted` or `packed`.\n- `accepted` reserves stock (fails with 409 `insufficient_stock` if available \u003c quantity).\n- `cancelled` releases reserved stock and requires `reason`.\n- `delivered` deducts stock and writes `sale` and `commission` balance entries.\nAny other transition is rejected with 409 `invalid_transition`.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrderId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            },
+            "description": "The order after the transition"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "summary": "Move an order to the next status",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/products": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Case-insensitive search in title and SKU",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProductStatus"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPage"
+                }
+              }
+            },
+            "description": "A page of products"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "List the products of the current shop, newest first",
+        "tags": [
+          "Products"
+        ]
+      },
+      "post": {
+        "description": "A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).\n\nTwo request formats:\n- `application/json`: the fields only, a product without photos.\n- `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`\n  (jpeg, png or webp, 5 MB each). The first image is the cover.\n\nThe product and its photos are saved together: when anything fails (a bad field, a file that is not an\nimage, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP\nand scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts\nagainst the same per shop limit as uploads (20 a minute by default); a JSON request does not.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequest"
+              }
+            },
+            "multipart/form-data": {
+              "encoding": {
+                "photos": {
+                  "contentType": "image/jpeg, image/png, image/webp"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "The created product, `photos` has the URLs of the stored images"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid field, an unknown or repeated form field, more than 5 photos, an empty file or a file that is not a\ndecodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)\n"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "SKU already used in this shop (`sku_taken`)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A photo is larger than 5 MB (`file_too_large`)"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A file is not jpeg, png or webp (`unsupported_media_type`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Too many images are being processed (`busy`), retry after the seconds in `Retry-After`",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a product in the current shop, with its photos",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProductId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "The product"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Get one product",
+        "tags": [
+          "Products"
+        ]
+      },
+      "put": {
+        "description": "Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.\nArchived products cannot be edited.\n\nSame two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`\nrequest changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order\nwanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;\nan empty `keep_photos` removes them all. At most 5 photos in the end.\n\nAll or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are\nno longer listed are deleted from the server once the product is saved.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProductId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductRequest"
+              }
+            },
+            "multipart/form-data": {
+              "encoding": {
+                "photos": {
+                  "contentType": "image/jpeg, image/png, image/webp"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "The updated product"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of\nthis product, more than 5 photos in the end, or a file that is not a decodable image (`validation_error`);\na body that is not valid JSON or multipart (`invalid_body`)\n"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`sku_taken` or `product_archived`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A photo is larger than 5 MB (`file_too_large`)"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A file is not jpeg, png or webp (`unsupported_media_type`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Too many images are being processed (`busy`), retry after the seconds in `Retry-After`",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace the editable fields and change the photos of a product",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{id}/archive": {
+      "post": {
+        "description": "Hides it from new orders and keeps its history. Archiving an archived product returns it unchanged.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProductId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "The archived product"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Archive a product",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{id}/stock": {
+      "patch": {
+        "description": "Rules are in docs/DECISIONS.md (D5).\n- `stock` is the new absolute quantity (0–1 000 000), so a retried request gives the same result.\n- `expected_stock` is the stock the seller saw; if it changed meanwhile, nothing is written (409 `stock_changed`).\n- `stock` cannot go below `reserved` (409 `stock_below_reserved`); archived products are refused (409 `product_archived`).\n- A product of another shop returns 404, the same as a missing one.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProductId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "The product with its new stock, the same shape as every other product endpoint"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "stock_changed",
+                  "message": "stock was changed since you opened it; reload and try again"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`stock_changed` (reload the product and try again), `stock_below_reserved` or `product_archived`.\n"
+          }
+        },
+        "summary": "Set the stock of a product from the product list",
+        "tags": [
+          "Stock"
+        ]
+      }
+    },
+    "/shop": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shop"
+                }
+              }
+            },
+            "description": "The shop"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Get the current seller's shop profile",
+        "tags": [
+          "Shop"
+        ]
+      },
+      "put": {
+        "description": "Replaces all editable fields. An empty optional field clears the stored value.\nThe shop is taken from the token, never from the request.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Shop"
+                }
+              }
+            },
+            "description": "The updated shop"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "summary": "Replace the shop profile",
+        "tags": [
+          "Shop"
+        ]
+      }
+    },
+    "/uploads": {
+      "post": {
+        "description": "`multipart/form-data` with one image in the field `file`: jpeg, png or webp, at most 5 MB and 20 megapixels.\nThe type is checked from the file content, not from its name or `Content-Type`.\nThe image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,\nand re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.\nUse the returned `url` in `photos` of a product (the shop `logo_url` takes it too). Opening the `url` in a\nbrowser needs no token: nginx serves the files straight from the uploads volume, the API does not.\nLimited per shop (20 uploads a minute by default); when the server is processing many images\nat once the answer is 503 `busy` with `Retry-After`.\n",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadedImage"
+                }
+              }
+            },
+            "description": "The stored image"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No `file` field, empty file, a file that is not a decodable image, or more than 20 megapixels (`validation_error`); a broken multipart body (`invalid_body`)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The file is larger than 5 MB (`file_too_large`)"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The request is not `multipart/form-data`, or the file is not jpeg, png or webp (`unsupported_media_type`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Too many images are being processed (`busy`), retry after the seconds in `Retry-After`",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Upload an image, it is stored as WebP",
+        "tags": [
+          "Uploads"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Through the proxy, the same address the app uses",
+      "url": "/api"
+    }
+  ]
+}
