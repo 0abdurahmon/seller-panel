@@ -47,7 +47,13 @@ func (s *server) shopIDOf(sel seller) int64 {
 // Orders cannot be delivered through the API yet, so the rows go in directly.
 func (s *server) deliverOrder(shopID, total int64, at time.Time) {
 	s.t.Helper()
-	order := time.Now().UnixNano()/1000 + counter.Add(1)
+	var order int64
+	if err := s.pool.QueryRow(context.Background(),
+		`INSERT INTO orders (shop_id, status, buyer_name, buyer_phone, delivery_address, total, created_at, status_changed_at)
+		 VALUES ($1, 'delivered', 'E2E buyer', '+998901234567', 'Tashkent', $2, $3, $3) RETURNING id`,
+		shopID, total, at).Scan(&order); err != nil {
+		s.t.Fatal(err)
+	}
 	for _, e := range []struct {
 		typ    string
 		amount int64
