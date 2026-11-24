@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
@@ -64,10 +65,11 @@ func run(logger *slog.Logger) error {
 	}
 
 	router := httpapi.NewRouter(httpapi.Deps{
-		Auth:   auth.NewHandler(authSvc),
-		Shop:   shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
-		Tokens: tokens,
-		Stock:  stock.NewHandler(stockSvc),
+		Auth:    auth.NewHandler(authSvc),
+		Shop:    shop.NewHandler(shop.NewService(shop.NewPgRepository(pool))),
+		Catalog: catalog.NewHandler(catalog.NewService(catalog.NewPgRepository(pool))),
+		Tokens:  tokens,
+		Stock:   stock.NewHandler(stockSvc),
 	})
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

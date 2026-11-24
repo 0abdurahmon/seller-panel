@@ -3,8 +3,8 @@ info:
   title: Seller Panel API
   version: 0.1.0
   description: |
-    Contract for auth, shop, orders, dashboard, balance and the stock change (issues #10, #11, #51, D5).
-    Categories and products are added with their features.
+    Contract for auth, shop, categories, orders, dashboard, balance and the stock change (issues #10, #11, #51, #72, D5).
+    Products are added with their feature.
     Errors are `{code, message}`. Lists take `page` and `page_size`.
     All money fields are integers in so'm (no floats).
 servers:
@@ -66,6 +66,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /categories:
+    get:
+      tags: [Catalog]
+      summary: The category tree as a flat list
+      description: |
+        Read only and the same for every seller. Top-level categories have `parent_id: null`.
+        Each parent comes before its children.
+      responses:
+        '200':
+          description: All categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /orders:
     get:
@@ -334,6 +351,30 @@ components:
         default: 20
 
   schemas:
+    Category:
+      type: object
+      required: [id, name, parent_id]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Null for a top-level category, two levels in total
+
+    CategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+
     RegisterRequest:
       type: object
       required: [email, password, shop_name]

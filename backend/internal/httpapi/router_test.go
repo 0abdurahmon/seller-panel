@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/catalog"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 )
@@ -30,10 +31,11 @@ func newTestRouter(t *testing.T) http.Handler {
 	}
 	shopRepo := &fakeShopRepository{}
 	return NewRouter(Deps{
-		Auth:   auth.NewHandler(svc),
-		Shop:   shop.NewHandler(shop.NewService(shopRepo)),
-		Tokens: tokens,
-		Stock:  stock.NewHandler(stockSvc),
+		Auth:    auth.NewHandler(svc),
+		Shop:    shop.NewHandler(shop.NewService(shopRepo)),
+		Catalog: catalog.NewHandler(catalog.NewService(fakeCatalogRepository{})),
+		Tokens:  tokens,
+		Stock:   stock.NewHandler(stockSvc),
 	})
 }
 
@@ -92,6 +94,27 @@ func TestUnknownRouteIs404(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNotFound)
 	}
+}
+
+func TestCategoriesRequireToken(t *testing.T) {
+	srv := httptest.NewServer(newTestRouter(t))
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/categories")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+type fakeCatalogRepository struct{}
+
+func (fakeCatalogRepository) List(context.Context) ([]catalog.Category, error) {
+	return []catalog.Category{{ID: 1, Name: "Electronics"}}, nil
 }
 
 type fakeAuthRepository struct {

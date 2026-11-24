@@ -32,7 +32,7 @@ A feature is a package `backend/internal/<feature>` with these files and no othe
 
 Rules:
 1. Layers go one way: handler, service, repository. Features never import each other's concrete types.
-2. Every repository method takes `shopID` first after `ctx` and filters by it. Another shop's row is `ErrNotFound`, never 403. `auth` is the exception, it runs before a shop exists.
+2. Every repository method takes `shopID` first after `ctx` and filters by it. Another shop's row is `ErrNotFound`, never 403. `auth` (runs before a shop exists) and `catalog` (shared reference data) are the exceptions.
 3. The shop comes from `auth.MustPrincipal(w, r)` in the handler, never from the body, query or URL.
 4. Validate and trim in the service before any SQL. Database `CHECK` and `UNIQUE` constraints are the second line.
 5. Money is `int64` in so'm. No floats. Time is UTC `timestamptz`.
