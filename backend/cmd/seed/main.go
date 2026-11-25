@@ -10,10 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0abdurahmon/seller-panel/backend/internal/app"
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/seed"
+	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
 func main() {
@@ -46,7 +48,14 @@ func run() error {
 	}
 	defer pool.Close()
 
+	uploads, err := upload.NewFSRepository(cfg.UploadDir)
+	if err != nil {
+		return err
+	}
+	defer uploads.Close()
+
 	res, err := seed.Run(ctx, pool, seed.Options{
+		Photos:            app.NewProductPhotos(upload.NewService(uploads, cfg.UploadPublicURL)),
 		Now:               time.Now(),
 		Loc:               cfg.BusinessLocation,
 		CommissionPercent: cfg.CommissionPercent,

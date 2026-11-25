@@ -12,6 +12,11 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
+// NewProductPhotos is the product photo store of the app, for commands that create products.
+func NewProductPhotos(uploads *upload.Service) product.PhotoStore {
+	return productPhotos{uploads: uploads}
+}
+
 // productPhotos lets the product feature store images through the upload feature without importing it:
 // it implements product.PhotoStore and translates upload errors into product errors.
 type productPhotos struct {

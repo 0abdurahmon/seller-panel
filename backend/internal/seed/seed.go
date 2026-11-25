@@ -33,6 +33,8 @@ type Options struct {
 	// Loc is the business time zone that defines the days orders are placed on.
 	Loc               *time.Location
 	CommissionPercent int
+	// Photos stores the picture of every demo product.
+	Photos product.PhotoStore
 }
 
 // Result tells what a run did.
@@ -61,6 +63,9 @@ func Run(ctx context.Context, pool *pgxpool.Pool, o Options) (Result, error) {
 	o = withDefaults(o)
 	if o.Loc == nil {
 		return Result{}, errors.New("seed: the business time zone is required")
+	}
+	if o.Photos == nil {
+		return Result{}, errors.New("seed: the photo store is required")
 	}
 	svc, err := newServices(pool, o)
 	if err != nil {
@@ -144,13 +149,13 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 		tokens:  tokens,
 		shop:    shop.NewService(shop.NewPgRepository(pool), noPhotos{}),
 		catalog: catalog.NewService(catalog.NewPgRepository(pool)),
-		product: product.NewService(product.NewPgRepository(pool), noPhotos{}),
+		product: product.NewService(product.NewPgRepository(pool), o.Photos),
 		stock:   stockSvc,
 		order:   orderSvc,
 	}, nil
 }
 
-// noPhotos is the image store of the seed: demo products and the shop have no images, so nothing is ever saved.
+// noPhotos is the logo store of the seed: the demo shop has no logo, so nothing is ever saved.
 type noPhotos struct{}
 
 func (noPhotos) Save(context.Context, int64, io.Reader) (string, error) {
@@ -172,7 +177,7 @@ func createProducts(ctx context.Context, svc *services, shopID int64) (map[strin
 	}
 
 	created := make(map[string]product.Product, len(products))
-	for _, spec := range products {
+	for i, spec := range products {
 		cat, ok := categoryID[spec.category]
 		if !ok {
 			return nil, fmt.Errorf("category %q is not in the database", spec.category)
@@ -184,10 +189,14 @@ func createProducts(ctx context.Context, svc *services, shopID int64) (map[strin
 		if spec.stock != 0 {
 			stockLevel = spec.stock
 		}
+		photo, err := placeholder(i)
+		if err != nil {
+			return nil, fmt.Errorf("draw the photo of %s: %w", spec.sku, err)
+		}
 		p, err := svc.product.Create(ctx, shopID, product.CreateInput{
 			CategoryID: cat, Title: spec.title, Description: spec.description,
 			Price: spec.price, SKU: spec.sku, Stock: stockLevel, Status: status,
-		}, nil)
+		}, [][]byte{photo})
 		if err != nil {
 			return nil, fmt.Errorf("create product %s: %w", spec.sku, err)
 		}

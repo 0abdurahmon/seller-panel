@@ -156,7 +156,13 @@ func (r *PgRepository) List(ctx context.Context, shopID int64, f ListFilter) ([]
 	}
 	const where = `shop_id = $1
 		  AND ($2::product_status IS NULL OR status = $2)
-		  AND ($3::bigint IS NULL OR category_id = $3)
+		  AND ($3::bigint IS NULL OR category_id IN (
+		      WITH RECURSIVE tree AS (
+		          SELECT id FROM categories WHERE id = $3
+		          UNION
+		          SELECT c.id FROM categories c JOIN tree ON c.parent_id = tree.id
+		      )
+		      SELECT id FROM tree))
 		  AND ($4::text IS NULL OR title ILIKE '%' || $4 || '%' OR sku ILIKE '%' || $4 || '%')`
 
 	var total int

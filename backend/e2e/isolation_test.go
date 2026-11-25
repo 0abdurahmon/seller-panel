@@ -83,7 +83,7 @@ func TestSameSKUIsAllowedInDifferentShops(t *testing.T) {
 	category := s.categoryID(a.token)
 	sku := uniqueSKU()
 
-	s.expect(s.do(http.MethodPost, "/products", a.token, productBody(category, sku, 1)), http.StatusCreated, "")
-	s.expect(s.do(http.MethodPost, "/products", b.token, productBody(category, sku, 1)), http.StatusCreated, "")
-	s.expect(s.do(http.MethodPost, "/products", a.token, productBody(category, sku, 1)), http.StatusConflict, "sku_taken")
+	s.expect(s.postProduct(a.token, productBody(category, sku, 1)), http.StatusCreated, "")
+	s.expect(s.postProduct(b.token, productBody(category, sku, 1)), http.StatusCreated, "")
+	s.expect(s.postProduct(a.token, productBody(category, sku, 1)), http.StatusConflict, "sku_taken")
 }
