@@ -192,3 +192,4 @@ Record every important decision here: what you chose, what else you considered, 
 ## D21 — Limits on request values
 - A list `page` is at most 1 000 000 on products, as on orders and balance entries; a larger one is `400 validation_error`. A huge page overflowed the SQL offset and answered `500`.
 - A cancel reason is at most 500 characters, counted after trimming. It is checked in the order service; there is no database constraint, so reasons saved earlier stay.
+- `DATABASE_URL` may carry the pool settings (`pool_max_conns` and the other `pool_*` parameters). The pool reads them; they are cut from the URL the migrations use, because PostgreSQL refuses them.
