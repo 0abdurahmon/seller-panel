@@ -26,11 +26,9 @@ type UpdateRequest struct {
 	PickupAddress string `json:"pickup_address"`
 }
 
-// LogoChange is what a request does to the logo. Add is a new image, Remove clears the logo,
-// neither keeps it; both at once is a validation error.
+// LogoChange is what a request does to the logo: Add is a new image, without it the logo stays.
 type LogoChange struct {
-	Add    []byte
-	Remove bool
+	Add []byte
 }
 
 // LogoStore turns image bytes into a stored file. Save converts and stores one image and returns its URL;

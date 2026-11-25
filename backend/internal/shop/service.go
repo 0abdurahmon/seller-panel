@@ -39,9 +39,6 @@ func (s *Service) Update(ctx context.Context, shopID int64, req UpdateRequest, l
 	if err != nil {
 		return Shop{}, err
 	}
-	if lc.Remove && lc.Add != nil {
-		return Shop{}, fmt.Errorf("%w: send a logo file or remove_logo, not both", ErrValidation)
-	}
 	current, err := s.repo.Get(ctx, shopID)
 	if err != nil {
 		return Shop{}, err
@@ -52,14 +49,11 @@ func (s *Service) Update(ctx context.Context, shopID int64, req UpdateRequest, l
 	}
 	p.LogoURL = old
 	saved := ""
-	switch {
-	case lc.Add != nil:
+	if lc.Add != nil {
 		if saved, err = s.logos.Save(ctx, shopID, bytes.NewReader(lc.Add)); err != nil {
 			return Shop{}, fmt.Errorf("logo: %w", err)
 		}
 		p.LogoURL = saved
-	case lc.Remove:
-		p.LogoURL = ""
 	}
 	updated, err := s.repo.Update(ctx, shopID, p)
 	if err != nil {

@@ -68,16 +68,17 @@ func TestShopLogoJourney(t *testing.T) {
 		t.Fatalf("replace: logo %v, old file on disk %v, %d files", got.LogoURL, s.onDisk(first), s.filesOnDisk())
 	}
 
-	// A multipart edit without a logo keeps it; remove_logo clears it and deletes the file.
+	// A multipart edit without a logo keeps it, and there is no way to remove it.
 	s.expect(s.putShop(a.token, shopParts("Renamed")...), http.StatusOK, "")
 	s.do(http.MethodGet, "/shop", a.token, nil).decode(&got)
 	if got.LogoURL == nil || s.filesOnDisk() != 1 {
 		t.Fatalf("a multipart edit without a logo lost it: %+v", got)
 	}
-	res = s.putShop(a.token, shopParts("Renamed", text("remove_logo", "true"))...)
-	s.expect(res, http.StatusOK, "")
-	if !strings.Contains(string(res.body), `"logo_url":null`) || s.filesOnDisk() != 0 {
-		t.Fatalf("remove: %s, %d files on disk", res.body, s.filesOnDisk())
+	kept := *got.LogoURL
+	s.expect(s.putShop(a.token, shopParts("Renamed", text("remove_logo", "true"))...), http.StatusBadRequest, "validation_error")
+	s.do(http.MethodGet, "/shop", a.token, nil).decode(&got)
+	if got.LogoURL == nil || *got.LogoURL != kept || !s.onDisk(kept) || s.filesOnDisk() != 1 {
+		t.Fatalf("a refused removal changed the logo: %+v, %d files on disk", got, s.filesOnDisk())
 	}
 }
 
@@ -98,12 +99,11 @@ func TestShopUpdateWithALogoIsAllOrNothing(t *testing.T) {
 		"a broken image":   shopParts("Changed", logoPart(png[:40])),
 		"an empty name":    {text("name", ""), logoPart(png)},
 		"a bad phone":      {text("name", "Changed"), text("contact_phone", "abc"), logoPart(png)},
-		"logo and remove":  shopParts("Changed", logoPart(png), text("remove_logo", "true")),
 		"a logo_url field": shopParts("Changed", text("logo_url", "https://evil.example.com/a.png")),
 	}
 	want := map[string]int{
 		"not an image": http.StatusUnsupportedMediaType, "a broken image": http.StatusBadRequest, "an empty name": http.StatusBadRequest,
-		"a bad phone": http.StatusBadRequest, "logo and remove": http.StatusBadRequest, "a logo_url field": http.StatusBadRequest,
+		"a bad phone": http.StatusBadRequest, "a logo_url field": http.StatusBadRequest,
 	}
 	for name, parts := range bad {
 		if res := s.putShop(a.token, parts...); res.status != want[name] {
