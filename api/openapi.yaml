@@ -17,7 +17,8 @@ info:
     - Errors are `{"code": "...", "message": "..."}`, also for unknown routes (`404 not_found`)
       and wrong methods (`405 method_not_allowed`, with an `Allow` header).
     - Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.
-      A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer is a 400.
+      A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer
+      and a `page` above 1 000 000 are `400 validation_error`.
     - An optional value that is not set is `null` when its column can be null (for example `logo_url`),
       and `""` for text that always has a value (for example a product `description`).
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
@@ -516,6 +517,9 @@ paths:
     get:
       tags: [Products]
       summary: List the products of the current shop, newest first
+      description: |
+        `page_size` above 100 is lowered to 100. A `page` above 1 000 000 or a value that is not an integer
+        is a `400 validation_error`.
       parameters:
         - name: q
           in: query
@@ -812,6 +816,7 @@ components:
       schema:
         type: integer
         minimum: 1
+        maximum: 1000000
         default: 1
     PageSize:
       name: page_size

@@ -17,6 +17,7 @@ const (
 	maxStock          = 1_000_000
 	defaultPageSize   = 20
 	maxPageSize       = 100
+	maxPage           = 1_000_000
 	maxPhotos         = 5
 	photoRequired     = "a product needs at least one photo"
 )
@@ -162,6 +163,9 @@ func (s *Service) List(ctx context.Context, shopID int64, f ListFilter) (Page, e
 	}
 	if f.Status != "" && !f.Status.valid() {
 		return Page{}, invalid("status must be draft, active or archived")
+	}
+	if f.Page > maxPage {
+		return Page{}, invalid("page must be at most %d", maxPage)
 	}
 	if f.Page < 1 {
 		f.Page = 1

@@ -146,6 +146,9 @@ func TestProductValidationAndConflicts(t *testing.T) {
 	s.expect(s.do(http.MethodGet, "/products/0", sel.token, nil), http.StatusNotFound, "not_found")
 	s.expect(s.do(http.MethodGet, "/products?status=sold", sel.token, nil), http.StatusBadRequest, "validation_error")
 	s.expect(s.do(http.MethodGet, "/products?page=x", sel.token, nil), http.StatusBadRequest, "validation_error")
+	s.expect(s.do(http.MethodGet, "/products?page=9223372036854775807", sel.token, nil), http.StatusBadRequest, "validation_error")
+	s.expect(s.do(http.MethodGet, "/products?page=1000001", sel.token, nil), http.StatusBadRequest, "validation_error")
+	s.expect(s.do(http.MethodGet, "/products?page=1000000&page_size=100", sel.token, nil), http.StatusOK, "")
 }
 
 func TestStockRules(t *testing.T) {

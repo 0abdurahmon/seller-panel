@@ -157,6 +157,7 @@ func TestHandlerStatusCodes(t *testing.T) {
 		{"update with stock field", http.MethodPut, "/products/1", createBody, 400, "invalid_body"},
 		{"archive missing", http.MethodPost, "/products/999/archive", "", 404, "not_found"},
 		{"list bad page", http.MethodGet, "/products?page=x", "", 400, "validation_error"},
+		{"list huge page", http.MethodGet, "/products?page=9223372036854775807", "", 400, "validation_error"},
 		{"list bad status", http.MethodGet, "/products?status=sold", "", 400, "validation_error"},
 		{"list bad category", http.MethodGet, "/products?category=x", "", 400, "validation_error"},
 	}

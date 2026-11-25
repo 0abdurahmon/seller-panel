@@ -188,3 +188,6 @@ Record every important decision here: what you chose, what else you considered, 
 - Why: it reverses the D2 trade-off without an SMS provider. Telegram is already the team's channel, costs nothing, and a bot can deliver codes. Password login stays so a seller who has not linked yet is not locked out.
 - Considered: SMS codes (needs a paid provider, and phone numbers must be verified), email codes (needs an SMTP service, and the email is already the login name), TOTP apps (the seller must set up an app, more friction for a shop owner), and a webhook instead of polling (needs a public HTTPS address, which the MVP deployment does not have).
 - Trade-off: the code is sent in plain Telegram chat and the seller must keep access to that account. A stolen Telegram account can sign in, which is why password login remains available and a relink replaces the chat.
+
+## D21 — Limits on request values
+- A list `page` is at most 1 000 000 on products, as on orders and balance entries; a larger one is `400 validation_error`. A huge page overflowed the SQL offset and answered `500`.

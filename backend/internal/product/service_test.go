@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 )
@@ -248,6 +249,19 @@ func TestListPagination(t *testing.T) {
 	beyond, _ := svc.List(ctx, 1, ListFilter{Page: 9, PageSize: 2})
 	if len(beyond.Items) != 0 || beyond.Items == nil {
 		t.Fatalf("beyond last page must be an empty slice: %+v", beyond.Items)
+	}
+}
+
+func TestListRefusesAHugePage(t *testing.T) {
+	svc := seedList(t)
+	for _, page := range []int{maxPage + 1, math.MaxInt} {
+		if _, err := svc.List(context.Background(), 1, ListFilter{Page: page, PageSize: 100}); !errors.Is(err, ErrValidation) {
+			t.Errorf("page %d: err = %v, want ErrValidation", page, err)
+		}
+	}
+	last, err := svc.List(context.Background(), 1, ListFilter{Page: maxPage, PageSize: 100})
+	if err != nil || len(last.Items) != 0 {
+		t.Fatalf("page %d = %+v, %v; want an empty page", maxPage, last, err)
 	}
 }
 
