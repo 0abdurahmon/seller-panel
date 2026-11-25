@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -12,7 +14,7 @@ import (
 )
 
 func TestServerTimeouts(t *testing.T) {
-	srv := newServer(":0", http.NotFoundHandler())
+	srv := newServer(":0", http.NotFoundHandler(), func() {})
 	if srv.ReadHeaderTimeout != 5*time.Second || srv.ReadTimeout != time.Minute || srv.IdleTimeout != 2*time.Minute {
 		t.Fatalf("read header %s, read %s, idle %s", srv.ReadHeaderTimeout, srv.ReadTimeout, srv.IdleTimeout)
 	}
@@ -62,7 +64,7 @@ func streamHandler(t *testing.T, hub *realtime.Hub) http.Handler {
 
 func TestReadTimeoutKeepsAStreamOpen(t *testing.T) {
 	hub := realtime.NewHub(1, 1)
-	srv := newServer("", streamHandler(t, hub))
+	srv := newServer("", streamHandler(t, hub), hub.Close)
 	srv.ReadTimeout = 100 * time.Millisecond
 	stream := openStream(t, serve(t, srv))
 
@@ -71,5 +73,20 @@ func TestReadTimeoutKeepsAStreamOpen(t *testing.T) {
 	line, err := stream.ReadString('\n')
 	if err != nil || line != "event: order.created\n" {
 		t.Fatalf("line = %q, %v; want the event after the read timeout", line, err)
+	}
+}
+
+func TestShutdownDoesNotWaitForOpenStreams(t *testing.T) {
+	hub := realtime.NewHub(1, 1)
+	srv := newServer("", streamHandler(t, hub), hub.Close)
+	stream := openStream(t, serve(t, srv))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown with an open stream: %v", err)
+	}
+	if line, err := stream.ReadString('\n'); !errors.Is(err, io.EOF) {
+		t.Fatalf("line = %q, %v; want the end of the stream", line, err)
 	}
 }

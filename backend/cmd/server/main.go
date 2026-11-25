@@ -57,7 +57,7 @@ func run(logger *slog.Logger) error {
 	}
 	defer func() { _ = application.Close() }()
 	application.Start(ctx)
-	srv := newServer(":"+cfg.Port, application.Handler)
+	srv := newServer(":"+cfg.Port, application.Handler, application.CloseStreams)
 
 	serverErr := make(chan error, 1)
 	go func() {
@@ -77,12 +77,14 @@ func run(logger *slog.Logger) error {
 }
 
 // There is no WriteTimeout: it would cut the order event streams.
-func newServer(addr string, handler http.Handler) *http.Server {
-	return &http.Server{
+func newServer(addr string, handler http.Handler, onShutdown func()) *http.Server {
+	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		IdleTimeout:       idleTimeout,
 	}
+	srv.RegisterOnShutdown(onShutdown)
+	return srv
 }

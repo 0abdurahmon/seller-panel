@@ -148,3 +148,24 @@ func TestOrderEventsNeedAToken(t *testing.T) {
 	s := newServer(t)
 	s.expect(s.do(http.MethodGet, "/orders/events", "", nil), http.StatusUnauthorized, "unauthorized")
 }
+
+func TestClosingTheAppEndsOrderStreams(t *testing.T) {
+	s := newServer(t)
+	sel := s.register()
+	_, open, cancel := s.openStream(sel.token)
+	defer cancel()
+
+	s.app.CloseStreams()
+	_, late, cancelLate := s.openStream(sel.token)
+	defer cancelLate()
+	for name, events := range map[string]<-chan sseEvent{"open stream": open, "stream opened later": late} {
+		select {
+		case ev, ok := <-events:
+			if ok {
+				t.Fatalf("%s got %+v", name, ev)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s did not end", name)
+		}
+	}
+}

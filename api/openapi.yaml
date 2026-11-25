@@ -245,7 +245,8 @@ paths:
         - `order.status_changed`: a `StatusChange`.
 
         A comment line `: ping` arrives every 25 seconds. Nothing is replayed, so after a reconnect reload
-        `GET /orders`. The stream ends when the token expires; open it again with a fresh token.
+        `GET /orders`. The stream ends when the token expires; open it again with a fresh token. It also ends
+        when the server shuts down; reconnect with a growing delay.
         At most 5 streams per shop, the next one gets `429 rate_limited` with `Retry-After`.
       responses:
         '200':
