@@ -2,10 +2,10 @@
 
 | Name | GitHub | Strongest at | Wants to learn | Owns (features) |
 |------|--------|--------------|----------------|-----------------|
-| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | Stock, Balance, Dashboard |
+| Nuriddin | @Nuriddin1999 | React, UI, PostgreSQL, Python | Go, backend, deep learning | **Stock**: `PATCH /products/{id}/stock` with a guard against stale edits, the PostgreSQL store, and reserve, release and commit of stock for orders<br>**Balance**: totals and paginated history, the `balance_entries` table and its endpoints<br>**Dashboard**: the summary endpoint (today, last 7 and 30 days, top products) with a business time zone<br>**Orders tables**: the migration for orders, items and status history<br>**Seed**: the `seed` command with a demo shop, 15 products and 30 orders |
 | Akbar | @iskanderovv | React, Next.js, PostgreSQL, CI/CD | Go | **Products**: model, validation, endpoints, the category tree, archive, search and filters, up to 5 photos saved with the product<br>**Images**: converting and storing images as WebP (`internal/upload`), used by product photos and the shop logo<br>**Infra**: Docker Compose, hardened images, nginx and rate limits, CI, smoke and end-to-end tests<br>**API docs**: the OpenAPI spec, Swagger UI at `/docs`, the spec as JSON at `/swagger`<br>**Backend conventions**: one shape for every feature, `AGENTS.md`, the rules for database tests |
-| Samandar | @01110011r | Distributed systems | Go | Auth, Shop profile, Orders |
-| Abdukhalil | @uicodee | Everything | Go | All frontend |
+| Samandar | @01110011r | Distributed systems | Go | **Auth**: sellers and shops in PostgreSQL, email and password sign-up and login with JWT, sign-in by a one-time code sent through Telegram<br>**Shop profile**: `GET` and `PUT /shop` (name, description, phone, pickup address; the logo is a file in `PUT /shop`)<br>**Orders**: the domain, with the status machine, stock reservation and release, and the sale and commission entries on delivery |
+| Abdukhalil | @uicodee | Everything | Go | **All frontend** (`frontend/`)<br>**Foundation**: aliases, Tailwind, the folder layout, shared UI components on shadcn<br>**App**: navigation and layout, sign-in and register on the real API<br>**Products screens**: the list with filters, details, create, edit, archive and activate, with photos |
 
 Orders is owned by Samandar. Akbar built the PostgreSQL side and the routes (#97, #99) and Nuriddin the tables and the stock effects orders call (#93, #76), so ask them about those parts, but changes go through Samandar.
 
