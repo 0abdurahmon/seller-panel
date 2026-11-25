@@ -86,6 +86,11 @@ export const OrdersPage = () => {
   // so by the time the reader gets there the rows are already in.
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = orders;
+  // The last page is usually shorter than a full one: show as many rows as are really coming.
+  const loadingMore =
+    isFetchingNextPage && orders.data
+      ? Math.max(0, Math.min(PAGE_SIZE, orders.data.total - orders.data.items.length))
+      : 0;
   useEffect(() => {
     const node = sentinel.current;
     if (!node || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
@@ -137,6 +142,7 @@ export const OrdersPage = () => {
           <OrdersTable
             orders={orders.data?.items}
             isLoading={orders.isPending}
+            loadingMore={loadingMore}
             status={status}
             onOpenOrder={openOrder}
           />
@@ -148,9 +154,13 @@ export const OrdersPage = () => {
               </Button>
             </div>
           ) : (
-            <div ref={sentinel} className="py-2 text-center text-sm text-muted-foreground">
-              {orders.isFetchingNextPage && "Загружаем ещё…"}
-            </div>
+            <>
+              <div ref={sentinel} className="h-px" />
+              {/* The skeleton rows are only for the eyes; this says the same to a screen reader. */}
+              <p role="status" className="sr-only">
+                {loadingMore > 0 && `Загружаем ещё заказы: ${loadingMore}`}
+              </p>
+            </>
           )}
         </>
       )}
