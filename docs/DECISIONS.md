@@ -92,7 +92,8 @@ Record every important decision here: what you chose, what else you considered, 
 ## D13 — Sign-in with a Telegram code
 - A seller links a Telegram chat once: `POST /auth/telegram/link` (signed in) returns a `t.me` link with a one-time token valid 10 minutes. Opening it sends `/start <token>` to the bot, which stores the chat on the seller. The token is stored only as a SHA-256 hash and is deleted when used.
 - Sign-in: `POST /auth/request-code` sends a 6-digit code to the linked chat (valid 5 minutes, one code per 60 seconds, stored as a hash). `POST /auth/verify` returns the same `TokenResponse` as password login. A code works once and stops working after 5 wrong attempts. Verification is guarded like login (5 failures per IP and email in 15 minutes).
-- Answers do not reveal accounts: `request-code` always returns `202` for a known or unknown email, and sends nothing when there is no linked chat. Without `TELEGRAM_BOT_TOKEN` the two endpoints return `503 telegram_unavailable`, and password login is unaffected.
+- Without a linked chat, `request-code` answers `409 telegram_not_linked`, for an unknown email and for a known seller alike. The callers learn that a code cannot be sent, not whether the account exists. It does reveal whether an email has a linked chat, so the request-code limit (5 per IP and email in 15 minutes) stays. Without `TELEGRAM_BOT_TOKEN` the two endpoints return `503 telegram_unavailable`, and password login is unaffected.
+- Changed: the first version answered `202` for every email and sent nothing when there was no chat, so the UI could not tell the user why no code came. The silent answer is gone; the reason is in the answer now.
 - The bot gets updates by long polling (`getUpdates`) inside the backend process, so one backend instance must run per bot. Several instances would fight over updates. Switching to a webhook is the way to scale out.
 - Why: it reverses the D2 trade-off without an SMS provider. Telegram is already the team's channel, costs nothing, and a bot can deliver codes. Password login stays so a seller who has not linked yet is not locked out.
 - Considered: SMS codes (needs a paid provider, and phone numbers must be verified), email codes (needs an SMTP service, and the email is already the login name), TOTP apps (the seller must set up an app, more friction for a shop owner), and a webhook instead of polling (needs a public HTTPS address, which the MVP deployment does not have).
@@ -159,7 +160,6 @@ Record every important decision here: what you chose, what else you considered, 
 - A sweeper that deleted image files nothing refers to was tried and removed: it cleaned up the leftovers of a crash between writing a file and saving its row, but it deletes files on a timer, and a mistake in it would delete live images. A leftover is a few hundred kilobytes, so they stay. If disk use ever matters, a manual command that lists them first is safer than a timer.
 - The setting `RATE_LIMIT_UPLOADS_PER_MINUTE` is now `RATE_LIMIT_IMAGES_PER_MINUTE`: there is no upload endpoint any more, it limits the requests that save an image. Rename it in a local `.env` if it was set.
 
-
 ## D18 — Real-time order changes
 - Sellers get new orders and status changes as they happen. Transport: Server-Sent Events, `GET /orders/events`, `text/event-stream`, authenticated like every protected route. Events: `order.created` (the order summary, as in `GET /orders`) and `order.status_changed` (id, number, status, `status_changed_at`). Events carry only data of the caller's shop.
 - Fetch, not `EventSource`: the browser's `EventSource` cannot send an `Authorization` header, and a token in the URL would end up in logs. The frontend reads the stream with `fetch` and a `ReadableStream`.
@@ -172,3 +172,16 @@ Record every important decision here: what you chose, what else you considered, 
 - Scope for now: one backend instance, which matches D10. Moving to several instances means replacing the in-process hub with Postgres `LISTEN/NOTIFY` behind the same interface; the endpoint and the events stay the same.
 - Later, not in this decision: a Telegram message for each `order.created` to a seller who linked a chat (D10). It subscribes to the same hub and is its own issue.
 - Considered: polling every few seconds (simplest, but slower and more requests), WebSocket (two-way channel nobody needs), `LISTEN/NOTIFY` from the start (more moving parts for one instance).
+
+## D19 — Telegram alert for each new order
+- When a buyer's order is created, the seller's linked Telegram chat (D10) gets one message: order number, buyer name, total, and a reminder to open the panel. Nothing is sent for other events or for sellers without a linked chat.
+- The alert is a second publisher next to the realtime hub (D18). `Publish` only puts the alert on a queue of 100, so a slow Telegram never delays the request that created the order. One worker sends the queue in order. A full queue drops the alert and logs it.
+- No retries. A failed send is logged with the order number and not sent again, because a retry after a timeout could send the same message twice and the seller can always see the order in the panel.
+- The message contains the buyer's name and total, which the seller already sees in the panel. The buyer's phone and address are not sent.
+- Only one backend instance sends alerts (D10 polling). With several instances, the queue would live in each and alerts would double; the same switch to a shared bus as D18 solves both.
+## D20 — A product always has a photo, the category filter covers subcategories
+- The task asks for at least one photo, so `POST /products` refuses a product without one and `PUT /products/{id}` refuses to leave none. A create is therefore always `multipart/form-data`, a JSON body gets `400 validation_error`, and every create counts against the image rate limit. A JSON edit still works and keeps the photos.
+- Products saved before this rule have no photo: they can be read, sold and archived, and the next edit has to add one. The seed gives every demo product a freely licensed photo of its type, embedded in the binary (`backend/internal/seed/photos`, sources in `SOURCES.md`), and a one colour image where there is none.
+- `GET /products?category=` returns the category and all its subcategories, so filtering by a top category such as Electronics finds the phones.
+- Considered: asking for a photo only when a draft is activated (a product could be created in one JSON call, but the catalogue would hold products without photos), a database constraint (a row count across two tables needs a deferred trigger, the service rule is enough), filtering by the exact category only (a top category looked empty).
+

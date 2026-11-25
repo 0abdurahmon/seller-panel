@@ -3,6 +3,12 @@ package seed
 import (
 	"context"
 	"fmt"
+	goimage "image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +95,38 @@ func TestThePlanIsConsistent(t *testing.T) {
 	}
 }
 
+func TestEveryPhotoBelongsToAProductAndHasASource(t *testing.T) {
+	sources, err := os.ReadFile("photos/SOURCES.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	known := map[string]bool{}
+	for _, p := range products {
+		known[p.sku+".jpg"] = true
+	}
+	files, err := photos.ReadDir("photos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if !known[f.Name()] {
+			t.Errorf("%s belongs to no product", f.Name())
+		}
+		if !strings.Contains(string(sources), f.Name()) {
+			t.Errorf("%s has no entry in SOURCES.md", f.Name())
+		}
+	}
+	for i, p := range products {
+		data, err := productPhoto(p.sku, i)
+		if err != nil {
+			t.Fatalf("%s: %v", p.sku, err)
+		}
+		if _, _, err := goimage.DecodeConfig(strings.NewReader(string(data))); err != nil {
+			t.Errorf("%s: not an image: %v", p.sku, err)
+		}
+	}
+}
+
 func TestStepsFollowTheStatusMachine(t *testing.T) {
 	cases := []struct {
 		plan plannedOrder
@@ -166,10 +204,22 @@ func scalar[T any](t *testing.T, pool *pgxpool.Pool, sql string, args ...any) T 
 	return v
 }
 
+type countingPhotos struct{ saved int }
+
+func (p *countingPhotos) Save(_ context.Context, shopID int64, image io.Reader) (string, error) {
+	if _, _, err := goimage.Decode(image); err != nil {
+		return "", err
+	}
+	p.saved++
+	return fmt.Sprintf("/api/uploads/%d/%032d.webp", shopID, p.saved), nil
+}
+
+func (*countingPhotos) Remove(context.Context, int64, []string) {}
+
 func runSeed(t *testing.T, pool *pgxpool.Pool, email string) Result {
 	t.Helper()
 	res, err := Run(context.Background(), pool, Options{
-		Email: email, Now: seedNow, Loc: tashkent(t), CommissionPercent: 10,
+		Email: email, Now: seedNow, Loc: tashkent(t), CommissionPercent: 10, Photos: &countingPhotos{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -198,6 +248,10 @@ func TestRunCreatesAConsistentDemoShop(t *testing.T) {
 		if res.ByStatus[status] != want {
 			t.Errorf("result reports %d %s orders, want %d", res.ByStatus[status], status, want)
 		}
+	}
+	if got := scalar[int](t, pool, `SELECT count(*) FROM products p WHERE p.shop_id = $1
+		AND NOT EXISTS (SELECT 1 FROM product_photos ph WHERE ph.product_id = p.id)`, shop); got != 0 {
+		t.Errorf("%d products have no photo", got)
 	}
 	for status, want := range map[string]int{"active": 13, "draft": 1, "archived": 1} {
 		if got := scalar[int](t, pool, `SELECT count(*) FROM products WHERE shop_id = $1 AND status = $2::product_status`, shop, status); got != want {

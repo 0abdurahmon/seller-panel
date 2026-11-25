@@ -11,6 +11,8 @@ func validInput() CreateInput {
 	return CreateInput{CategoryID: 1, Title: "Phone X", Description: "Good phone", Price: 1_000_000, SKU: "PX-1", Stock: 10}
 }
 
+func onePhoto() [][]byte { return [][]byte{img(0)} }
+
 func newService() *Service {
 	return NewService(newMemRepository(), newFakePhotos())
 }
@@ -35,7 +37,7 @@ func TestCreateValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			in := validInput()
 			mutate(&in)
-			if _, err := newService().Create(context.Background(), 1, in, nil); !errors.Is(err, ErrValidation) {
+			if _, err := newService().Create(context.Background(), 1, in, onePhoto()); !errors.Is(err, ErrValidation) {
 				t.Fatalf("err = %v, want ErrValidation", err)
 			}
 		})
@@ -46,7 +48,7 @@ func TestCreateDefaultsAndTrims(t *testing.T) {
 	in := validInput()
 	in.Title = "  Phone X  "
 	in.SKU = " PX-1 "
-	p, err := newService().Create(context.Background(), 7, in, nil)
+	p, err := newService().Create(context.Background(), 7, in, onePhoto())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,13 +66,13 @@ func TestCreateDefaultsAndTrims(t *testing.T) {
 func TestSKUUniquePerShop(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	if _, err := svc.Create(ctx, 1, validInput(), nil); err != nil {
+	if _, err := svc.Create(ctx, 1, validInput(), onePhoto()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Create(ctx, 1, validInput(), nil); !errors.Is(err, ErrSKUTaken) {
+	if _, err := svc.Create(ctx, 1, validInput(), onePhoto()); !errors.Is(err, ErrSKUTaken) {
 		t.Fatalf("same shop err = %v, want ErrSKUTaken", err)
 	}
-	if _, err := svc.Create(ctx, 2, validInput(), nil); err != nil {
+	if _, err := svc.Create(ctx, 2, validInput(), onePhoto()); err != nil {
 		t.Fatalf("other shop must accept the same sku: %v", err)
 	}
 }
@@ -78,7 +80,7 @@ func TestSKUUniquePerShop(t *testing.T) {
 func TestOtherShopCannotTouchProduct(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput(), nil)
+	p, _ := svc.Create(ctx, 1, validInput(), onePhoto())
 
 	if _, err := svc.Get(ctx, 2, p.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("get err = %v, want ErrNotFound", err)
@@ -106,10 +108,10 @@ func TestGetRejectsNonPositiveID(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput(), nil)
+	p, _ := svc.Create(ctx, 1, validInput(), onePhoto())
 	other := validInput()
 	other.SKU = "OTHER"
-	if _, err := svc.Create(ctx, 1, other, nil); err != nil {
+	if _, err := svc.Create(ctx, 1, other, onePhoto()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -154,7 +156,7 @@ func TestUpdate(t *testing.T) {
 func TestArchive(t *testing.T) {
 	svc := newService()
 	ctx := context.Background()
-	p, _ := svc.Create(ctx, 1, validInput(), nil)
+	p, _ := svc.Create(ctx, 1, validInput(), onePhoto())
 
 	got, err := svc.Archive(ctx, 1, p.ID)
 	if err != nil || got.Status != StatusArchived {
@@ -174,7 +176,7 @@ func seedList(t *testing.T) *Service {
 	ctx := context.Background()
 	add := func(shop int64, title, sku string, cat int64, status Status) {
 		in := CreateInput{CategoryID: cat, Title: title, Price: 1000, SKU: sku, Status: status}
-		if _, err := svc.Create(ctx, shop, in, nil); err != nil {
+		if _, err := svc.Create(ctx, shop, in, onePhoto()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -269,11 +271,11 @@ func TestLengthLimitsCountCharacters(t *testing.T) {
 			svc := newService()
 			in := validInput()
 			tc.set(&in, strings.Repeat("ж", tc.limit))
-			if _, err := svc.Create(context.Background(), 1, in, nil); err != nil {
+			if _, err := svc.Create(context.Background(), 1, in, onePhoto()); err != nil {
 				t.Fatalf("%d characters: %v", tc.limit, err)
 			}
 			tc.set(&in, strings.Repeat("ж", tc.limit+1))
-			if _, err := svc.Create(context.Background(), 1, in, nil); !errors.Is(err, ErrValidation) {
+			if _, err := svc.Create(context.Background(), 1, in, onePhoto()); !errors.Is(err, ErrValidation) {
 				t.Fatalf("%d characters: err = %v, want ErrValidation", tc.limit+1, err)
 			}
 		})
@@ -297,7 +299,7 @@ func TestUpdateDoesNotOverwriteAConcurrentChange(t *testing.T) {
 	t.Run("a product archived meanwhile stays archived", func(t *testing.T) {
 		store := newFakePhotos()
 		svc := NewService(newMemRepository(), store)
-		p, err := svc.Create(ctx, 1, validInput(), nil)
+		p, err := svc.Create(ctx, 1, validInput(), onePhoto())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -310,14 +312,14 @@ func TestUpdateDoesNotOverwriteAConcurrentChange(t *testing.T) {
 			t.Fatalf("err = %v, want ErrArchived", err)
 		}
 		got, err := svc.Get(ctx, 1, p.ID)
-		if err != nil || got.Status != StatusArchived || len(store.live()) != 0 {
+		if err != nil || got.Status != StatusArchived || len(store.live()) != 1 {
 			t.Fatalf("status = %s, live = %v, err = %v", got.Status, store.live(), err)
 		}
 	})
 	t.Run("a photo added meanwhile stays", func(t *testing.T) {
 		store := newFakePhotos()
 		svc := NewService(newMemRepository(), store)
-		p, err := svc.Create(ctx, 1, validInput(), nil)
+		p, err := svc.Create(ctx, 1, validInput(), onePhoto())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -327,7 +329,7 @@ func TestUpdateDoesNotOverwriteAConcurrentChange(t *testing.T) {
 			}
 		}
 		got, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(1)}})
-		if err != nil || len(got.Photos) != 2 || len(store.live()) != 2 {
+		if err != nil || len(got.Photos) != 3 || len(store.live()) != 3 {
 			t.Fatalf("photos = %v, live = %v, err = %v", got.Photos, store.live(), err)
 		}
 	})
@@ -349,6 +351,43 @@ func TestUpdateDoesNotOverwriteAConcurrentChange(t *testing.T) {
 		got, err := svc.Get(ctx, 1, p.ID)
 		if err != nil || len(got.Photos) != maxPhotos || len(store.live()) != maxPhotos {
 			t.Fatalf("photos = %v, live = %v, err = %v", got.Photos, store.live(), err)
+		}
+	})
+}
+
+func TestProductAlwaysHasAPhoto(t *testing.T) {
+	ctx := context.Background()
+	up := UpdateInput{CategoryID: 1, Title: "New", Price: 5, SKU: "PX-1"}
+
+	t.Run("create without a photo is refused", func(t *testing.T) {
+		if _, err := newService().Create(ctx, 1, validInput(), nil); !errors.Is(err, ErrValidation) {
+			t.Fatalf("err = %v, want ErrValidation", err)
+		}
+	})
+	t.Run("update cannot remove the last photo", func(t *testing.T) {
+		store := newFakePhotos()
+		svc := NewService(newMemRepository(), store)
+		p, err := svc.Create(ctx, 1, validInput(), [][]byte{img(1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Keep: &[]string{}}); !errors.Is(err, ErrValidation) {
+			t.Fatalf("err = %v, want ErrValidation", err)
+		}
+		got, err := svc.Get(ctx, 1, p.ID)
+		if err != nil || len(got.Photos) != 1 || len(store.removed) != 0 {
+			t.Fatalf("photos = %v, removed = %v, err = %v", got.Photos, store.removed, err)
+		}
+	})
+	t.Run("the only photo can be replaced", func(t *testing.T) {
+		svc := newService()
+		p, err := svc.Create(ctx, 1, validInput(), [][]byte{img(1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Keep: &[]string{}, Add: [][]byte{img(2)}})
+		if err != nil || len(got.Photos) != 1 || got.Photos[0] == p.Photos[0] {
+			t.Fatalf("photos = %v, err = %v", got.Photos, err)
 		}
 	})
 }

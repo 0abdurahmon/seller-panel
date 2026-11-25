@@ -412,3 +412,43 @@ func TestPgFailedChangeStoresNothing(t *testing.T) {
 		t.Fatalf("product = %+v, err = %v", got, err)
 	}
 }
+
+func TestPgCategoryFilterIncludesSubcategories(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop := seedShop(t, pool)
+	parent, other := seedCategory(t, pool), seedCategory(t, pool)
+	child := seedSubcategory(t, pool, parent)
+	grandchild := seedSubcategory(t, pool, child)
+	for sku, category := range map[string]int64{"P": parent, "C": child, "G": grandchild, "O": other} {
+		if _, err := repo.Create(ctx, shop, newProduct(category, sku)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		category int64
+		want     int
+	}{
+		"parent":     {parent, 3},
+		"child":      {child, 2},
+		"grandchild": {grandchild, 1},
+		"unknown":    {999_999_999, 0},
+	} {
+		items, total, err := repo.List(ctx, shop, ListFilter{CategoryID: tc.category, Page: 1, PageSize: 10})
+		if err != nil || total != tc.want || len(items) != tc.want {
+			t.Errorf("%s: total = %d, items = %d, err = %v, want %d", name, total, len(items), err, tc.want)
+		}
+	}
+}
+
+func seedSubcategory(t *testing.T, pool *pgxpool.Pool, parent int64) int64 {
+	t.Helper()
+	var id int64
+	name := fmt.Sprintf("subcategory-%d", time.Now().UnixNano())
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO categories (name, parent_id) VALUES ($1, $2) RETURNING id`, name, parent).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
