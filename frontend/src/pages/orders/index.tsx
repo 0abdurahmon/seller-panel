@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
-import { useOrderCounts, useOrderEvents, useOrders, type OrderStatusFilter } from "@/entities/order";
+import { useOrderCounts, useOrders, type OrderStatusFilter } from "@/entities/order";
 import { AdvanceOrderDialog } from "@/features/order/advance-order";
 import { CancelOrderDialog } from "@/features/order/cancel-order";
 import { getApiErrorMessage } from "@/shared/api";
@@ -81,7 +81,6 @@ export const OrdersPage = () => {
     ...(status === "all" ? {} : { status }),
   });
   const counts = useOrderCounts();
-  useOrderEvents();
 
   // The next page is requested while the sentinel is still 800px below the screen,
   // so by the time the reader gets there the rows are already in.

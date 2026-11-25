@@ -4,6 +4,7 @@ export {
   getApiErrorMessage,
   getApiFieldError,
   getErrorStatus,
+  getRetryAfterMs,
   parseApiError,
   type ParsedApiError,
 } from './http/error';

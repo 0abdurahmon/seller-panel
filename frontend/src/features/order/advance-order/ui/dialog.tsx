@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { dashboardKeys } from "@/entities/dashboard";
 import { getNextStatus, orderKeys, type OrderTarget } from "@/entities/order";
 import { productKeys } from "@/entities/product";
 import { getApiErrorMessage, getOrders } from "@/shared/api";
@@ -16,6 +17,7 @@ export const AdvanceOrderDialog = () => {
   const action = next ? ADVANCE_ACTIONS[next] : undefined;
 
   const mutation = useMutation({
+    meta: { announcedByServer: true },
     mutationFn: ({ target, to }: { target: OrderTarget; to: NonNullable<typeof next> }) =>
       api.postOrdersIdTransition(target.id, { to }),
     onSuccess: async () => {
@@ -23,6 +25,8 @@ export const AdvanceOrderDialog = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: orderKeys.all }),
         queryClient.invalidateQueries({ queryKey: productKeys.all }),
+        // The menu badge counts the orders waiting for action.
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
       ]);
       close();
     },

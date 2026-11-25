@@ -3,7 +3,10 @@ import { getDashboard } from '@/shared/api';
 
 const api = getDashboard();
 
-export const dashboardKeys = { summary: ['dashboard', 'summary'] as const };
+export const dashboardKeys = {
+  all: ['dashboard'] as const,
+  summary: ['dashboard', 'summary'] as const,
+};
 
 /** The dashboard numbers (MVP item 6) from GET /dashboard/summary. */
 export function useDashboardSummary() {

@@ -1,15 +1,13 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { EventStreamError, followOrderEvents } from "@/shared/api";
-import { orderKeys } from "./queries";
 
 const MIN_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 // A stream that lived this long was healthy, so the next reconnect starts from the shortest delay again.
 // Opening alone proves nothing: a stream that is closed at once must keep backing off.
 const HEALTHY_AFTER_MS = 10_000;
-// Events arriving within this window share one refetch. A refetch is about 8 requests (the list and
-// the tab counts) and nginx allows 10 a second from one address, so the window cannot be much shorter.
+// The first change is reported at once; more within this window share one report at its end. A refetch
+// is about 10 requests and nginx allows 10 a second from one address, so the window cannot be much shorter.
 const REFRESH_WINDOW_MS = 2_000;
 
 function sleep(ms: number, signal: AbortSignal) {
@@ -25,23 +23,28 @@ function sleep(ms: number, signal: AbortSignal) {
 }
 
 /**
- * Keeps the orders on screen current: the backend pushes an event when an order is created or
- * changes status, and every order query (list, tab counts, details) is refetched.
- * Events are not replayed, so a reconnect refetches too. Mount it once, on the orders page.
+ * Follows the shop's order events and calls `onChange` when an order is created or changes status.
+ * Events are not replayed, so a reconnect calls it too. Mount it once for the whole signed-in app.
  *
  * Only a visible page holds a stream. Over HTTP/1.1 a browser has six connections per site:
  * streams kept by background tabs, or by pages kept for Back, would use them all and every
  * other request would hang.
  */
-export function useOrderEvents() {
-  const queryClient = useQueryClient();
-
+export function useOrderEvents(onChange: () => void) {
   useEffect(() => {
-    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let windowTimer: ReturnType<typeof setTimeout> | undefined;
+    let changedAgain = false;
     const refresh = () => {
-      refreshTimer ??= setTimeout(() => {
-        refreshTimer = undefined;
-        void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      if (windowTimer !== undefined) {
+        changedAgain = true;
+        return;
+      }
+      onChange();
+      windowTimer = setTimeout(() => {
+        windowTimer = undefined;
+        if (!changedAgain) return;
+        changedAgain = false;
+        refresh();
       }, REFRESH_WINDOW_MS);
     };
 
@@ -102,7 +105,7 @@ export function useOrderEvents() {
       window.removeEventListener("pagehide", stop);
       window.removeEventListener("pageshow", sync);
       stop();
-      clearTimeout(refreshTimer);
+      clearTimeout(windowTimer);
     };
-  }, [queryClient]);
+  }, [onChange]);
 }
