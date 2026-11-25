@@ -42,10 +42,10 @@ func process(raw []byte) (processed, error) {
 	if err != nil {
 		return processed{}, fmt.Errorf("%w: file is not a valid image", ErrValidation)
 	}
+	img = fit(img, MaxSide)
 	if http.DetectContentType(raw) == "image/jpeg" {
 		img = orient(img, jpegOrientation(raw))
 	}
-	img = fit(img, MaxSide)
 
 	var buf bytes.Buffer
 	if err := webp.Encode(&buf, img, webp.Options{Quality: webpQuality}); err != nil {
@@ -74,8 +74,17 @@ func fit(src image.Image, maxSide int) image.Image {
 	if h < 1 {
 		h = 1
 	}
+	// Halving first keeps large reductions smooth. A kernel scaler would need about 250 MB per photo.
+	for max(src.Bounds().Dx(), src.Bounds().Dy()) > 2*maxSide {
+		half := src.Bounds()
+		src = scale(src, max(half.Dx()/2, 1), max(half.Dy()/2, 1))
+	}
+	return scale(src, w, h)
+}
+
+func scale(src image.Image, w, h int) image.Image {
 	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, b, xdraw.Over, nil)
+	xdraw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Src, nil)
 	return dst
 }
 
