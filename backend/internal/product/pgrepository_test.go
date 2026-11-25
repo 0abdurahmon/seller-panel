@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +48,10 @@ func seedCategory(t *testing.T, pool *pgxpool.Pool) int64 {
 
 func newProduct(categoryID int64, sku string) Product {
 	return Product{CategoryID: categoryID, Title: "Phone X", Description: "Good", Price: 1_000_000, SKU: sku, Stock: 10, Status: StatusActive}
+}
+
+func replace(p Product) func(Product) (Product, error) {
+	return func(Product) (Product, error) { return p, nil }
 }
 
 func TestPgCreateAndGetAreScopedByShop(t *testing.T) {
@@ -103,7 +108,7 @@ func TestPgSKUIsUniquePerShop(t *testing.T) {
 		t.Fatal(err)
 	}
 	other.SKU = first.SKU
-	if _, err := repo.Update(ctx, shopA, other); !errors.Is(err, ErrSKUTaken) {
+	if _, err := repo.Update(ctx, shopA, other.ID, replace(other)); !errors.Is(err, ErrSKUTaken) {
 		t.Fatalf("update to taken sku err = %v, want ErrSKUTaken", err)
 	}
 }
@@ -133,7 +138,7 @@ func TestPgUpdateKeepsStockAndIsScoped(t *testing.T) {
 
 	p.Title, p.Price, p.Status = "Renamed", 2_000_000, StatusArchived
 	p.Stock, p.Reserved = 999, 999
-	updated, err := repo.Update(ctx, shopA, p)
+	updated, err := repo.Update(ctx, shopA, p.ID, replace(p))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +152,7 @@ func TestPgUpdateKeepsStockAndIsScoped(t *testing.T) {
 		t.Fatalf("updated_at did not move: %v then %v", p.UpdatedAt, updated.UpdatedAt)
 	}
 
-	if _, err := repo.Update(ctx, shopB, p); !errors.Is(err, ErrNotFound) {
+	if _, err := repo.Update(ctx, shopB, p.ID, replace(p)); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other shop update err = %v, want ErrNotFound", err)
 	}
 }
@@ -289,7 +294,7 @@ func TestPgPhotos(t *testing.T) {
 	}
 
 	created.Photos = []string{u(2), u(5)}
-	updated, err := repo.Update(ctx, shop, created)
+	updated, err := repo.Update(ctx, shop, created.ID, replace(created))
 	if err != nil || fmt.Sprint(updated.Photos) != fmt.Sprint(created.Photos) {
 		t.Fatalf("update photos = %v, err = %v", updated.Photos, err)
 	}
@@ -298,13 +303,13 @@ func TestPgPhotos(t *testing.T) {
 	}
 
 	created.Photos = nil
-	if updated, err = repo.Update(ctx, shop, created); err != nil || len(updated.Photos) != 0 {
+	if updated, err = repo.Update(ctx, shop, created.ID, replace(created)); err != nil || len(updated.Photos) != 0 {
 		t.Fatalf("clear = %v, err = %v", updated.Photos, err)
 	}
 
 	foreign := created
 	foreign.Photos = []string{u(1)}
-	if _, err := repo.Update(ctx, other, foreign); !errors.Is(err, ErrNotFound) {
+	if _, err := repo.Update(ctx, other, foreign.ID, replace(foreign)); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("another shop's update err = %v, want ErrNotFound", err)
 	}
 	if got, _ = repo.Get(ctx, shop, created.ID); len(got.Photos) != 0 {
@@ -357,5 +362,53 @@ func TestPgPhotosAreDeletedWithTheProduct(t *testing.T) {
 	var n int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM product_photos WHERE product_id = $1`, created.ID).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("%d photo rows left, want 0 (err %v)", n, err)
+	}
+}
+
+func TestPgConcurrentUpdatesSeeEachOther(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop, cat := seedShop(t, pool), seedCategory(t, pool)
+	p, err := repo.Create(ctx, shop, newProduct(cat, "RACE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	for i := range maxPhotos {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := repo.Update(ctx, shop, p.ID, func(current Product) (Product, error) {
+				time.Sleep(20 * time.Millisecond)
+				current.Photos = append(current.Photos, fmt.Sprintf("/api/uploads/%d/%032d.webp", shop, i))
+				return current, nil
+			})
+			if err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	got, err := repo.Get(ctx, shop, p.ID)
+	if err != nil || len(got.Photos) != maxPhotos {
+		t.Fatalf("photos = %v, err = %v, want every concurrent update to keep the others", got.Photos, err)
+	}
+}
+
+func TestPgFailedChangeStoresNothing(t *testing.T) {
+	repo, pool := newPgRepo(t)
+	ctx := context.Background()
+	shop, cat := seedShop(t, pool), seedCategory(t, pool)
+	p, err := repo.Create(ctx, shop, newProduct(cat, "KEEP"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Update(ctx, shop, p.ID, func(Product) (Product, error) { return Product{}, ErrArchived }); !errors.Is(err, ErrArchived) {
+		t.Fatalf("err = %v, want ErrArchived", err)
+	}
+	if got, err := repo.Get(ctx, shop, p.ID); err != nil || got.Title != p.Title || !got.UpdatedAt.Equal(p.UpdatedAt) {
+		t.Fatalf("product = %+v, err = %v", got, err)
 	}
 }

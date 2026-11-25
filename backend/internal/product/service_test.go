@@ -254,3 +254,101 @@ func TestListValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestLengthLimitsCountCharacters(t *testing.T) {
+	cases := map[string]struct {
+		limit int
+		set   func(in *CreateInput, v string)
+	}{
+		"title":       {maxTitleLen, func(in *CreateInput, v string) { in.Title = v }},
+		"description": {maxDescriptionLen, func(in *CreateInput, v string) { in.Description = v }},
+		"sku":         {maxSKULen, func(in *CreateInput, v string) { in.SKU = v }},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			svc := newService()
+			in := validInput()
+			tc.set(&in, strings.Repeat("ж", tc.limit))
+			if _, err := svc.Create(context.Background(), 1, in, nil); err != nil {
+				t.Fatalf("%d characters: %v", tc.limit, err)
+			}
+			tc.set(&in, strings.Repeat("ж", tc.limit+1))
+			if _, err := svc.Create(context.Background(), 1, in, nil); !errors.Is(err, ErrValidation) {
+				t.Fatalf("%d characters: err = %v, want ErrValidation", tc.limit+1, err)
+			}
+		})
+	}
+	t.Run("q", func(t *testing.T) {
+		svc := newService()
+		if _, err := svc.List(context.Background(), 1, ListFilter{Query: strings.Repeat("ж", maxQueryLen)}); err != nil {
+			t.Fatalf("%d characters: %v", maxQueryLen, err)
+		}
+		_, err := svc.List(context.Background(), 1, ListFilter{Query: strings.Repeat("ж", maxQueryLen+1)})
+		if !errors.Is(err, ErrValidation) {
+			t.Fatalf("%d characters: err = %v, want ErrValidation", maxQueryLen+1, err)
+		}
+	})
+}
+
+func TestUpdateDoesNotOverwriteAConcurrentChange(t *testing.T) {
+	ctx := context.Background()
+	up := UpdateInput{CategoryID: 1, Title: "New", Price: 5, SKU: "PX-1", Status: StatusActive}
+
+	t.Run("a product archived meanwhile stays archived", func(t *testing.T) {
+		store := newFakePhotos()
+		svc := NewService(newMemRepository(), store)
+		p, err := svc.Create(ctx, 1, validInput(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.during = func() {
+			if _, err := svc.Archive(ctx, 1, p.ID); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(1)}}); !errors.Is(err, ErrArchived) {
+			t.Fatalf("err = %v, want ErrArchived", err)
+		}
+		got, err := svc.Get(ctx, 1, p.ID)
+		if err != nil || got.Status != StatusArchived || len(store.live()) != 0 {
+			t.Fatalf("status = %s, live = %v, err = %v", got.Status, store.live(), err)
+		}
+	})
+	t.Run("a photo added meanwhile stays", func(t *testing.T) {
+		store := newFakePhotos()
+		svc := NewService(newMemRepository(), store)
+		p, err := svc.Create(ctx, 1, validInput(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.during = func() {
+			if _, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(2)}}); err != nil {
+				t.Error(err)
+			}
+		}
+		got, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(1)}})
+		if err != nil || len(got.Photos) != 2 || len(store.live()) != 2 {
+			t.Fatalf("photos = %v, live = %v, err = %v", got.Photos, store.live(), err)
+		}
+	})
+	t.Run("the photo limit counts photos added meanwhile", func(t *testing.T) {
+		store := newFakePhotos()
+		svc := NewService(newMemRepository(), store)
+		p, err := svc.Create(ctx, 1, validInput(), [][]byte{img(1), img(2), img(3), img(4)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.during = func() {
+			if _, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(5)}}); err != nil {
+				t.Error(err)
+			}
+		}
+		if _, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Add: [][]byte{img(6)}}); !errors.Is(err, ErrValidation) {
+			t.Fatalf("err = %v, want ErrValidation", err)
+		}
+		got, err := svc.Get(ctx, 1, p.ID)
+		if err != nil || len(got.Photos) != maxPhotos || len(store.live()) != maxPhotos {
+			t.Fatalf("photos = %v, live = %v, err = %v", got.Photos, store.live(), err)
+		}
+	})
+}
