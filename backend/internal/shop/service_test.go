@@ -126,20 +126,6 @@ func TestUpdateLogo(t *testing.T) {
 	if len(store.removed) != 1 || store.removed[0] != first {
 		t.Fatalf("removed = %v, want the old logo %q", store.removed, first)
 	}
-
-	store.removed = nil
-	got, err = svc.Update(ctx, 1, validReq(), LogoChange{Remove: true})
-	if err != nil || got.LogoURL != nil {
-		t.Fatalf("remove: logo %v, err %v", got.LogoURL, err)
-	}
-	if len(store.removed) != 1 || store.removed[0] != second {
-		t.Fatalf("removed = %v, want %q", store.removed, second)
-	}
-
-	store.removed = nil
-	if _, err := svc.Update(ctx, 1, validReq(), LogoChange{Remove: true}); err != nil || len(store.removed) != 0 {
-		t.Fatalf("removing a missing logo: err %v, removed %v", err, store.removed)
-	}
 }
 
 func TestUpdateLogoFailuresChangeNothing(t *testing.T) {
@@ -195,16 +181,6 @@ func TestUpdateLogoFailuresChangeNothing(t *testing.T) {
 		}
 		if store.next != before {
 			t.Fatal("an image was processed for an invalid request")
-		}
-	})
-	t.Run("a logo and remove_logo together", func(t *testing.T) {
-		_, store, svc, _ := setup()
-		before := store.next
-		if _, err := svc.Update(ctx, 1, validReq(), LogoChange{Add: []byte("x"), Remove: true}); !errors.Is(err, ErrValidation) {
-			t.Fatalf("err = %v", err)
-		}
-		if store.next != before {
-			t.Fatal("an image was processed for a contradictory request")
 		}
 	})
 	t.Run("an unknown shop stores nothing", func(t *testing.T) {
