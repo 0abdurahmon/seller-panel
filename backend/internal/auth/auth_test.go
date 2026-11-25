@@ -118,6 +118,19 @@ func TestRegisterValidation(t *testing.T) {
 	}
 }
 
+func TestRegisterCountsTheShopNameInCharacters(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+	req := RegisterRequest{Email: "uz@example.com", Password: "correct-horse", ShopName: strings.Repeat("Ў", 120)}
+	if _, err := svc.Register(ctx, req); err != nil {
+		t.Fatalf("120 characters: %v", err)
+	}
+	req.Email, req.ShopName = "uz2@example.com", strings.Repeat("Ў", 121)
+	if _, err := svc.Register(ctx, req); !errors.Is(err, ErrValidation) {
+		t.Fatalf("121 characters: err = %v, want ErrValidation", err)
+	}
+}
+
 func TestLoginWrongPasswordAndUnknownEmailLookTheSame(t *testing.T) {
 	svc, _ := newService(t)
 	register(t, svc, "a@example.com")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -78,6 +79,19 @@ func TestRequestCodeInsideCooldownAnswersRateLimited(t *testing.T) {
 	if n := len(tg.messages()); n != 1 {
 		t.Fatalf("%d messages, want 1", n)
 	}
+}
+
+func TestRequestCodeSaysWhenTelegramRefusesTheMessage(t *testing.T) {
+	tg := &fakeTelegram{fail: errors.New("bot was blocked by the user")}
+	h, repo, _ := newOTPHandler(t, tg)
+	sellerID, _, err := repo.CreateSellerWithShop(context.Background(), "seller@example.com", "hash", "Shop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.chats[sellerID] = linkedChat
+
+	rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
+	assertError(t, rec, http.StatusServiceUnavailable, "telegram_send_failed")
 }
 
 func TestRequestCodeUnavailableWithoutTelegram(t *testing.T) {

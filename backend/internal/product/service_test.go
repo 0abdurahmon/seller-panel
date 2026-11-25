@@ -219,6 +219,15 @@ func TestListFilters(t *testing.T) {
 	}
 }
 
+func TestListRefusesAQueryTheDatabaseCannotStore(t *testing.T) {
+	svc := seedList(t)
+	for _, q := range []string{"a\x00b", "\xff"} {
+		if _, err := svc.List(context.Background(), 1, ListFilter{Query: q}); !errors.Is(err, ErrValidation) {
+			t.Errorf("q %q: err = %v, want ErrValidation", q, err)
+		}
+	}
+}
+
 func TestListPagination(t *testing.T) {
 	svc := seedList(t)
 	ctx := context.Background()

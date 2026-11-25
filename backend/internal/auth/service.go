@@ -13,6 +13,7 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -88,7 +89,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	shopName := strings.TrimSpace(req.ShopName)
-	if shopName == "" || len(shopName) > maxShopNameLen {
+	if shopName == "" || utf8.RuneCountInString(shopName) > maxShopNameLen {
 		return TokenResponse{}, fmt.Errorf("%w: shop_name must be 1-%d characters", ErrValidation, maxShopNameLen)
 	}
 
@@ -200,8 +201,6 @@ func (s *Service) HandleBotMessage(ctx context.Context, chatID int64, text strin
 		"Telegram is linked. Sign-in codes for your seller panel will be sent here.")
 }
 
-// RequestCode sends a sign-in code to the seller's linked chat. Unknown emails and
-// unlinked sellers both get ErrTelegramNotLinked, so the answer does not show which accounts exist.
 // CooldownError says how long a seller must wait before the next sign-in code.
 type CooldownError struct{ RetryAfter time.Duration }
 
@@ -210,6 +209,8 @@ func (e *CooldownError) Error() string { return "a sign-in code was requested re
 // CodeCooldown is the time a seller waits between two sign-in codes.
 func (s *Service) CodeCooldown() time.Duration { return s.codeCooldown }
 
+// RequestCode sends a sign-in code to the seller's linked chat. Unknown emails and
+// unlinked sellers both get ErrTelegramNotLinked.
 func (s *Service) RequestCode(ctx context.Context, email string) error {
 	if s.telegram == nil {
 		return ErrTelegramUnavailable
@@ -222,32 +223,47 @@ func (s *Service) RequestCode(ctx context.Context, email string) error {
 		return err
 	}
 
-	now := s.now()
-	prev, err := s.repo.FindLoginCode(ctx, sellerID)
-	switch {
-	case err == nil:
-		if wait := prev.CreatedAt.Add(s.codeCooldown).Sub(now); wait > 0 {
-			return &CooldownError{RetryAfter: wait}
-		}
-	case !errors.Is(err, ErrNotFound):
-		return err
-	}
-
 	code, err := randomDigits(codeDigits)
 	if err != nil {
 		return err
 	}
-	if err := s.repo.SaveLoginCode(ctx, sellerID, LoginCode{
-		CodeHash:  hashSecret(code),
+	now := s.now()
+	hash := hashSecret(code)
+	saved, err := s.repo.SaveLoginCode(ctx, sellerID, LoginCode{
+		CodeHash:  hash,
 		CreatedAt: now,
 		ExpiresAt: now.Add(codeTTL),
-	}); err != nil {
+	}, now.Add(-s.codeCooldown))
+	if err != nil {
 		return err
 	}
+	if !saved {
+		return s.cooldownError(ctx, sellerID, now)
+	}
 	// The code is in <code> so Telegram shows it as tap-to-copy.
-	return s.telegram.SendHTML(ctx, chatID, fmt.Sprintf(
+	err = s.telegram.SendHTML(ctx, chatID, fmt.Sprintf(
 		"Your sign-in code is <code>%s</code>. It expires in %d minutes. If you did not ask for it, ignore this message.",
 		code, int(codeTTL.Minutes())), "", "")
+	if err != nil {
+		// A code nobody received must not hold the cooldown, even when the client has gone.
+		if _, derr := s.repo.DeleteLoginCode(context.WithoutCancel(ctx), sellerID, hash); derr != nil {
+			err = errors.Join(err, derr)
+		}
+		return fmt.Errorf("%w: %w", ErrCodeNotSent, err)
+	}
+	return nil
+}
+
+func (s *Service) cooldownError(ctx context.Context, sellerID int64, now time.Time) error {
+	prev, err := s.repo.FindLoginCode(ctx, sellerID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	wait := s.codeCooldown
+	if err == nil {
+		wait = max(prev.CreatedAt.Add(s.codeCooldown).Sub(now), time.Second)
+	}
+	return &CooldownError{RetryAfter: wait}
 }
 
 // VerifyCode checks a sign-in code and returns a token. A code is single use and
@@ -264,27 +280,22 @@ func (s *Service) VerifyCode(ctx context.Context, email, code string) (TokenResp
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	lc, err := s.repo.FindLoginCode(ctx, c.SellerID)
+	hash, err := s.repo.ClaimLoginAttempt(ctx, c.SellerID, s.codeMaxAttempts, s.now())
 	if errors.Is(err, ErrNotFound) {
 		return TokenResponse{}, ErrInvalidCode
 	}
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if !s.now().Before(lc.ExpiresAt) || lc.Attempts >= s.codeMaxAttempts {
-		if err := s.repo.DeleteLoginCode(ctx, c.SellerID); err != nil {
-			return TokenResponse{}, err
-		}
+	if subtle.ConstantTimeCompare([]byte(hashSecret(code)), []byte(hash)) != 1 {
 		return TokenResponse{}, ErrInvalidCode
 	}
-	if subtle.ConstantTimeCompare([]byte(hashSecret(code)), []byte(lc.CodeHash)) != 1 {
-		if err := s.repo.IncrementLoginAttempts(ctx, c.SellerID); err != nil {
-			return TokenResponse{}, err
-		}
-		return TokenResponse{}, ErrInvalidCode
-	}
-	if err := s.repo.DeleteLoginCode(ctx, c.SellerID); err != nil {
+	used, err := s.repo.DeleteLoginCode(ctx, c.SellerID, hash)
+	if err != nil {
 		return TokenResponse{}, err
+	}
+	if !used {
+		return TokenResponse{}, ErrInvalidCode
 	}
 	return s.issue(c.SellerID, c.ShopID)
 }

@@ -138,34 +138,44 @@ func (s *PgRepository) FindLoginCode(ctx context.Context, sellerID int64) (Login
 	return c, nil
 }
 
-func (s *PgRepository) SaveLoginCode(ctx context.Context, sellerID int64, c LoginCode) error {
-	_, err := s.pool.Exec(ctx,
+func (s *PgRepository) SaveLoginCode(ctx context.Context, sellerID int64, c LoginCode, replaceBefore time.Time) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
 		`INSERT INTO login_codes (seller_id, code_hash, attempts, created_at, expires_at) VALUES ($1, $2, 0, $3, $4)
 		 ON CONFLICT (seller_id) DO UPDATE
 		   SET code_hash = EXCLUDED.code_hash, attempts = 0,
-		       created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at`,
-		sellerID, c.CodeHash, c.CreatedAt, c.ExpiresAt,
+		       created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at
+		   WHERE login_codes.created_at <= $5`,
+		sellerID, c.CodeHash, c.CreatedAt, c.ExpiresAt, replaceBefore,
 	)
 	if err != nil {
-		return fmt.Errorf("save login code: %w", err)
+		return false, fmt.Errorf("save login code: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
-func (s *PgRepository) IncrementLoginAttempts(ctx context.Context, sellerID int64) error {
-	_, err := s.pool.Exec(ctx, `UPDATE login_codes SET attempts = attempts + 1 WHERE seller_id = $1`, sellerID)
-	if err != nil {
-		return fmt.Errorf("count login attempt: %w", err)
+func (s *PgRepository) ClaimLoginAttempt(ctx context.Context, sellerID int64, maxAttempts int, now time.Time) (string, error) {
+	var hash string
+	err := s.pool.QueryRow(ctx,
+		`UPDATE login_codes SET attempts = attempts + 1
+		  WHERE seller_id = $1 AND attempts < $2 AND expires_at > $3
+		  RETURNING code_hash`,
+		sellerID, maxAttempts, now,
+	).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
 	}
-	return nil
+	if err != nil {
+		return "", fmt.Errorf("count login attempt: %w", err)
+	}
+	return hash, nil
 }
 
-func (s *PgRepository) DeleteLoginCode(ctx context.Context, sellerID int64) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM login_codes WHERE seller_id = $1`, sellerID)
+func (s *PgRepository) DeleteLoginCode(ctx context.Context, sellerID int64, codeHash string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM login_codes WHERE seller_id = $1 AND code_hash = $2`, sellerID, codeHash)
 	if err != nil {
-		return fmt.Errorf("delete login code: %w", err)
+		return false, fmt.Errorf("delete login code: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
 func (r *PgRepository) ShopOwnedBy(ctx context.Context, sellerID, shopID int64) (bool, error) {

@@ -111,26 +111,35 @@ func (r *memRepository) FindLoginCode(_ context.Context, sellerID int64) (LoginC
 	return c, nil
 }
 
-func (r *memRepository) SaveLoginCode(_ context.Context, sellerID int64, c LoginCode) error {
+func (r *memRepository) SaveLoginCode(_ context.Context, sellerID int64, c LoginCode, replaceBefore time.Time) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if prev, ok := r.codes[sellerID]; ok && prev.CreatedAt.After(replaceBefore) {
+		return false, nil
+	}
 	c.Attempts = 0
 	r.codes[sellerID] = c
-	return nil
+	return true, nil
 }
 
-func (r *memRepository) IncrementLoginAttempts(_ context.Context, sellerID int64) error {
+func (r *memRepository) ClaimLoginAttempt(_ context.Context, sellerID int64, maxAttempts int, now time.Time) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	c := r.codes[sellerID]
+	c, ok := r.codes[sellerID]
+	if !ok || c.Attempts >= maxAttempts || !now.Before(c.ExpiresAt) {
+		return "", ErrNotFound
+	}
 	c.Attempts++
 	r.codes[sellerID] = c
-	return nil
+	return c.CodeHash, nil
 }
 
-func (r *memRepository) DeleteLoginCode(_ context.Context, sellerID int64) error {
+func (r *memRepository) DeleteLoginCode(_ context.Context, sellerID int64, codeHash string) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if c, ok := r.codes[sellerID]; !ok || c.CodeHash != codeHash {
+		return false, nil
+	}
 	delete(r.codes, sellerID)
-	return nil
+	return true, nil
 }

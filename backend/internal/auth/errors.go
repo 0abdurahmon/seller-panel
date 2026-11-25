@@ -13,4 +13,5 @@ var (
 	ErrTelegramNotLinked   = errors.New("no telegram chat linked to this account")
 	ErrLinkInvalid         = errors.New("telegram link is unknown, expired or used")
 	ErrTelegramTaken       = errors.New("telegram chat already linked to another seller")
+	ErrCodeNotSent         = errors.New("sign-in code was not sent")
 )

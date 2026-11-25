@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,6 +144,111 @@ func TestPgTelegramSignInFlow(t *testing.T) {
 	}
 	if _, err := svc.VerifyCode(ctx, "otp-pg@example.com", tg.lastCode(t)); !errors.Is(err, ErrInvalidCode) {
 		t.Fatalf("reused code: err = %v", err)
+	}
+}
+
+func newPgLinkedSeller(t *testing.T) (*Service, *fakeTelegram, string) {
+	t.Helper()
+	tg := &fakeTelegram{}
+	svc, _ := newPgServiceWith(t, tg)
+	ctx := context.Background()
+	email := "race@example.com"
+	if _, err := svc.Register(ctx, RegisterRequest{Email: email, Password: "correct-horse", ShopName: "Race"}); err != nil {
+		t.Fatal(err)
+	}
+	link, err := svc.StartTelegramLink(ctx, sellerIDOf(t, svc, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, _ := strings.Cut(link.URL, "start=")
+	if err := svc.HandleBotMessage(ctx, linkedChat, "/start "+token); err != nil {
+		t.Fatal(err)
+	}
+	return svc, tg, email
+}
+
+// parallel runs fn n times at once and returns the errors.
+func parallel(n int, fn func() error) []error {
+	errs := make([]error, n)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs[i] = fn()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	return errs
+}
+
+func succeeded(errs []error) int {
+	n := 0
+	for _, err := range errs {
+		if err == nil {
+			n++
+		}
+	}
+	return n
+}
+
+func TestPgParallelRequestsSendOneCode(t *testing.T) {
+	svc, tg, email := newPgLinkedSeller(t)
+	before := len(tg.messages())
+	errs := parallel(20, func() error { return svc.RequestCode(context.Background(), email) })
+	if n := succeeded(errs); n != 1 {
+		t.Fatalf("%d requests succeeded, want 1", n)
+	}
+	for _, err := range errs {
+		var cooldown *CooldownError
+		if err != nil && !errors.As(err, &cooldown) {
+			t.Fatalf("err = %v, want CooldownError", err)
+		}
+	}
+	if n := len(tg.messages()) - before; n != 1 {
+		t.Fatalf("%d messages sent, want 1", n)
+	}
+}
+
+func TestPgParallelCorrectCodeGivesOneToken(t *testing.T) {
+	svc, tg, email := newPgLinkedSeller(t)
+	ctx := context.Background()
+	if err := svc.RequestCode(ctx, email); err != nil {
+		t.Fatal(err)
+	}
+	code := tg.lastCode(t)
+	errs := parallel(20, func() error {
+		_, err := svc.VerifyCode(ctx, email, code)
+		return err
+	})
+	if n := succeeded(errs); n != 1 {
+		t.Fatalf("%d tokens issued for one code, want 1", n)
+	}
+}
+
+func TestPgParallelWrongCodesCannotPassTheAttemptLimit(t *testing.T) {
+	svc, tg, email := newPgLinkedSeller(t)
+	ctx := context.Background()
+	if err := svc.RequestCode(ctx, email); err != nil {
+		t.Fatal(err)
+	}
+	wrong := "000000"
+	if tg.lastCode(t) == wrong {
+		wrong = "111111"
+	}
+	parallel(40, func() error {
+		_, err := svc.VerifyCode(ctx, email, wrong)
+		return err
+	})
+	stored, err := svc.repo.FindLoginCode(ctx, sellerIDOf(t, svc, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Attempts != codeMaxAttempts {
+		t.Fatalf("%d guesses were compared, want %d", stored.Attempts, codeMaxAttempts)
 	}
 }
 

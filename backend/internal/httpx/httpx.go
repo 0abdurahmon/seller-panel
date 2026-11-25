@@ -4,8 +4,12 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"reflect"
 )
+
+var errInvalidText = errors.New("text has a NUL character or is not valid UTF-8")
 
 // Error is the JSON body returned for every failed request.
 type Error struct {
@@ -25,11 +29,17 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 	WriteJSON(w, status, Error{Code: code, Message: message})
 }
 
-// DecodeJSON reads a JSON body into v. It rejects unknown fields and bodies
-// larger than 1 MB.
+// DecodeJSON reads a JSON body into v. It rejects unknown fields, bodies
+// larger than 1 MB and strings with a NUL character.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	return dec.Decode(v)
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if !validStrings(reflect.ValueOf(v)) {
+		return errInvalidText
+	}
+	return nil
 }

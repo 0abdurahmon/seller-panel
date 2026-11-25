@@ -118,6 +118,9 @@ func ReadForm(w http.ResponseWriter, r *http.Request, spec FormSpec) (Form, erro
 		if len(raw) > maxFormValueBytes {
 			return Form{}, &FormError{"field " + quote(name) + " is too long"}
 		}
+		if !ValidText(string(raw)) {
+			return Form{}, &FormError{"field " + quote(name) + " is not valid text"}
+		}
 		if lists[name] {
 			if _, seen := f.Lists[name]; !seen {
 				f.Lists[name] = []string{}

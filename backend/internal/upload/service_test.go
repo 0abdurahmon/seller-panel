@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -117,6 +118,29 @@ func TestUploadIsBusyWhenAllSlotsAreTaken(t *testing.T) {
 	_, err := svc.Upload(ctx, 1, bytes.NewReader(pngBytes(t, 10, 10)))
 	if !errors.Is(err, ErrBusy) {
 		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+}
+
+func TestProcessMemoryStaysBounded(t *testing.T) {
+	raw := jpegBytes(t, 4000, 3000)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if _, err := process(raw); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	if got := (after.TotalAlloc - before.TotalAlloc) >> 20; got > 230 {
+		t.Fatalf("processing a 12 MP photo allocated %d MiB, want at most 230", got)
+	}
+}
+
+func TestProcessScalesVeryLargeSides(t *testing.T) {
+	out, err := process(jpegBytes(t, 9000, 1500))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.width != MaxSide || out.height != 1500*MaxSide/9000 {
+		t.Fatalf("size = %dx%d, want %dx%d", out.width, out.height, MaxSide, 1500*MaxSide/9000)
 	}
 }
 
