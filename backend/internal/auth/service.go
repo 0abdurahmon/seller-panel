@@ -61,7 +61,8 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if err := validatePassword(req.Password); err != nil {
+	password := normalizePassword(req.Password)
+	if err := validatePassword(password); err != nil {
 		return TokenResponse{}, err
 	}
 	shopName := strings.TrimSpace(req.ShopName)
@@ -69,7 +70,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 		return TokenResponse{}, fmt.Errorf("%w: shop_name must be 1-%d characters", ErrValidation, maxShopNameLen)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("hash password: %w", err)
 	}
@@ -84,16 +85,17 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 // Login checks the password and returns a token.
 func (s *Service) Login(ctx context.Context, req LoginRequest) (TokenResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
+	password := normalizePassword(req.Password)
 
 	c, err := s.repo.FindCredentials(ctx, email)
 	if errors.Is(err, ErrNotFound) {
-		_ = bcrypt.CompareHashAndPassword(s.dummyHash, []byte(req.Password))
+		_ = bcrypt.CompareHashAndPassword(s.dummyHash, []byte(password))
 		return TokenResponse{}, ErrInvalidCredentials
 	}
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(c.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(c.PasswordHash), []byte(password)); err != nil {
 		return TokenResponse{}, ErrInvalidCredentials
 	}
 	return s.issue(c.SellerID, c.ShopID)
@@ -114,6 +116,11 @@ func normalizeEmail(raw string) (string, error) {
 		return "", fmt.Errorf("%w: email is not valid", ErrValidation)
 	}
 	return email, nil
+}
+
+// normalizePassword drops the spaces a copy or a keyboard adds around a password, sign-up and login alike.
+func normalizePassword(p string) string {
+	return strings.TrimSpace(p)
 }
 
 func validatePassword(p string) error {

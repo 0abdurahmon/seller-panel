@@ -850,7 +850,9 @@ components:
           type: string
           minLength: 8
           maxLength: 72
-          description: At most 72 bytes, bcrypt ignores the rest
+          description: |
+            Spaces around the password are dropped, here and at login, before the length is checked. At most
+            72 bytes, bcrypt ignores the rest.
         shop_name:
           type: string
           minLength: 1
