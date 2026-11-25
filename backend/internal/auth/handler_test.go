@@ -39,7 +39,7 @@ func postJSON(t *testing.T, h http.HandlerFunc, body any, principal *Principal) 
 	return rec
 }
 
-func TestRequestCodeAnswersTheSameForAnyEmail(t *testing.T) {
+func TestRequestCodeAcceptsLinkedAndExplainsUnlinked(t *testing.T) {
 	tg := &fakeTelegram{}
 	h, repo, _ := newOTPHandler(t, tg)
 	sellerID, _, err := repo.CreateSellerWithShop(context.Background(), "seller@example.com", "hash", "Shop")
@@ -48,12 +48,12 @@ func TestRequestCodeAnswersTheSameForAnyEmail(t *testing.T) {
 	}
 	repo.chats[sellerID] = linkedChat
 
-	for _, email := range []string{"seller@example.com", "nobody@example.com"} {
-		rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: email}, nil)
-		if rec.Code != http.StatusAccepted || rec.Body.String() != `{"status":"sent"}`+"\n" {
-			t.Fatalf("%s: %d %s", email, rec.Code, rec.Body.String())
-		}
+	rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
+	if rec.Code != http.StatusAccepted || rec.Body.String() != `{"status":"sent"}`+"\n" {
+		t.Fatalf("linked: %d %s", rec.Code, rec.Body.String())
 	}
+	assertError(t, postJSON(t, h.RequestCode, RequestCodeRequest{Email: "nobody@example.com"}, nil),
+		http.StatusConflict, "telegram_not_linked")
 }
 
 func TestRequestCodeUnavailableWithoutTelegram(t *testing.T) {

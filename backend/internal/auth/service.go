@@ -171,15 +171,15 @@ func (s *Service) HandleBotMessage(ctx context.Context, chatID int64, text strin
 		"Telegram is linked. Sign-in codes for your seller panel will be sent here.")
 }
 
-// RequestCode sends a sign-in code to the seller's linked chat. It returns nil
-// for unknown emails and unlinked sellers too, so the caller cannot tell them apart.
+// RequestCode sends a sign-in code to the seller's linked chat. Unknown emails and
+// unlinked sellers both get ErrTelegramNotLinked, so the answer does not show which accounts exist.
 func (s *Service) RequestCode(ctx context.Context, email string) error {
 	if s.telegram == nil {
 		return ErrTelegramUnavailable
 	}
 	sellerID, chatID, err := s.repo.FindTelegramChat(ctx, normalizeLookup(email))
 	if errors.Is(err, ErrNotFound) {
-		return nil
+		return ErrTelegramNotLinked
 	}
 	if err != nil {
 		return err

@@ -106,15 +106,15 @@ func TestRequestCodeSendsSixDigitsToLinkedChat(t *testing.T) {
 	}
 }
 
-func TestRequestCodeIsSilentWhenNothingCanBeSent(t *testing.T) {
+func TestRequestCodeSaysWhenNoChatIsLinked(t *testing.T) {
 	f := newOTPFixture(t)
 	ctx := context.Background()
 	if _, _, err := f.repo.CreateSellerWithShop(ctx, "unlinked@example.com", "hash", "Other"); err != nil {
 		t.Fatal(err)
 	}
 	for _, email := range []string{"nobody@example.com", "unlinked@example.com"} {
-		if err := f.svc.RequestCode(ctx, email); err != nil {
-			t.Fatalf("%s: err = %v, want nil so the answer does not reveal the account", email, err)
+		if err := f.svc.RequestCode(ctx, email); !errors.Is(err, ErrTelegramNotLinked) {
+			t.Fatalf("%s: err = %v, want ErrTelegramNotLinked", email, err)
 		}
 	}
 	if n := len(f.tg.messages()); n != 0 {
