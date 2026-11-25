@@ -135,6 +135,8 @@ func writeAuthError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
 	case errors.Is(err, ErrInvalidCode):
 		httpx.WriteError(w, http.StatusUnauthorized, "invalid_code", "the code is wrong or has expired")
+	case errors.Is(err, ErrTelegramNotLinked):
+		httpx.WriteError(w, http.StatusConflict, "telegram_not_linked", "no Telegram chat is linked to this account, so no code can be sent")
 	case errors.Is(err, ErrTelegramUnavailable):
 		httpx.WriteError(w, http.StatusServiceUnavailable, "telegram_unavailable", "sign-in by Telegram code is not set up on this server")
 	default:

@@ -125,7 +125,8 @@ func TestTelegramSignInJourney(t *testing.T) {
 	s.expect(s.do(http.MethodPost, "/auth/request-code", "", map[string]string{"email": sel.email}), http.StatusAccepted, "")
 	code := regexp.MustCompile(`\b\d{6}\b`).FindString(bot.waitFor(t, "sign-in code"))
 
-	s.expect(s.do(http.MethodPost, "/auth/request-code", "", map[string]string{"email": "nobody@example.com"}), http.StatusAccepted, "")
+	s.expect(s.do(http.MethodPost, "/auth/request-code", "", map[string]string{"email": "nobody@example.com"}),
+		http.StatusConflict, "telegram_not_linked")
 	verify := s.do(http.MethodPost, "/auth/verify", "", map[string]string{"email": sel.email, "code": code})
 	s.expect(verify, http.StatusOK, "")
 	var otpTok struct {
