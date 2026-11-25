@@ -92,4 +92,4 @@ Backend changes apply on the next start of the backend (`docker compose up -d --
 - The order alert queue (`orderAlertQueue` in `backend/internal/app/app.go`, 100 messages) is a bound on memory, not a rate limit. When it is full, new alerts are dropped and logged (D19).
 - The Telegram send has no retry and no rate limit of its own. Telegram's Bot API limits apply.
 
-See also `docs/DECISIONS.md` D6 (shop rate), D10 (sign-in codes) and D18 (order events).
+See also `docs/DECISIONS.md` D6 (shop rate), D21 (sign-in codes) and D18 (order events).
