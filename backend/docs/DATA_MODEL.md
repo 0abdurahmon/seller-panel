@@ -4,13 +4,15 @@ Entities, relations, constraints and the rules that keep stock and money correct
 
 **Source of truth:** the SQL files in `backend/migrations`. This document and [`schema.dbml`](schema.dbml) explain them and show the target schema. When they disagree, the migration wins and the docs get fixed. A merged migration is never edited, a change is a new migration.
 
-**Diagram:** paste [`schema.dbml`](schema.dbml) into [dbdiagram.io](https://dbdiagram.io/d). It lists every table, constraint and relation. DBML cannot express the partial index on delivered orders, DESC index columns and the trigram indexes, noted at the top of that file.
+**Diagram:** paste [`schema.dbml`](schema.dbml) into [dbdiagram.io](https://dbdiagram.io/d). It lists every table, constraint and relation. DBML cannot express DESC index columns and the trigram indexes, noted at the top of that file.
 
 ## 1. Entity relationship diagram
 
 ```mermaid
 erDiagram
   SELLER ||--|| SHOP : owns
+  SELLER ||--o| TELEGRAM_LINK_TOKEN : "links Telegram with"
+  SELLER ||--o| LOGIN_CODE : "signs in with"
   SHOP ||--o{ PRODUCT : lists
   CATEGORY ||--o{ PRODUCT : classifies
   CATEGORY ||--o{ CATEGORY : "parent of"
@@ -30,7 +32,7 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 - IDs: `bigint GENERATED ALWAYS AS IDENTITY`. Money: `bigint` in so'm, never floats. Time: `timestamptz`.
 - Status columns are PostgreSQL enums, so a typo cannot be stored.
 - Rules that must never break are `CHECK` or `UNIQUE` constraints, not only checks in Go. The service validates first and returns a friendly error, the database is the last line of defence.
-- Nothing is deleted in normal operation: products are archived, orders are cancelled, balance entries are append only. The only cascade is `product_photos` when a product is removed.
+- Nothing is deleted in normal operation: products are archived, orders are cancelled, balance entries are append only. Only three foreign keys cascade: `product_photos` when a product is removed, `telegram_link_tokens` and `login_codes` when a seller is removed.
 
 ## 3. Tables
 
@@ -41,7 +43,7 @@ Ownership rule: everything a seller can see hangs off exactly one `shop_id`, and
 `token_hash` (primary key, SHA-256 of the link token), `seller_id` (unique: one pending link per seller), `expires_at`. Deleted when used. Expired rows are replaced by the next link request.
 
 ### login_codes (sign-in codes)
-`seller_id` (primary key: one active code per seller), `code_hash` (SHA-256 of the 6-digit code), `attempts` (0 or more), `created_at`, `expires_at`. Deleted on success or after too many wrong attempts. The code is never stored in plain text.
+`seller_id` (primary key: one active code per seller), `code_hash` (SHA-256 of the 6-digit code), `attempts` (0 or more), `created_at`, `expires_at`. Deleted on success. A code with too many wrong attempts stops working and is replaced by the next one (D13). The code is never stored in plain text.
 
 ### shops (exactly one per seller)
 `id`, `seller_id` (unique), `name` (required), `logo_url`, `description`, `contact_phone`, `pickup_address`, `created_at`. An empty shop is created together with the seller at sign up, so every authenticated seller has a `shop_id`.
@@ -94,7 +96,7 @@ Derived, not stored: `available = stock - reserved`. The API returns `stock` and
 | `products_title_trgm_idx`, `products_sku_trgm_idx` | `ILIKE '%text%'` search (`pg_trgm`) |
 | `orders_shop_status_created_idx` | order list by status, waiting-for-action counts |
 | `orders_shop_created_idx` | all orders newest first, today's orders |
-| `orders_shop_delivered_idx` (partial) | revenue and top products for delivered orders in a date range |
+| `orders_shop_delivered_idx` | revenue and top products for delivered orders in a date range |
 | `order_items_product_idx` | top products, product lookups |
 | `balance_entries_shop_created_idx` | balance history |
 | `order_status_history_order_idx` | order timeline |
