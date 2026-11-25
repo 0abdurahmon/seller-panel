@@ -100,7 +100,9 @@ func TestOrderEventsJourney(t *testing.T) {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
 	}
-	json.Unmarshal([]byte(s.nextEvent(myEvents, "order.created").Data), &newOrder)
+	if err := json.Unmarshal([]byte(s.nextEvent(myEvents, "order.created").Data), &newOrder); err != nil {
+		t.Fatal(err)
+	}
 	if newOrder.ID != o.ID || newOrder.Status != "new" {
 		t.Fatalf("order.created = %+v, want order %d as new", newOrder, o.ID)
 	}
@@ -110,7 +112,9 @@ func TestOrderEventsJourney(t *testing.T) {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
 	}
-	json.Unmarshal([]byte(s.nextEvent(myEvents, "order.status_changed").Data), &change)
+	if err := json.Unmarshal([]byte(s.nextEvent(myEvents, "order.status_changed").Data), &change); err != nil {
+		t.Fatal(err)
+	}
 	if change.ID != o.ID || change.Status != "accepted" {
 		t.Fatalf("order.status_changed = %+v", change)
 	}
