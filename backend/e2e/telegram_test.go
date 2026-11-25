@@ -24,6 +24,7 @@ type fakeBot struct {
 	mu      sync.Mutex
 	pending []map[string]any
 	sent    []string
+	bodies  []map[string]any
 }
 
 func newFakeBot(t *testing.T) *fakeBot {
@@ -41,11 +42,11 @@ func newFakeBot(t *testing.T) *fakeBot {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": result})
 		case "/bot" + fakeBotToken + "/sendMessage":
-			var body struct {
-				Text string `json:"text"`
-			}
+			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			b.sent = append(b.sent, body.Text)
+			text, _ := body["text"].(string)
+			b.sent = append(b.sent, text)
+			b.bodies = append(b.bodies, body)
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{"message_id": 1}})
 		default:
 			http.NotFound(w, r)
@@ -69,6 +70,20 @@ func (b *fakeBot) messages() []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]string(nil), b.sent...)
+}
+
+// sendRequest returns the whole sendMessage request that carried text.
+func (b *fakeBot) sendRequest(t *testing.T, text string) map[string]any {
+	t.Helper()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, body := range b.bodies {
+		if body["text"] == text {
+			return body
+		}
+	}
+	t.Fatalf("no request with the text %q", text)
+	return nil
 }
 
 // waitFor returns the first message containing want, or fails after a few seconds.

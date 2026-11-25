@@ -53,6 +53,16 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) err
 	return c.call(ctx, "sendMessage", body, nil)
 }
 
+// SendHTML posts HTML formatted text to a chat, with a button that opens buttonURL unless it is empty.
+func (c *Client) SendHTML(ctx context.Context, chatID int64, text, buttonText, buttonURL string) error {
+	body := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML"}
+	if buttonURL != "" {
+		button := map[string]string{"text": buttonText, "url": buttonURL}
+		body["reply_markup"] = map[string]any{"inline_keyboard": [][]map[string]string{{button}}}
+	}
+	return c.call(ctx, "sendMessage", body, nil)
+}
+
 // getUpdates returns messages after offset, waiting up to pollTimeout seconds.
 func (c *Client) getUpdates(ctx context.Context, offset int64) ([]Update, error) {
 	body := map[string]any{

@@ -165,6 +165,7 @@ cp .env.example .env
 | `JWT_TTL` | `24h` | How long a login token stays valid (Go duration, for example `12h`) |
 | `TELEGRAM_BOT_TOKEN` | empty | Bot token from @BotFather. Empty turns off sign-in by Telegram code (`503 telegram_unavailable`) |
 | `TELEGRAM_BOT_USERNAME` | empty | The bot's username without `@`, required when the token is set |
+| `PANEL_URL` | empty | Address the seller opens the panel at, for example `http://192.168.0.10:3000` on the same network. The Telegram order alert then has a button that opens the order (see D19). `localhost` would point at the phone itself |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base URL, change only for a test double |
 | `APP_ENV` | `development` in Docker Compose, `production` when unset | `development` turns on the dev endpoint `POST /dev/simulate-order` (fake buyer orders); in `production` it does not exist |
 | `OPENAPI_FILE` | empty (off); `/app/api/openapi.yaml` in Docker Compose | Path of the OpenAPI file the backend turns into JSON at `GET /openapi.json`. Running the backend from `backend/` use `../api/openapi.yaml` |

@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -67,6 +68,33 @@ func TestSendMessagePostsToChat(t *testing.T) {
 	body := (*calls)[0]["body"].(map[string]any)
 	if body["chat_id"] != float64(42) || body["text"] != "hello" {
 		t.Fatalf("body = %+v", body)
+	}
+}
+
+func TestSendHTMLPostsFormattedTextWithAnOptionalButton(t *testing.T) {
+	srv, calls, mu := fakeBotAPI(t, nil)
+	c := NewClient(testToken, "panel_bot", srv.URL)
+	if err := c.SendHTML(context.Background(), 42, "<b>hi</b>", "Open", "http://10.0.0.5:3000/orders?order=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SendHTML(context.Background(), 42, "plain", "Open", ""); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*calls) != 2 || (*calls)[0]["method"] != "sendMessage" {
+		t.Fatalf("calls = %+v", *calls)
+	}
+	first := (*calls)[0]["body"].(map[string]any)
+	if first["chat_id"] != float64(42) || first["text"] != "<b>hi</b>" || first["parse_mode"] != "HTML" {
+		t.Fatalf("body = %+v", first)
+	}
+	want := "map[inline_keyboard:[[map[text:Open url:http://10.0.0.5:3000/orders?order=1]]]]"
+	if got := fmt.Sprint(first["reply_markup"]); got != want {
+		t.Fatalf("reply_markup = %s", got)
+	}
+	if second := (*calls)[1]["body"].(map[string]any); second["reply_markup"] != nil {
+		t.Fatalf("a message without an address has a button: %+v", second)
 	}
 }
 

@@ -76,7 +76,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	var alerts *orderalert.Alerts
 	var publisher order.Publisher = hub
 	if bot != nil {
-		alerts = orderalert.New(orderalert.NewPgRepository(pool), bot, logger, orderAlertQueue)
+		alerts = orderalert.New(orderalert.NewPgRepository(pool), bot, logger, orderAlertQueue, cfg.BusinessLocation, cfg.PanelURL)
 		publisher = fanout{hub, alerts}
 	}
 	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent, publisher)

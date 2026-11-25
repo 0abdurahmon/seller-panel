@@ -4,8 +4,8 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +19,7 @@ func TestOrderAlertJourney(t *testing.T) {
 		c.TelegramBotToken = fakeBotToken
 		c.TelegramBotUsername = "panel_bot"
 		c.TelegramAPIURL = bot.url
+		c.PanelURL = "http://panel.test"
 	})
 	ctx, stop := context.WithCancel(context.Background())
 	t.Cleanup(stop)
@@ -45,9 +46,36 @@ func TestOrderAlertJourney(t *testing.T) {
 	created := s.do(http.MethodPost, "/dev/simulate-order", sel.token, nil)
 	s.expect(created, http.StatusCreated, "")
 	created.decode(&o)
-	msg := bot.waitFor(t, "New order "+o.Number)
-	if !strings.Contains(msg, o.BuyerName) || !regexp.MustCompile(`so'm\. Open the seller panel`).MatchString(msg) {
-		t.Fatalf("alert = %q", msg)
+	msg := bot.waitFor(t, "Новый заказ "+o.Number)
+	for _, want := range []string{o.BuyerName, "Состав:", "Phone SKU-", "сум", "Откройте панель продавца"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("alert lacks %q: %q", want, msg)
+		}
+	}
+	var detail struct {
+		BuyerPhone      string `json:"buyer_phone"`
+		DeliveryAddress string `json:"delivery_address"`
+	}
+	var list struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+	}
+	s.do(http.MethodGet, "/orders", sel.token, nil).decode(&list)
+	if len(list.Items) != 1 {
+		t.Fatalf("orders = %+v", list)
+	}
+	s.do(http.MethodGet, fmt.Sprintf("/orders/%d", list.Items[0].ID), sel.token, nil).decode(&detail)
+	if detail.BuyerPhone == "" || strings.Contains(msg, detail.BuyerPhone) || strings.Contains(msg, detail.DeliveryAddress) {
+		t.Fatalf("the alert must not carry the phone or the address: %q", msg)
+	}
+	sent := bot.sendRequest(t, msg)
+	if sent["parse_mode"] != "HTML" {
+		t.Fatalf("parse_mode = %v", sent["parse_mode"])
+	}
+	want := fmt.Sprintf("map[inline_keyboard:[[map[text:Открыть заказ url:http://panel.test/orders?order=%d]]]]", list.Items[0].ID)
+	if got := fmt.Sprint(sent["reply_markup"]); got != want {
+		t.Fatalf("reply_markup = %s, want %s", got, want)
 	}
 
 	// A seller without a linked chat gets no alert for the same kind of order.
