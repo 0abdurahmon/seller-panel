@@ -120,14 +120,19 @@ func TestMultipartUpdateWithLogo(t *testing.T) {
 		t.Fatalf("replace: %d, removed %v, want the old logo %q", rec.Code, a.store.removed, first)
 	}
 
-	rec = a.put(a.token, fields(part{field: "remove_logo", value: "true"})...)
-	if rec.Code != 200 || shopOf(t, rec).LogoURL != nil || !strings.Contains(rec.Body.String(), `"logo_url":null`) {
-		t.Fatalf("remove: %d %s", rec.Code, rec.Body)
+	kept := *shopOf(t, rec).LogoURL
+
+	rec = a.put(a.token, fields()...)
+	if rec.Code != 200 || shopOf(t, rec).LogoURL == nil || *shopOf(t, rec).LogoURL != kept {
+		t.Fatalf("an edit without a logo: %d %s, want the logo %q", rec.Code, rec.Body, kept)
 	}
 
-	rec = a.put(a.token, fields(part{field: "remove_logo", value: "false"})...)
-	if rec.Code != 200 {
-		t.Fatalf("remove_logo=false: %d %s", rec.Code, rec.Body)
+	rec = a.put(a.token, fields(part{field: "remove_logo", value: "true"})...)
+	if rec.Code != 400 || code(t, rec) != "validation_error" {
+		t.Fatalf("a logo cannot be removed: %d %s", rec.Code, rec.Body)
+	}
+	if got, err := NewService(a.repo, a.store).Get(t.Context(), 1); err != nil || got.LogoURL == nil || *got.LogoURL != kept || len(a.store.removed) != 1 {
+		t.Fatalf("a refused request changed the logo: %+v, removed %v, err %v", got, a.store.removed, err)
 	}
 }
 
@@ -146,8 +151,6 @@ func TestMultipartUpdateErrors(t *testing.T) {
 		{"file in a wrong field", fields(part{field: "avatar", file: []byte("x")}), 400, "validation_error"},
 		{"two logos", fields(part{field: "logo", file: []byte("a")}, part{field: "logo", file: []byte("b")}), 400, "validation_error"},
 		{"empty logo", fields(part{field: "logo", file: []byte{}, value: ""}), 400, "validation_error"},
-		{"remove_logo is not a boolean", fields(part{field: "remove_logo", value: "maybe"}), 400, "validation_error"},
-		{"a logo and remove_logo", fields(part{field: "logo", file: []byte("x")}, part{field: "remove_logo", value: "true"}), 400, "validation_error"},
 		{"logo over 5 MB", fields(big), 413, "file_too_large"},
 	}
 	for _, tc := range cases {

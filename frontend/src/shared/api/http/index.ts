@@ -16,7 +16,7 @@ AXIOS_INSTANCE.interceptors.request.use((config) => {
   return config;
 });
 
-const AUTH_ENDPOINTS = ["/auth/login", "/auth/register"];
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/request-code', '/auth/verify'];
 
 AXIOS_INSTANCE.interceptors.response.use(
   (res) => res,

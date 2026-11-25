@@ -41,6 +41,10 @@ export default defineConfig(({ mode }) => {
               if (!proxyRes.headers['content-type']?.startsWith('text/event-stream')) return
               // This runs before the proxy copies the status and headers, so send them a tick later.
               process.nextTick(() => res.flushHeaders())
+              // When the backend dies mid-stream the proxy leaves the browser's side open and silent.
+              proxyRes.on('close', () => {
+                if (!proxyRes.complete) res.destroy()
+              })
             })
           },
         },

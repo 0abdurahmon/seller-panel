@@ -3,8 +3,6 @@ package shop
 import (
 	"errors"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
@@ -14,11 +12,11 @@ const maxLogoBytes = 5 << 20
 
 var errInvalidBody = errors.New("request body is not valid")
 
-// readForm reads the multipart form of PUT /shop: the profile fields, a logo file in "logo" and "remove_logo".
+// readForm reads the multipart form of PUT /shop: the profile fields and a logo file in "logo".
 // Unknown and repeated fields are refused, like unknown fields in the JSON body.
 func readForm(w http.ResponseWriter, r *http.Request) (UpdateRequest, LogoChange, error) {
 	f, err := httpx.ReadForm(w, r, httpx.FormSpec{
-		Fields:    []string{"name", "description", "contact_phone", "pickup_address", "remove_logo"},
+		Fields:    []string{"name", "description", "contact_phone", "pickup_address"},
 		FileField: "logo", MaxFiles: 1, MaxFileBytes: maxLogoBytes,
 	})
 	if err != nil {
@@ -39,13 +37,6 @@ func readForm(w http.ResponseWriter, r *http.Request) (UpdateRequest, LogoChange
 	lc := LogoChange{}
 	if len(f.Files) == 1 {
 		lc.Add = f.Files[0]
-	}
-	if v := strings.TrimSpace(f.Values["remove_logo"]); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return UpdateRequest{}, LogoChange{}, invalid("remove_logo must be true or false")
-		}
-		lc.Remove = b
 	}
 	return req, lc, nil
 }

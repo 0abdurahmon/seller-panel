@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
+import { dashboardKeys } from "@/entities/dashboard";
 import { holdsStock, orderKeys, type OrderTarget } from "@/entities/order";
 import { productKeys } from "@/entities/product";
 import { getApiErrorMessage, getOrders } from "@/shared/api";
@@ -34,6 +35,7 @@ export const CancelOrderDialog = () => {
   });
 
   const mutation = useMutation({
+    meta: { announcedByServer: true },
     mutationFn: ({ target, reason }: { target: OrderTarget; reason: string }) =>
       api.postOrdersIdTransition(target.id, { to: "cancelled", reason }),
     onSuccess: async () => {
@@ -41,6 +43,8 @@ export const CancelOrderDialog = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: orderKeys.all }),
         queryClient.invalidateQueries({ queryKey: productKeys.all }),
+        // The menu badge counts the orders waiting for action.
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
       ]);
       handleClose();
     },

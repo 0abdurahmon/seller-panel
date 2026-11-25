@@ -9,6 +9,8 @@ const MESSAGES: Record<string, string> = {
   validation_error: 'Проверьте заполненные поля',
   unauthorized: 'Сессия истекла, войдите снова',
   invalid_credentials: 'Неверный email или пароль',
+  invalid_code: 'Неверный или просроченный код',
+  telegram_unavailable: 'Вход через Telegram сейчас недоступен',
   not_found: 'Не найдено: возможно, запись уже удалена',
   product_not_found: 'Товар не найден: возможно, он уже удалён',
   email_taken: 'Этот email уже зарегистрирован',
@@ -65,4 +67,11 @@ export function getApiFieldError(error: unknown, field: string) {
 /** The HTTP status of a failed request; undefined when there was no answer (network error). */
 export function getErrorStatus(error: unknown) {
   return Axios.isAxiosError(error) ? error.response?.status : undefined;
+}
+
+/** How long the server asked to wait (`Retry-After`, in seconds), as milliseconds; undefined when it did not. */
+export function getRetryAfterMs(error: unknown) {
+  if (!Axios.isAxiosError(error)) return undefined;
+  const seconds = Number(error.response?.headers['retry-after']);
+  return seconds > 0 ? seconds * 1000 : undefined;
 }

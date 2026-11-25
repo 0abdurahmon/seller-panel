@@ -5,6 +5,10 @@ import type { ProductStatusFilter } from './types';
 
 const api = getProducts();
 
+// The backend sends no events for products, so a change made on another device is found by asking
+// again while the page is in view (react-query pauses this for a hidden tab).
+const PRODUCTS_REFRESH_MS = 15_000;
+
 export const productKeys = {
   all: ['products'] as const,
   list: (params: GetProductsParams) => [...productKeys.all, 'list', params] as const,
@@ -18,6 +22,7 @@ export function useProducts(params: GetProductsParams) {
     queryFn: ({ signal }) => api.getProducts(params, { signal }),
     // Keeps the current page on screen while the next one loads.
     placeholderData: keepPreviousData,
+    refetchInterval: PRODUCTS_REFRESH_MS,
   });
 }
 
@@ -42,6 +47,7 @@ export function useProductCounts(
           { signal },
         ),
       placeholderData: keepPreviousData,
+      refetchInterval: PRODUCTS_REFRESH_MS,
     })),
     combine: (results) =>
       Object.fromEntries(COUNTED.map((status, i) => [status, results[i].data?.total])),
