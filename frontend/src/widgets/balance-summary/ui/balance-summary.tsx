@@ -21,7 +21,7 @@ function BalanceSummaryView({ balance }: { balance: Balance }) {
           </span>
         </div>
         <span className="text-3xl font-semibold tracking-tight whitespace-nowrap text-foreground">
-          <AnimatedNumber value={balance.available} />
+          <AnimatedNumber value={balance.available} fromZero />
           <span className="ml-1.5 text-base font-medium text-muted-foreground">сум</span>
         </span>
         <span className="text-xs text-muted-foreground">
@@ -37,7 +37,7 @@ function BalanceSummaryView({ balance }: { balance: Balance }) {
           </span>
         </div>
         <span className="text-3xl font-semibold tracking-tight whitespace-nowrap text-foreground">
-          <AnimatedNumber value={balance.earned} />
+          <AnimatedNumber value={balance.earned} fromZero />
           <span className="ml-1.5 text-base font-medium text-muted-foreground">сум</span>
         </span>
         <span className="text-xs text-muted-foreground">
@@ -53,7 +53,7 @@ function BalanceSummaryView({ balance }: { balance: Balance }) {
           </span>
         </div>
         <span className="text-3xl font-semibold tracking-tight whitespace-nowrap text-foreground">
-          <AnimatedNumber value={Math.abs(balance.commission)} />
+          <AnimatedNumber value={Math.abs(balance.commission)} fromZero />
           <span className="ml-1.5 text-base font-medium text-muted-foreground">сум</span>
         </span>
         <span className="text-xs text-muted-foreground">
