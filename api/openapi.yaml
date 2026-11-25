@@ -275,7 +275,8 @@ paths:
         `new → accepted → packed → handed_to_courier → delivered`, and `cancelled`
         from `new`, `accepted` or `packed`.
         - `accepted` reserves stock (fails with 409 `insufficient_stock` if available < quantity).
-        - `cancelled` releases reserved stock and requires `reason`.
+        - `cancelled` releases reserved stock and requires `reason` of at most 500 characters (counted after
+          trimming spaces); a missing or longer one is `400 validation_error`.
         - `delivered` deducts stock and writes `sale` and `commission` balance entries.
         Any other transition is rejected with 409 `invalid_transition`.
       parameters:
@@ -1082,7 +1083,8 @@ components:
         reason:
           type: string
           minLength: 1
-          description: Required when `to` is `cancelled`
+          maxLength: 500
+          description: Required when `to` is `cancelled`, at most 500 characters after trimming spaces
 
     TopProduct:
       type: object

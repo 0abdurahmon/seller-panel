@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	defaultPageSize = 20
 	maxPageSize     = 100
 	maxPage         = 1_000_000
+	maxReasonLen    = 500
 )
 
 // Service holds the order rules: the status machine, stock effects and the
@@ -105,6 +107,9 @@ func (s *Service) Transition(ctx context.Context, shopID, orderID int64, req Tra
 	reason := strings.TrimSpace(req.Reason)
 	if req.To == StatusCancelled && reason == "" {
 		return Order{}, fmt.Errorf("%w: reason is required to cancel", ErrValidation)
+	}
+	if req.To == StatusCancelled && utf8.RuneCountInString(reason) > maxReasonLen {
+		return Order{}, fmt.Errorf("%w: reason must be at most %d characters", ErrValidation, maxReasonLen)
 	}
 
 	var result Order
