@@ -129,8 +129,9 @@ func TestRequestCodeCooldown(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.advance(codeCooldown - time.Second)
-	if err := f.svc.RequestCode(ctx, f.email); err != nil {
-		t.Fatal(err)
+	var cooldown *CooldownError
+	if err := f.svc.RequestCode(ctx, f.email); !errors.As(err, &cooldown) || cooldown.RetryAfter != time.Second {
+		t.Fatalf("during cooldown: err = %v, want CooldownError with 1s left", err)
 	}
 	if n := len(f.tg.messages()); n != 1 {
 		t.Fatalf("%d messages during cooldown, want 1", n)
@@ -322,8 +323,9 @@ func TestCodeLimitsCanBeConfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.advance(9 * time.Second)
-	if err := svc.RequestCode(ctx, f.email); err != nil {
-		t.Fatal(err)
+	var cooldown *CooldownError
+	if err := svc.RequestCode(ctx, f.email); !errors.As(err, &cooldown) || cooldown.RetryAfter != time.Second {
+		t.Fatalf("inside a 10s cooldown: err = %v, want CooldownError with 1s left", err)
 	}
 	if n := len(f.tg.messages()); n != 1 {
 		t.Fatalf("%d messages inside a 10s cooldown, want 1", n)

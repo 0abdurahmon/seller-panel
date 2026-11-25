@@ -201,6 +201,11 @@ func (s *Service) HandleBotMessage(ctx context.Context, chatID int64, text strin
 
 // RequestCode sends a sign-in code to the seller's linked chat. Unknown emails and
 // unlinked sellers both get ErrTelegramNotLinked, so the answer does not show which accounts exist.
+// CooldownError says how long a seller must wait before the next sign-in code.
+type CooldownError struct{ RetryAfter time.Duration }
+
+func (e *CooldownError) Error() string { return "a sign-in code was requested recently" }
+
 func (s *Service) RequestCode(ctx context.Context, email string) error {
 	if s.telegram == nil {
 		return ErrTelegramUnavailable
@@ -214,9 +219,13 @@ func (s *Service) RequestCode(ctx context.Context, email string) error {
 	}
 
 	now := s.now()
-	if prev, err := s.repo.FindLoginCode(ctx, sellerID); err == nil && now.Before(prev.CreatedAt.Add(s.codeCooldown)) {
-		return nil
-	} else if err != nil && !errors.Is(err, ErrNotFound) {
+	prev, err := s.repo.FindLoginCode(ctx, sellerID)
+	switch {
+	case err == nil:
+		if wait := prev.CreatedAt.Add(s.codeCooldown).Sub(now); wait > 0 {
+			return &CooldownError{RetryAfter: wait}
+		}
+	case !errors.Is(err, ErrNotFound):
 		return err
 	}
 

@@ -126,6 +126,11 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeAuthError(w http.ResponseWriter, err error) {
+	var cooldown *CooldownError
+	if errors.As(err, &cooldown) {
+		httpx.WriteRateLimited(w, cooldown.RetryAfter)
+		return
+	}
 	switch {
 	case errors.Is(err, ErrValidation):
 		httpx.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())

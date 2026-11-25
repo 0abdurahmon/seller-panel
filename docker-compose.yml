@@ -66,6 +66,13 @@ services:
     volumes:
       - ./api:/usr/share/nginx/html/docs/spec:ro
       - uploads:/srv/uploads:ro
+    environment:
+      RATE_LIMIT_NGINX_API_RATE: ${RATE_LIMIT_NGINX_API_RATE:-10r/s}
+      RATE_LIMIT_NGINX_API_BURST: ${RATE_LIMIT_NGINX_API_BURST:-30}
+      RATE_LIMIT_NGINX_AUTH_RATE: ${RATE_LIMIT_NGINX_AUTH_RATE:-10r/m}
+      RATE_LIMIT_NGINX_AUTH_BURST: ${RATE_LIMIT_NGINX_AUTH_BURST:-5}
+      RATE_LIMIT_NGINX_FILES_RATE: ${RATE_LIMIT_NGINX_FILES_RATE:-50r/s}
+      RATE_LIMIT_NGINX_FILES_BURST: ${RATE_LIMIT_NGINX_FILES_BURST:-100}
     ports:
       - "${FRONTEND_PORT:-3000}:8080"
     depends_on:
@@ -74,6 +81,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
     cap_drop:
       - ALL
     security_opt:
