@@ -14,6 +14,7 @@ export * from './icons';
 export * from './image-picker';
 export * from './input';
 export * from './input-group';
+export * from './input-otp';
 export * from './label';
 export * from './logo';
 export * from './password-input';

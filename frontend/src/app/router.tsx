@@ -33,6 +33,10 @@ export const router = createBrowserRouter([
             element: page(() => import('@/pages/login').then((m) => m.LoginPage)),
           },
           {
+            path: '/login/otp',
+            element: page(() => import('@/pages/otp').then((m) => m.OtpPage)),
+          },
+          {
             path: '/register',
             element: page(() => import('@/pages/register').then((m) => m.RegisterPage)),
           },

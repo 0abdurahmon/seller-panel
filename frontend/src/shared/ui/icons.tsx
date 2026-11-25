@@ -112,6 +112,15 @@ function MenuIcon(props: IconProps) {
   )
 }
 
+/** A plain horizontal dash / minus. */
+function MinusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 12h14" />
+    </IconBase>
+  )
+}
+
 export {
   CheckIcon,
   ChevronDownIcon,
@@ -120,6 +129,7 @@ export {
   ChevronUpIcon,
   CloseIcon,
   MenuIcon,
+  MinusIcon,
   MoreHorizontalIcon,
   MoreVerticalIcon,
 }

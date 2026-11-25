@@ -9,6 +9,8 @@ const MESSAGES: Record<string, string> = {
   validation_error: 'Проверьте заполненные поля',
   unauthorized: 'Сессия истекла, войдите снова',
   invalid_credentials: 'Неверный email или пароль',
+  invalid_code: 'Неверный или просроченный код',
+  telegram_unavailable: 'Вход через Telegram сейчас недоступен',
   not_found: 'Не найдено: возможно, запись уже удалена',
   product_not_found: 'Товар не найден: возможно, он уже удалён',
   email_taken: 'Этот email уже зарегистрирован',
