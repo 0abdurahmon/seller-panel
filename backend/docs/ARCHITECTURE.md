@@ -1,6 +1,6 @@
 # Architecture
 
-How the Seller Panel backend is built and the rules every feature follows. Business rules live in [`DOMAIN.md`](../../docs/DOMAIN.md), stack choices in [`DECISIONS.md`](../../docs/DECISIONS.md). The frontend rules are in [`frontend/AGENTS.md`](../../frontend/AGENTS.md). Status: **draft for team review** (issue #29).
+How the Seller Panel backend is built and the rules every feature follows. Business rules live in [`DOMAIN.md`](../../docs/DOMAIN.md), stack choices in [`DECISIONS.md`](../../docs/DECISIONS.md). The frontend rules are in [`frontend/AGENTS.md`](../../frontend/AGENTS.md).
 
 ## 1. System overview
 
@@ -10,11 +10,12 @@ flowchart LR
   Nginx -->|"proxy /api/ to :8080"| API["Go backend"]
   API -->|"pgx pool"| DB[("PostgreSQL")]
   API -->|"photos"| Files["uploads volume"]
+  API <-->|"long polling, messages"| Bot["Telegram Bot API (optional)"]
 ```
 
 - One backend, one database, one SPA. No message queue, no cache, no microservices: the team has 3–5 days.
 - The browser only talks to the SPA origin. nginx (production) and the Vite dev server proxy `/api` to the backend, so there is no CORS setup.
-- The backend is a stateless Go process. All state is in PostgreSQL and the uploads volume.
+- The backend runs as one instance. Data is in PostgreSQL and the uploads volume; open order streams, rate limit counters, the alert queue and the bot polling live in its memory (D18, D21).
 
 ## 2. Backend structure
 
@@ -31,6 +32,8 @@ backend/
     app/                  wiring: builds every service, handler, limiter and the router
     database/             pgx pool, DBTX, InTx helper, migration runner
     httpx/                JSON helpers, error type, request logging
+    httpapi/              routes and the protected(...) wrapper
+    apispec/              serves api/openapi.yaml as JSON (D9)
     auth/                 sign up, login, JWT
     shop/                 shop profile
     catalog/              categories (read only)
@@ -40,9 +43,13 @@ backend/
     dashboard/            summary queries
     seed/                 demo shop, 15 products and 30 orders, written through the services (D11)
     balance/              balance entries
+    upload/               images: checked, converted to WebP and stored (D12)
+    realtime/             in-process hub and the order event stream (D18)
+    telegram/             Telegram Bot API client (D21)
+    orderalert/           Telegram message for each new order (D19)
 ```
 
-Each feature package has the same files:
+Each feature package has the same files. `app`, `httpapi`, `httpx`, `config`, `database`, `apispec`, `realtime`, `telegram` and `seed` are infrastructure or tools and have their own shape:
 
 | File | Responsibility |
 |------|----------------|
@@ -82,7 +89,7 @@ Authentication helpers live in `auth`: `RequireAuth` for routes, `MustPrincipal`
 
 ## 4. Auth and data isolation
 
-- Email + password. Passwords hashed with bcrypt. Login returns a JWT (HS256, signed with `JWT_SECRET`, TTL from config) carrying `seller_id` and `shop_id`. Final wording of D2 is part of issue #10.
+- Email + password. Passwords hashed with bcrypt. Login returns a JWT (HS256, signed with `JWT_SECRET`, TTL from config) carrying `seller_id` and `shop_id`. A seller who linked a Telegram chat can also sign in with a one-time code (D21).
 - An auth middleware validates the token and puts `seller_id` and `shop_id` into the request context. Handlers read them from the context, **never from the request body or URL**.
 - **Every repository method takes `shopID` and includes it in the `WHERE` clause.** Asking for another seller's product or order returns `404`, same as a missing one. This is the single rule that guarantees "a seller only sees their own data" and it gets a test per feature.
 - Logout is client-side (drop the token). No server session store.
@@ -125,19 +132,19 @@ Images: a product is saved with its photos and the shop with its logo in one req
 |------|-----|-------|
 | Status transitions | Table-driven unit tests over every `from → to` pair, valid and invalid | `order` service |
 | Commission math | Pure function with integer arithmetic, edge cases (rounding, zero) | `balance` / `order` service |
-| Stock reserve and release | Integration tests against a real PostgreSQL, including two concurrent accepts and "never negative" | `product` + `order` repository |
+| Stock reserve and release | Integration tests against a real PostgreSQL, including two concurrent accepts and "never negative" | `stock` + `order` repository |
 | Data isolation | Per feature: seller B requesting seller A's resource gets `404` | handler or integration |
 | HTTP behaviour | `httptest` against the router | each `handler` |
 | Whole journeys, isolation, error shape, limits | Real router and PostgreSQL through `app.NewHandler`, build tag `e2e` | `backend/e2e` |
 
-CI (`.github/workflows/ci.yml`) already runs lint, vet, build and tests. Integration tests need a database, see open questions.
+CI (`.github/workflows/ci.yml`) runs formatting, vet, the linter, tests against a PostgreSQL service with a coverage minimum, the end-to-end tests, a vulnerability check, the frontend lint and build, and a smoke test of the Docker stack.
 
-## 8. Open questions for the team
+## 8. Answered questions
 
-Reviewers: please answer these in the PR. A recommendation is given for each.
+Open while the design was a draft. The numbers are kept because `DECISIONS.md` refers to them.
 
-1. **Token storage.** `localStorage` with `Authorization: Bearer` (simple, exposed to XSS) or an httpOnly cookie (safer, needs CSRF thinking). *Recommend:* Bearer + `localStorage` for this project, noted as a known trade-off.
-2. **Integration test database.** GitHub Actions `services: postgres` in CI plus the compose `db` locally, or `testcontainers-go`. *Recommend:* CI service container, fewer moving parts.
-3. **Business time zone** for the dashboard. *Recommend:* `Asia/Tashkent`, a constant in config. *Decided in D10:* `Asia/Tashkent` by default, set with `BUSINESS_TIMEZONE`.
-4. **Order number.** A global sequence starting at 100000 (`#100245`) or per-shop numbering. *Recommend:* global sequence, unique and simple.
-5. **Photos on disk vs object storage.** *Recommend:* local volume for the MVP, object storage is out of scope.
+1. **Token storage.** `localStorage` with `Authorization: Bearer`, a known trade-off against XSS (D2).
+2. **Integration test database.** A `postgres` service in CI and a throwaway `_test` database locally.
+3. **Business time zone.** `Asia/Tashkent` by default, set with `BUSINESS_TIMEZONE` (D10).
+4. **Order number.** One global sequence starting at 100000 (`#100245`).
+5. **Photos.** A local volume served by nginx, object storage is out of scope (D12).
