@@ -11,7 +11,7 @@ const shopA int64 = 1
 
 func newTestService(t *testing.T, repo *memRepository) *Service {
 	t.Helper()
-	svc, err := NewService(repo, 10)
+	svc, err := NewService(repo, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestListsInOrderJSONAreNeverNull(t *testing.T) {
 }
 
 func TestNewServiceRejectsBadCommission(t *testing.T) {
-	if _, err := NewService(newMemRepository(), 101); err == nil {
+	if _, err := NewService(newMemRepository(), 101, nil); err == nil {
 		t.Fatal("commission 101 accepted")
 	}
 }

@@ -135,7 +135,7 @@ func newServices(pool *pgxpool.Pool, o Options) (*services, error) {
 		return nil, err
 	}
 	stockSvc := stock.NewService(stock.NewPgRepository(pool))
-	orderSvc, err := order.NewService(order.NewPgRepository(pool), o.CommissionPercent)
+	orderSvc, err := order.NewService(order.NewPgRepository(pool), o.CommissionPercent, nil)
 	if err != nil {
 		return nil, err
 	}

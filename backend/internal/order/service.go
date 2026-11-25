@@ -18,16 +18,36 @@ const (
 type Service struct {
 	repo              Repository
 	commissionPercent int64
+	publisher         Publisher
 	now               func() time.Time
 	intn              func(n int) int
 }
 
-// NewService builds the order service. commissionPercent is 0–100.
-func NewService(repo Repository, commissionPercent int) (*Service, error) {
+// Publisher receives order events. Service calls it only after the change is committed.
+type Publisher interface {
+	Publish(shopID int64, name string, data any)
+}
+
+// NewService builds the order service. commissionPercent is 0–100. publisher may be nil.
+func NewService(repo Repository, commissionPercent int, publisher Publisher) (*Service, error) {
 	if commissionPercent < 0 || commissionPercent > 100 {
 		return nil, fmt.Errorf("commission percent must be between 0 and 100")
 	}
-	return &Service{repo: repo, commissionPercent: int64(commissionPercent), now: time.Now, intn: randomIntn}, nil
+	return &Service{repo: repo, commissionPercent: int64(commissionPercent), publisher: publisher,
+		now: time.Now, intn: randomIntn}, nil
+}
+
+func (s *Service) publish(shopID int64, name string, data any) {
+	if s.publisher != nil {
+		s.publisher.Publish(shopID, name, data)
+	}
+}
+
+func (s *Service) publishCreated(shopID int64, o Order) {
+	s.publish(shopID, EventOrderCreated, Summary{
+		ID: o.ID, Number: o.Number, Status: o.Status, BuyerName: o.BuyerName,
+		Total: o.Total, CreatedAt: o.CreatedAt.UTC(),
+	})
 }
 
 // List returns one page of the shop's orders, newest first. Paging is clamped like product lists.
@@ -147,5 +167,8 @@ func (s *Service) Transition(ctx context.Context, shopID, orderID int64, req Tra
 	if err != nil {
 		return Order{}, err
 	}
+	s.publish(shopID, EventOrderStatusChanged, StatusChange{
+		ID: result.ID, Number: result.Number, Status: result.Status, StatusChangedAt: result.StatusChangedAt.UTC(),
+	})
 	return result, nil
 }

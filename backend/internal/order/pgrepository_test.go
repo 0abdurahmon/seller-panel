@@ -22,7 +22,7 @@ func newPgRepo(t *testing.T) (*PgRepository, *pgxpool.Pool) {
 
 func newPgService(t *testing.T, repo *PgRepository) *Service {
 	t.Helper()
-	svc, err := NewService(repo, 10)
+	svc, err := NewService(repo, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

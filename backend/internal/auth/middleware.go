@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 )
@@ -15,6 +16,8 @@ type principalKey struct{}
 type Principal struct {
 	SellerID int64
 	ShopID   int64
+	// Expires is when the token stops being valid; zero when the token has no expiry.
+	Expires time.Time
 }
 
 // PrincipalFrom returns the principal set by RequireAuth.
@@ -48,6 +51,9 @@ func RequireAuth(tokens *TokenIssuer) func(http.Handler) http.Handler {
 				return
 			}
 			p := Principal{SellerID: claims.SellerID, ShopID: claims.ShopID}
+			if claims.ExpiresAt != nil {
+				p.Expires = claims.ExpiresAt.Time
+			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
 		})
 	}

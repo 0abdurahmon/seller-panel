@@ -90,6 +90,20 @@ type Summary struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Event names of the order stream (GET /orders/events).
+const (
+	EventOrderCreated       = "order.created"
+	EventOrderStatusChanged = "order.status_changed"
+)
+
+// StatusChange is the data of an order.status_changed event.
+type StatusChange struct {
+	ID              int64     `json:"id"`
+	Number          string    `json:"number"`
+	Status          Status    `json:"status"`
+	StatusChangedAt time.Time `json:"status_changed_at"`
+}
+
 // Page is one page of results.
 type Page[T any] struct {
 	Items    []T `json:"items"`

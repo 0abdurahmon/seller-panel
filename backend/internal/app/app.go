@@ -19,10 +19,17 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
+	"github.com/0abdurahmon/seller-panel/backend/internal/realtime"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
 	"github.com/0abdurahmon/seller-panel/backend/internal/stock"
 	"github.com/0abdurahmon/seller-panel/backend/internal/telegram"
 	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
+)
+
+// Open order streams per shop, and events buffered per stream before a slow client is dropped.
+const (
+	maxStreamsPerShop = 5
+	streamBuffer      = 16
 )
 
 // App is the HTTP handler and the background work that runs next to it.
@@ -62,7 +69,8 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	}
 	stockSvc := stock.NewService(stock.NewPgRepository(pool))
 
-	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent)
+	hub := realtime.NewHub(maxStreamsPerShop, streamBuffer)
+	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent, hub)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +107,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		Tokens:  tokens,
 		Stock:   stock.NewHandler(stockSvc, productHandler.Load),
 		Balance: balance.NewHandler(balance.NewService(balance.NewPgRepository(pool))),
-		Order:   order.NewHandler(orderSvc),
+		Order:   order.NewHandler(orderSvc, hub),
 
 		Dashboard: dashboard.NewHandler(dashboardSvc),
 
