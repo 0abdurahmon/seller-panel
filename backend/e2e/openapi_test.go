@@ -45,6 +45,13 @@ func TestOpenAPIJSONDescribesTheImplementedAPI(t *testing.T) {
 	if _, ok := doc.Paths["/uploads"]; ok {
 		t.Error("the spec still has /uploads, images are saved by the product and shop endpoints")
 	}
+	for _, path := range []string{"/products", "/orders", "/balance/entries"} {
+		get, _ := doc.Paths[path]["get"].(map[string]any)
+		responses, _ := get["responses"].(map[string]any)
+		if _, ok := responses["400"]; !ok {
+			t.Errorf("the spec has no 400 response for GET %s, a bad query is refused", path)
+		}
+	}
 	for _, name := range []string{"Product", "Order", "OrderHistoryEntry", "Error", "TokenResponse"} {
 		if _, ok := doc.Comp.Schemas[name]; !ok {
 			t.Errorf("the spec has no schema %s", name)

@@ -205,6 +205,9 @@ paths:
     get:
       tags: [Orders]
       summary: List orders of the current shop
+      description: |
+        Newest first. `page_size` above 100 is lowered to 100. An unknown `status`, a `page` above
+        1 000 000 or a value that is not an integer is a `400 validation_error`.
       parameters:
         - name: status
           in: query
@@ -220,6 +223,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderPage'
+        '400':
+          description: Unknown `status`, `page` above 1 000 000, or `page` or `page_size` not an integer (`validation_error`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
