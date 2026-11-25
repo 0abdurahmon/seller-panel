@@ -38,7 +38,7 @@ function createClient(onChanged: () => void) {
       queries: {
         retry: shouldRetry,
         retryDelay,
-        staleTime: 30_000,
+        staleTime: 0,
         // Back on the tab, the seller sees what is true now: it may have changed on another device.
         refetchOnWindowFocus: 'always',
       },
