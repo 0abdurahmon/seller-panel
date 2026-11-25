@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { cn } from 'cn';
-import { Card } from '@/shared/ui';
+import { AnimatedNumber, Card } from '@/shared/ui';
 
 export type StatTone = 'neutral' | 'success' | 'attention';
 
@@ -22,7 +22,7 @@ export const StatCard = ({
   to,
 }: {
   label: string;
-  value: string;
+  value: number;
   unit?: string;
   hint: ReactNode;
   icon: ReactNode;
@@ -48,7 +48,7 @@ export const StatCard = ({
         </span>
       </div>
       <span className="text-3xl font-semibold tracking-tight whitespace-nowrap tabular-nums">
-        {value}
+        <AnimatedNumber value={value} />
         {unit && <span className="ml-1.5 text-base font-medium text-muted-foreground">{unit}</span>}
       </span>
       <span className="text-xs text-muted-foreground">{hint}</span>

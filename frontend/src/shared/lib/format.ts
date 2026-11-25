@@ -7,11 +7,6 @@ const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
-/** 1500000 -> "1 500 000": a count or an amount without its unit. */
-export function formatNumber(value: number) {
-  return priceFormat.format(value);
-}
-
 /** 1500000 -> "1 500 000 сум". Money stays an integer until it is shown. */
 export function formatPrice(value: number) {
   return `${priceFormat.format(value)} сум`;

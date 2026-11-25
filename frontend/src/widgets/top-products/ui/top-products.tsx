@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 import { Box } from "iconsax-reactjs";
 import type { TopProduct } from "@/shared/api";
-import { formatNumber, formatPrice } from "@/shared/lib";
 import {
+  AnimatedNumber,
   Button,
   Card,
   Empty,
@@ -69,7 +69,7 @@ function TopTable({ products }: { products: TopProduct[] }) {
               </div>
             </TableCell>
             <TableCell className="text-right whitespace-nowrap tabular-nums">
-              {formatNumber(product.quantity_sold)} шт.
+              <AnimatedNumber value={product.quantity_sold} /> шт.
             </TableCell>
             <TableCell>
               <Progress
@@ -79,7 +79,7 @@ function TopTable({ products }: { products: TopProduct[] }) {
               />
             </TableCell>
             <TableCell className="pr-5 text-right font-medium whitespace-nowrap tabular-nums">
-              {formatPrice(product.revenue)}
+              <AnimatedNumber value={product.revenue} /> сум
             </TableCell>
           </TableRow>
         ))}
