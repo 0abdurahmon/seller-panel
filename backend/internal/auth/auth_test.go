@@ -68,6 +68,26 @@ func TestEmailIsNormalised(t *testing.T) {
 	}
 }
 
+func TestPasswordIgnoresSurroundingSpaces(t *testing.T) {
+	svc, _ := newService(t)
+	ctx := context.Background()
+	if _, err := svc.Register(ctx, RegisterRequest{Email: "spaces@example.com", Password: "  correct horse \t", ShopName: "Shop"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, typed := range []string{"correct horse", " correct horse", "correct horse  ", " correct horse\n"} {
+		if _, err := svc.Login(ctx, LoginRequest{Email: "spaces@example.com", Password: typed}); err != nil {
+			t.Errorf("login with %q: %v", typed, err)
+		}
+	}
+	if _, err := svc.Login(ctx, LoginRequest{Email: "spaces@example.com", Password: "correcthorse"}); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("a space inside the password is part of it: err = %v", err)
+	}
+	_, err := svc.Register(ctx, RegisterRequest{Email: "short@example.com", Password: "  seven77  ", ShopName: "Shop"})
+	if !errors.Is(err, ErrValidation) {
+		t.Errorf("7 characters padded with spaces: err = %v, want ErrValidation", err)
+	}
+}
+
 func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 	svc, _ := newService(t)
 	register(t, svc, "dup@example.com")
