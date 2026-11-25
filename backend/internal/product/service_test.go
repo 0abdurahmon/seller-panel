@@ -109,7 +109,9 @@ func TestUpdate(t *testing.T) {
 	p, _ := svc.Create(ctx, 1, validInput(), nil)
 	other := validInput()
 	other.SKU = "OTHER"
-	svc.Create(ctx, 1, other, nil)
+	if _, err := svc.Create(ctx, 1, other, nil); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("changes fields and keeps stock and status", func(t *testing.T) {
 		got, err := svc.Update(ctx, 1, p.ID, UpdateInput{CategoryID: 2, Title: " New ", Description: "d", Price: 2_000_000, SKU: " PX-1 "}, PhotoChange{})

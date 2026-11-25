@@ -41,7 +41,9 @@ func (s *server) productFormTo(method, path, token string, parts ...formPart) re
 			if err != nil {
 				s.t.Fatal(err)
 			}
-			fw.Write(p.file)
+			if _, err := fw.Write(p.file); err != nil {
+				s.t.Fatal(err)
+			}
 			continue
 		}
 		if err := mw.WriteField(p.field, p.value); err != nil {

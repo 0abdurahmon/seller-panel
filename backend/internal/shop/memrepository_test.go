@@ -76,7 +76,9 @@ func (f *fakeLogoStore) Save(_ context.Context, shopID int64, image io.Reader) (
 	if f.failErr != nil {
 		return "", f.failErr
 	}
-	io.Copy(io.Discard, image)
+	if _, err := io.Copy(io.Discard, image); err != nil {
+		return "", err
+	}
 	f.next++
 	url := fmt.Sprintf("/api/uploads/%d/%032d.webp", shopID, f.next)
 	f.saved = append(f.saved, url)

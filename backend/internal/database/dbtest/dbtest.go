@@ -61,7 +61,8 @@ func NewPool(t *testing.T, suffix string) *pgxpool.Pool {
 	defer conn.Close(ctx)
 	_, err = conn.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize())
 	var pgErr *pgconn.PgError
-	if err != nil && !(errors.As(err, &pgErr) && (pgErr.Code == "42P04" || pgErr.Code == "23505")) {
+	exists := errors.As(err, &pgErr) && (pgErr.Code == "42P04" || pgErr.Code == "23505")
+	if err != nil && !exists {
 		t.Fatalf("create test database: %v", err)
 	}
 

@@ -25,10 +25,14 @@ func formRequest(t *testing.T, parts ...fpart) (*http.Request, []byte, string) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fw.Write(p.file)
+			if _, err := fw.Write(p.file); err != nil {
+				t.Fatal(err)
+			}
 			continue
 		}
-		mw.WriteField(p.field, p.value)
+		if err := mw.WriteField(p.field, p.value); err != nil {
+			t.Fatal(err)
+		}
 	}
 	mw.Close()
 	return nil, body.Bytes(), mw.FormDataContentType()
