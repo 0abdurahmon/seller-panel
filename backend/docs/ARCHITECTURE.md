@@ -109,7 +109,7 @@ The contract is `api/openapi.yaml` (D3). These conventions apply to every endpoi
 
 Known shape differences, on purpose: `GET /categories` returns `{"items": [...]}` without paging fields (about a dozen rows), `GET /health` returns `{"status": "ok"}`. Every endpoint that answers with a product (list items, create, get, update, archive, stock change) answers with the same fields (D14).
 
-Images: a product is saved with its photos and the shop with its logo in one request (`POST /products`, `PUT /products/{id}` and `PUT /shop` as `multipart/form-data`; up to 5 photos, or one logo, of jpeg, png or webp, 5 MB each), converted to WebP and stored as `UPLOAD_DIR/<shop_id>/<random>.webp`; the responses have `photos` and `logo_url` with their URLs. nginx serves the files itself, read only from the same volume, at `GET /api/uploads/{shop_id}/{name}` (public, no backend call). See D12, D15 and D16.
+Images: a product is saved with its photos and the shop with its logo in one request (`POST /products`, `PUT /products/{id}` and `PUT /shop` as `multipart/form-data`; 1 to 5 photos, or one logo, of jpeg, png or webp, 5 MB each), converted to WebP and stored as `UPLOAD_DIR/<shop_id>/<random>.webp`; the responses have `photos` and `logo_url` with their URLs. nginx serves the files itself, read only from the same volume, at `GET /api/uploads/{shop_id}/{name}` (public, no backend call). See D12, D15 and D16.
 
 ## 6. Cross-cutting
 

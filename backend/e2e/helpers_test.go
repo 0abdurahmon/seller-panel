@@ -226,13 +226,23 @@ func productBody(category int64, sku string, stock int) map[string]any {
 	}
 }
 
+// postProduct creates a product from the fields, with one small photo.
+func (s *server) postProduct(token string, fields map[string]any) response {
+	s.t.Helper()
+	parts := []formPart{photoPart(pngFixture(s.t, 10, 10))}
+	for name, v := range fields {
+		parts = append(parts, text(name, fmt.Sprint(v)))
+	}
+	return s.productForm(http.MethodPost, "/products", token, parts...)
+}
+
 func uniqueSKU() string {
 	return fmt.Sprintf("SKU-%d-%d", time.Now().UnixNano(), counter.Add(1))
 }
 
 func (s *server) createProduct(token string, category int64, stock int) product {
 	s.t.Helper()
-	res := s.do(http.MethodPost, "/products", token, productBody(category, uniqueSKU(), stock))
+	res := s.postProduct(token, productBody(category, uniqueSKU(), stock))
 	if res.status != http.StatusCreated {
 		s.t.Fatalf("create product status = %d: %s", res.status, res.body)
 	}

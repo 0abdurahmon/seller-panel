@@ -520,6 +520,7 @@ paths:
           schema:
             type: integer
             format: int64
+          description: Products of this category and of all its subcategories
         - name: status
           in: query
           required: false
@@ -544,24 +545,20 @@ paths:
       description: |
         A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).
 
-        Two request formats:
-        - `application/json`: the fields only, a product without photos.
-        - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
-          (jpeg, png or webp, 5 MB each). The first image is the cover.
+        The body is `multipart/form-data`: the fields as form fields plus 1 to 5 images in the field `photos`
+        (jpeg, png or webp, 5 MB each). The first image is the cover. A product needs at least one photo, so a
+        JSON body is answered with `validation_error`.
 
         The product and its photos are saved together: when anything fails (a bad field, a file that is not an
         image, a taken SKU) nothing is created and no file stays on the server. The image type is checked from
         the file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),
         scaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.
         The files are public: a photo URL opens in a browser without a token, nginx serves it straight from the
-        uploads volume. A request with images counts against a per shop limit of 20 a minute by default
-        (`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.
+        uploads volume. Every create counts against a per shop limit of 20 a minute by default
+        (`RATE_LIMIT_IMAGES_PER_MINUTE`).
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateProductRequest'
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/CreateProductForm'
@@ -577,8 +574,8 @@ paths:
                 $ref: '#/components/schemas/Product'
         '400':
           description: |
-            Invalid field, an unknown or repeated form field, more than 5 photos, an empty file or a file that is not a
-            decodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)
+            Invalid field, an unknown or repeated form field, no photo or more than 5, an empty file or a file that is not
+            a decodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)
           content:
             application/json:
               schema:
@@ -640,10 +637,11 @@ paths:
         Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
         Archived products cannot be edited.
 
-        Same two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`
-        request changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order
-        wanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;
-        an empty `keep_photos` removes them all. At most 5 photos in the end.
+        Two formats: `application/json` never touches the photos, a `multipart/form-data` request changes them:
+        `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order wanted, and new images
+        in `photos` are added after them. Without `keep_photos` every current photo stays; an empty `keep_photos`
+        drops them all, which needs new images in `photos`. 1 to 5 photos in the end, so a product that has no photo
+        yet gets one with its next edit.
 
         All or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are
         no longer listed are deleted from the server once the product is saved.
@@ -671,7 +669,7 @@ paths:
         '400':
           description: |
             Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of
-            this product, more than 5 photos in the end, or a file that is not a decodable image (`validation_error`);
+            this product, no photo or more than 5 in the end, or a file that is not a decodable image (`validation_error`);
             a body that is not valid JSON or multipart (`invalid_body`)
           content:
             application/json:
@@ -1286,39 +1284,6 @@ components:
         `/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp`. `[]` when there are none.
       example: ['/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp']
 
-    CreateProductRequest:
-      type: object
-      required: [category_id, title, price, sku]
-      additionalProperties: false
-      properties:
-        category_id:
-          type: integer
-          format: int64
-          minimum: 1
-        title:
-          type: string
-          minLength: 1
-          maxLength: 200
-        description:
-          type: string
-          maxLength: 5000
-        price:
-          type: integer
-          format: int64
-          minimum: 1
-          maximum: 1000000000000
-          description: so'm
-        sku:
-          type: string
-          minLength: 1
-          maxLength: 64
-          description: Unique within the shop
-        stock:
-          type: integer
-          minimum: 0
-          maximum: 1000000
-          default: 0
-
     UpdateProductRequest:
       type: object
       required: [category_id, title, price, sku]
@@ -1351,8 +1316,8 @@ components:
 
     CreateProductForm:
       type: object
-      required: [category_id, title, price, sku]
-      description: The fields of `CreateProductRequest` as form fields, plus the images.
+      required: [category_id, title, price, sku, photos]
+      description: The fields of a new product and its images.
       properties:
         category_id:
           type: integer
@@ -1381,6 +1346,7 @@ components:
           default: 0
         photos:
           type: array
+          minItems: 1
           maxItems: 5
           items:
             type: string

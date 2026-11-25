@@ -123,13 +123,13 @@ func TestProductValidationAndConflicts(t *testing.T) {
 		for k, v := range override {
 			body[k] = v
 		}
-		if res := s.do(http.MethodPost, "/products", sel.token, body); res.status != http.StatusBadRequest || res.errorCode() != "validation_error" {
+		if res := s.postProduct(sel.token, body); res.status != http.StatusBadRequest || res.errorCode() != "validation_error" {
 			t.Errorf("%s: status %d body %s, want 400 validation_error", name, res.status, res.body)
 		}
 	}
 
 	dup := productBody(category, p.SKU, 1)
-	s.expect(s.do(http.MethodPost, "/products", sel.token, dup), http.StatusConflict, "sku_taken")
+	s.expect(s.postProduct(sel.token, dup), http.StatusConflict, "sku_taken")
 
 	update := productBody(category, p.SKU, 0)
 	delete(update, "stock")
@@ -183,7 +183,7 @@ func TestListingPagesAndLiteralSearch(t *testing.T) {
 	}
 	odd := productBody(category, "50%_OFF-"+uniqueSKU(), 1)
 	odd["title"] = "Sale 50% off"
-	s.expect(s.do(http.MethodPost, "/products", sel.token, odd), http.StatusCreated, "")
+	s.expect(s.postProduct(sel.token, odd), http.StatusCreated, "")
 
 	var page productPage
 	s.do(http.MethodGet, "/products?page=3&page_size=10", sel.token, nil).decode(&page)
