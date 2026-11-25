@@ -20,13 +20,15 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
  *
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accepted';
+export * from './acceptedStatus';
 export * from './balance';
 export * from './balanceEntry';
 export * from './balanceEntryPage';
@@ -58,11 +60,15 @@ export * from './productPage';
 export * from './productPhotos';
 export * from './productStatus';
 export * from './registerRequest';
+export * from './requestCodeRequest';
 export * from './shop';
+export * from './shopForm';
 export * from './shopUpdate';
 export * from './stockLabel';
 export * from './stockLevel';
 export * from './stockUpdateRequest';
+export * from './telegramLink';
+export * from './telegramUnavailableResponse';
 export * from './tokenResponse';
 export * from './tooManyRequestsResponse';
 export * from './topProduct';
@@ -75,3 +81,4 @@ export * from './updateProductRequestStatus';
 export * from './uploadedImage';
 export * from './uploadedImageContentType';
 export * from './validationErrorResponse';
+export * from './verifyRequest';

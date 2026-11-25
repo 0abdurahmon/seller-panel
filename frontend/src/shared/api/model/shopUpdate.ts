@@ -20,7 +20,7 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
  *
@@ -32,11 +32,6 @@ export interface ShopUpdate {
   contact_phone?: string;
   /** @maxLength 2000 */
   description?: string;
-  /**
-     * http or https URL. Empty clears it.
-     * @maxLength 2048
-     */
-  logo_url?: string;
   /**
      * @minLength 1
      * @maxLength 120
