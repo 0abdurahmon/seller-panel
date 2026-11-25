@@ -206,3 +206,10 @@ func TestListingPagesAndLiteralSearch(t *testing.T) {
 		t.Fatalf("a percent sign must be searched literally, total = %d, want 1", page.Total)
 	}
 }
+
+func TestHealthFailsWithoutTheDatabase(t *testing.T) {
+	s := newServer(t)
+	s.expect(s.do(http.MethodGet, "/health", "", nil), http.StatusOK, "")
+	s.pool.Close()
+	s.expect(s.do(http.MethodGet, "/health", "", nil), http.StatusServiceUnavailable, "database_unavailable")
+}

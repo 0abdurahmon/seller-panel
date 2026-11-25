@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -93,6 +96,48 @@ func TestHealth(t *testing.T) {
 	}
 	if body["status"] != "ok" {
 		t.Fatalf("status field = %q, want ok", body["status"])
+	}
+}
+
+func TestHealthChecksTheDatabase(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	get := func(ping func(context.Context) error) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		health(ping)(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+		return rec
+	}
+
+	var limit time.Duration
+	ok := get(func(ctx context.Context) error {
+		deadline, set := ctx.Deadline()
+		if set {
+			limit = time.Until(deadline)
+		}
+		return nil
+	})
+	if ok.Code != http.StatusOK || !strings.Contains(ok.Body.String(), `"status":"ok"`) {
+		t.Fatalf("database up: status %d body %s", ok.Code, ok.Body)
+	}
+	if limit <= time.Second || limit > 2*time.Second {
+		t.Fatalf("ping time limit = %s, want 2s, below the 3s of the container health check", limit)
+	}
+
+	down := get(func(context.Context) error { return errors.New("dial tcp 10.0.0.7:5432: refused") })
+	var e struct{ Code, Message string }
+	if err := json.Unmarshal(down.Body.Bytes(), &e); err != nil || e.Message == "" {
+		t.Fatalf("body = %s", down.Body)
+	}
+	if down.Code != http.StatusServiceUnavailable || e.Code != "database_unavailable" {
+		t.Fatalf("database down: status %d code %q", down.Code, e.Code)
+	}
+	if strings.Contains(down.Body.String(), "10.0.0.7") {
+		t.Fatalf("the cause must not reach the caller: %s", down.Body)
+	}
+	if !strings.Contains(logs.String(), "10.0.0.7") {
+		t.Fatalf("the cause must be logged, got %q", logs.String())
 	}
 }
 

@@ -199,3 +199,8 @@ Record every important decision here: what you chose, what else you considered, 
 - One backend process serves at most `MAX_REQUESTS_IN_FLIGHT` requests at once (default 200). The next one is answered at once with `503 busy` and `Retry-After: 1`, so work does not queue for seconds behind the database pool. `/health` is exempt because it must answer under load, `/orders/events` because a stream stays open and has its own per shop limit.
 - The server gives a client 5 seconds for the headers and 1 minute for the whole request, and closes an idle connection after 2 minutes. There is no write timeout: it would cut the event streams. The read timeout does not, `net/http` removes the read deadline once the request is read.
 - Considered: a per request timeout (`http.TimeoutHandler` buffers the answer and breaks streaming), queueing with a short wait (the queue is the problem being removed).
+
+## D23 — The health check includes the database
+- `GET /health` pings the database and answers `503 database_unavailable` after at most 2 seconds, below the 3 second timeout of the container health check. The cause is logged and not sent. Without the database nothing but this route and the spec works, so a container that reports healthy then was misleading.
+- The ping uses the request pool: a pool kept busy for more than 2 seconds also reports unhealthy. Docker Compose does not restart a container for that.
+- Considered: separate liveness and readiness routes (nothing in the stack would tell them apart).

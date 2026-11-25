@@ -30,7 +30,7 @@ func TestOpenAPIJSONDescribesTheImplementedAPI(t *testing.T) {
 	}
 
 	for _, op := range []struct{ path, method string }{
-		{"/auth/register", "post"}, {"/auth/login", "post"}, {"/shop", "put"}, {"/categories", "get"},
+		{"/health", "get"}, {"/auth/register", "post"}, {"/auth/login", "post"}, {"/shop", "put"}, {"/categories", "get"},
 		{"/products", "post"}, {"/products/{id}/archive", "post"}, {"/products/{id}/stock", "patch"},
 		{"/orders", "get"}, {"/orders/{id}/transition", "post"}, {"/balance", "get"}, {"/balance/entries", "get"},
 		{"/dev/simulate-order", "post"}, {"/auth/request-code", "post"}, {"/auth/verify", "post"},

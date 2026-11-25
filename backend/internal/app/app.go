@@ -132,6 +132,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		DevEndpoints: cfg.Env == config.EnvDevelopment,
 		Spec:         spec,
 		MaxInFlight:  cfg.MaxRequestsInFlight,
+		Ping:         pool.Ping,
 	})
 	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo, hub: hub}
 	if bot != nil {

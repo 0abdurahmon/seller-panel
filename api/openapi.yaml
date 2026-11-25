@@ -36,6 +36,28 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check that the backend and its database answer
+      description: |
+        Pings the database and waits at most 2 seconds. The container health check calls it. It is not counted
+        by the limit on requests in progress.
+      security: []
+      responses:
+        '200':
+          description: The backend and the database answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: The database does not answer (`database_unavailable`), the cause is only in the server log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/register:
     post:
       tags: [Auth]
@@ -1461,6 +1483,14 @@ components:
       example:
         stock: 12
         expected_stock: 10
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
 
     Error:
       type: object
