@@ -7,6 +7,7 @@ export type {
   OrderSummary,
   OrderTarget,
 } from './model/types';
+export { useOrderEvents } from './model/events';
 export { orderKeys, useOrder, useOrderCounts, useOrders } from './model/queries';
 export {
   canCancel,

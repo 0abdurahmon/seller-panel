@@ -34,6 +34,15 @@ export default defineConfig(({ mode }) => {
           target: backend,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
+          // The proxy holds the headers back until the first body bytes, which on the order events
+          // stream is the ping 25 s later, so the page would not know it is connected. nginx does not.
+          configure: (proxy) => {
+            proxy.on('proxyRes', (proxyRes, _req, res) => {
+              if (!proxyRes.headers['content-type']?.startsWith('text/event-stream')) return
+              // This runs before the proxy copies the status and headers, so send them a tick later.
+              process.nextTick(() => res.flushHeaders())
+            })
+          },
         },
       },
     },

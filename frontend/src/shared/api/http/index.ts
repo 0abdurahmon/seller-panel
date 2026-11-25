@@ -2,7 +2,7 @@ import Axios, { type AxiosRequestConfig } from "axios";
 import { clearAuthToken, readAuthToken } from "@/shared/lib";
 
 // The Vite dev server and nginx both proxy /api to the backend, so no CORS is needed.
-const API_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+export const API_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export const AXIOS_INSTANCE = Axios.create({
   baseURL: API_URL,

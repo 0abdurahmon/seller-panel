@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
-import { useOrderCounts, useOrders, type OrderStatusFilter } from "@/entities/order";
+import { useOrderCounts, useOrderEvents, useOrders, type OrderStatusFilter } from "@/entities/order";
 import { AdvanceOrderDialog } from "@/features/order/advance-order";
 import { CancelOrderDialog } from "@/features/order/cancel-order";
 import { getApiErrorMessage } from "@/shared/api";
@@ -81,6 +81,7 @@ export const OrdersPage = () => {
     ...(status === "all" ? {} : { status }),
   });
   const counts = useOrderCounts();
+  useOrderEvents();
 
   // The next page is requested while the sentinel is still 800px below the screen,
   // so by the time the reader gets there the rows are already in.
@@ -121,7 +122,8 @@ export const OrdersPage = () => {
         </TabsList>
       </Tabs>
 
-      {orders.isError ? (
+      {/* Only when there is nothing to show: a failed next page or background refetch keeps the loaded rows. */}
+      {orders.isError && !orders.data ? (
         <Alert variant="destructive">
           <AlertTitle>Не удалось загрузить заказы</AlertTitle>
           <AlertDescription>{getApiErrorMessage(orders.error)}</AlertDescription>
