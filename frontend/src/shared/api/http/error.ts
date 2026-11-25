@@ -66,3 +66,10 @@ export function getApiFieldError(error: unknown, field: string) {
 export function getErrorStatus(error: unknown) {
   return Axios.isAxiosError(error) ? error.response?.status : undefined;
 }
+
+/** How long the server asked to wait (`Retry-After`, in seconds), as milliseconds; undefined when it did not. */
+export function getRetryAfterMs(error: unknown) {
+  if (!Axios.isAxiosError(error)) return undefined;
+  const seconds = Number(error.response?.headers['retry-after']);
+  return seconds > 0 ? seconds * 1000 : undefined;
+}

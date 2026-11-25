@@ -2,8 +2,11 @@ import { Outlet } from 'react-router';
 import { SidebarProvider } from '@/shared/providers';
 import { Aside, MobileMenu } from '@/widgets/aside';
 import { Header } from '@/widgets/header';
+import { useLiveSync } from './use-live-sync';
 
 export const AppLayout = () => {
+  useLiveSync();
+
   return (
     <SidebarProvider>
       <div className="flex h-dvh bg-background text-foreground">
