@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -14,11 +15,16 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
 )
 
-const sendTimeout = 10 * time.Second
+const (
+	sendTimeout = 10 * time.Second
+	// maxLines keeps a large order far below the 4096 characters Telegram accepts.
+	maxLines   = 10
+	buttonText = "Открыть заказ"
+)
 
-// Sender posts a text to a Telegram chat.
+// Sender posts HTML formatted text to a Telegram chat, with a button that opens buttonURL unless it is empty.
 type Sender interface {
-	SendMessage(ctx context.Context, chatID int64, text string) error
+	SendHTML(ctx context.Context, chatID int64, text, buttonText, buttonURL string) error
 }
 
 type alert struct {
@@ -28,15 +34,18 @@ type alert struct {
 
 // Alerts queues order alerts and sends them one at a time.
 type Alerts struct {
-	repo   Repository
-	sender Sender
-	logger *slog.Logger
-	queue  chan alert
+	repo     Repository
+	sender   Sender
+	logger   *slog.Logger
+	queue    chan alert
+	location *time.Location
+	panelURL string
 }
 
 // New returns alerts that keep up to queueSize unsent messages. Run must be started for them to go out.
-func New(repo Repository, sender Sender, logger *slog.Logger, queueSize int) *Alerts {
-	return &Alerts{repo: repo, sender: sender, logger: logger, queue: make(chan alert, queueSize)}
+// Times are written in location, and an empty panelURL leaves the button out.
+func New(repo Repository, sender Sender, logger *slog.Logger, queueSize int, location *time.Location, panelURL string) *Alerts {
+	return &Alerts{repo: repo, sender: sender, logger: logger, queue: make(chan alert, queueSize), location: location, panelURL: panelURL}
 }
 
 // Publish queues an alert for order.created. Other events are ignored. A full queue drops the alert and logs it.
@@ -76,13 +85,40 @@ func (a *Alerts) send(ctx context.Context, al alert) {
 		a.logger.Error("order alert: chat lookup failed", "order", al.summary.Number, "error", err)
 		return
 	}
+	lines, err := a.repo.Lines(ctx, al.shopID, al.summary.ID)
+	if err != nil {
+		a.logger.Error("order alert: items not read, sending without them", "order", al.summary.Number, "error", err)
+		lines = nil
+	}
+	var link string
+	if a.panelURL != "" {
+		link = a.panelURL + "/orders?order=" + strconv.FormatInt(al.summary.ID, 10)
+	}
 	sendCtx, cancel := context.WithTimeout(ctx, sendTimeout)
 	defer cancel()
-	text := fmt.Sprintf("New order %s from %s: %s so'm. Open the seller panel to accept it.",
-		al.summary.Number, al.summary.BuyerName, formatSom(al.summary.Total))
-	if err := a.sender.SendMessage(sendCtx, chat, text); err != nil {
+	if err := a.sender.SendHTML(sendCtx, chat, a.message(al.summary, lines), buttonText, link); err != nil {
 		a.logger.Error("order alert not sent", "order", al.summary.Number, "error", err)
 	}
+}
+
+// message writes the alert in Telegram HTML, in Russian like the panel. Every value from data is escaped.
+func (a *Alerts) message(s order.Summary, lines []Line) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "🛒 <b>Новый заказ %s</b>\n%s\n\n👤 Покупатель: %s\n\n",
+		html.EscapeString(s.Number), s.CreatedAt.In(a.location).Format("02.01.2006, 15:04"), html.EscapeString(s.BuyerName))
+	if len(lines) > 0 {
+		b.WriteString("📦 Состав:\n")
+		for i, l := range lines[:min(len(lines), maxLines)] {
+			fmt.Fprintf(&b, "%d. %s\n   %d × %s = %s сум\n", i+1, html.EscapeString(l.Title),
+				l.Quantity, formatSom(l.Price), formatSom(l.Price*int64(l.Quantity)))
+		}
+		if rest := len(lines) - maxLines; rest > 0 {
+			fmt.Fprintf(&b, "и ещё %d\n", rest)
+		}
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(&b, "💰 <b>Итого: %s сум</b>\n\nОткройте панель продавца, чтобы принять заказ.", formatSom(s.Total))
+	return b.String()
 }
 
 // formatSom writes an amount in so'm with spaces between the thousands, for example 4 500 000.

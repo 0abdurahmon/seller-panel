@@ -32,3 +32,23 @@ func (r *PgRepository) ChatForShop(ctx context.Context, shopID int64) (int64, er
 	}
 	return *chat, nil
 }
+
+func (r *PgRepository) Lines(ctx context.Context, shopID, orderID int64) ([]Line, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.title_snapshot, i.quantity, i.price_snapshot
+		   FROM order_items i JOIN orders o ON o.id = i.order_id
+		  WHERE o.id = $2 AND o.shop_id = $1
+		  ORDER BY i.id`,
+		shopID, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("load order lines: %w", err)
+	}
+	lines, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Line])
+	if err != nil {
+		return nil, fmt.Errorf("load order lines: %w", err)
+	}
+	if len(lines) == 0 {
+		return nil, ErrNotFound
+	}
+	return lines, nil
+}

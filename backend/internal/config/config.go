@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -39,6 +40,7 @@ type Config struct {
 	UploadDir           string
 	UploadPublicURL     string
 	ImagesPerMinute     int
+	PanelURL            string
 }
 
 func Load() (Config, error) {
@@ -99,7 +101,22 @@ func Load() (Config, error) {
 	if cfg.BusinessLocation, err = time.LoadLocation(zone); err != nil {
 		return Config{}, fmt.Errorf("BUSINESS_TIMEZONE must be a zone name like %s: %w", DefaultBusinessTimeZone, err)
 	}
+	if cfg.PanelURL, err = panelURL(os.Getenv("PANEL_URL")); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// panelURL checks the address the seller opens the panel at, links are built by appending a path to it.
+func panelURL(v string) (string, error) {
+	if v == "" {
+		return "", nil
+	}
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("PANEL_URL must be an address like http://192.168.0.10:3000, got %q", v)
+	}
+	return strings.TrimRight(v, "/"), nil
 }
 
 func getEnv(key, fallback string) string {

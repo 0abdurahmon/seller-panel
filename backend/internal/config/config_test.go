@@ -104,6 +104,28 @@ func TestLoadOpenAPIFile(t *testing.T) {
 	}
 }
 
+func TestLoadPanelURL(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.PanelURL != "" {
+		t.Fatalf("default = %q, %v; want empty so alerts carry no button", cfg.PanelURL, err)
+	}
+	for in, want := range map[string]string{
+		"http://192.168.0.93:3000":   "http://192.168.0.93:3000",
+		"https://panel.example.com/": "https://panel.example.com",
+	} {
+		t.Setenv("PANEL_URL", in)
+		if cfg, err = Load(); err != nil || cfg.PanelURL != want {
+			t.Fatalf("PANEL_URL %q = %q, %v; want %q", in, cfg.PanelURL, err, want)
+		}
+	}
+	for _, bad := range []string{"192.168.0.93:3000", "ftp://panel.example.com", "http://", "http://host/?a=1", "http://host/#x"} {
+		t.Setenv("PANEL_URL", bad)
+		if _, err := Load(); err == nil {
+			t.Errorf("PANEL_URL %q accepted", bad)
+		}
+	}
+}
+
 func TestLoadUploadSettings(t *testing.T) {
 	cfg, err := Load()
 	if err != nil {
