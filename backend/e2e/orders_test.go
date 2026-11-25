@@ -228,7 +228,7 @@ func TestCommissionRoundsDownToWholeSom(t *testing.T) {
 	category := s.categoryID(sel.token)
 	body := productBody(category, uniqueSKU(), 5)
 	body["price"] = 4115
-	res := s.do(http.MethodPost, "/products", sel.token, body)
+	res := s.postProduct(sel.token, body)
 	s.expect(res, http.StatusCreated, "")
 	var p product
 	res.decode(&p)

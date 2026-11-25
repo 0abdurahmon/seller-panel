@@ -18,6 +18,7 @@ const (
 	defaultPageSize   = 20
 	maxPageSize       = 100
 	maxPhotos         = 5
+	photoRequired     = "a product needs at least one photo"
 )
 
 type Service struct {
@@ -49,6 +50,9 @@ func (s *Service) Create(ctx context.Context, shopID int64, in CreateInput, add 
 	}
 	if p.Stock < 0 || p.Stock > maxStock {
 		return Product{}, invalid("stock must be between 0 and %d", maxStock)
+	}
+	if len(add) == 0 {
+		return Product{}, invalid(photoRequired)
 	}
 	if len(add) > maxPhotos {
 		return Product{}, invalid("a product has at most %d photos", maxPhotos)
@@ -120,6 +124,9 @@ func edited(p Product, in UpdateInput, keep *[]string, added []string) (Product,
 	kept, err := keptPhotos(p.Photos, keep)
 	if err != nil {
 		return Product{}, err
+	}
+	if len(kept)+len(added) == 0 {
+		return Product{}, invalid(photoRequired)
 	}
 	if len(kept)+len(added) > maxPhotos {
 		return Product{}, invalid("a product has at most %d photos, %d kept and %d new", maxPhotos, len(kept), len(added))

@@ -31,7 +31,7 @@ func TestEveryProductEndpointAnswersWithTheSameShape(t *testing.T) {
 	cat := s.categoryID(a.token)
 	sku := uniqueSKU()
 
-	created := s.do(http.MethodPost, "/products", a.token, productBody(cat, sku, 5))
+	created := s.postProduct(a.token, productBody(cat, sku, 5))
 	s.expect(created, http.StatusCreated, "")
 	var p product
 	created.decode(&p)

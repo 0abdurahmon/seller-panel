@@ -40,7 +40,7 @@ func TestSellerJourney(t *testing.T) {
 
 	category := s.categoryID(token)
 	sku := uniqueSKU()
-	created := s.do(http.MethodPost, "/products", token, productBody(category, sku, 3))
+	created := s.postProduct(token, productBody(category, sku, 3))
 	s.expect(created, http.StatusCreated, "")
 	var p product
 	created.decode(&p)

@@ -162,11 +162,11 @@ func TestProductPhotosJourney(t *testing.T) {
 		t.Fatalf("on disk: dropped %v, kept %v and %v; want only the dropped one gone", s.onDisk(second), s.onDisk(first), s.onDisk(third))
 	}
 
-	// An empty keep_photos removes all.
+	// The last photo cannot be removed.
 	res = s.productForm(http.MethodPut, productPath(created), a.token, updateParts(cat, sku, text("keep_photos", ""))...)
-	s.expect(res, http.StatusOK, "")
-	if !strings.Contains(string(res.body), `"photos":[]`) || s.filesOnDisk() != 0 {
-		t.Fatalf("photos %s, %d files on disk, want none", res.body, s.filesOnDisk())
+	s.expect(res, http.StatusBadRequest, "validation_error")
+	if s.filesOnDisk() != 2 {
+		t.Fatalf("%d files on disk, want the two kept ones", s.filesOnDisk())
 	}
 }
 
@@ -178,11 +178,12 @@ func TestProductWithPhotosIsAllOrNothing(t *testing.T) {
 
 	taken := s.createProduct(a.token, cat, 1)
 	other := s.createProduct(a.token, cat, 1)
+	before := s.filesOnDisk()
 
 	// The save fails after the photos are converted: no file stays.
 	s.expect(s.productForm(http.MethodPost, "/products", a.token, createParts(cat, taken.SKU, photoPart(png), photoPart(png))...), http.StatusConflict, "sku_taken")
-	if n := s.filesOnDisk(); n != 0 {
-		t.Fatalf("a duplicate SKU left %d files", n)
+	if n := s.filesOnDisk(); n != before {
+		t.Fatalf("a duplicate SKU left %d files", n-before)
 	}
 	// The second photo is not an image: the first one does not stay either.
 	s.expect(s.productForm(http.MethodPost, "/products", a.token, createParts(cat, uniqueSKU(), photoPart(png), photoPart([]byte("not an image")))...), http.StatusUnsupportedMediaType, "unsupported_media_type")
@@ -198,8 +199,8 @@ func TestProductWithPhotosIsAllOrNothing(t *testing.T) {
 	s.expect(s.productForm(http.MethodPost, "/products", a.token, six...), http.StatusBadRequest, "validation_error")
 	s.expect(s.productForm(http.MethodPost, "/products", a.token, createParts(cat, uniqueSKU(), photoPart(bytes.Repeat([]byte{0x89}, 5<<20+1)))...), http.StatusRequestEntityTooLarge, "file_too_large")
 	s.expect(s.productForm(http.MethodPost, "/products", "", createParts(cat, uniqueSKU(), photoPart(png))...), http.StatusUnauthorized, "unauthorized")
-	if n := s.filesOnDisk(); n != 0 {
-		t.Fatalf("refused requests left %d files", n)
+	if n := s.filesOnDisk(); n != before {
+		t.Fatalf("refused requests left %d files", n-before)
 	}
 	var page productPage
 	s.do(http.MethodGet, "/products", a.token, nil).decode(&page)
@@ -212,13 +213,13 @@ func TestProductWithPhotosIsAllOrNothing(t *testing.T) {
 	s.expect(res, http.StatusOK, "")
 	var withPhoto product
 	res.decode(&withPhoto)
-	if s.filesOnDisk() != 1 {
-		t.Fatalf("%d files, want 1", s.filesOnDisk())
+	if s.filesOnDisk() != before+1 {
+		t.Fatalf("%d files, want %d", s.filesOnDisk(), before+1)
 	}
 	s.expect(s.productForm(http.MethodPut, productPath(withPhoto), a.token, updateParts(cat, taken.SKU, text("keep_photos", ""), photoPart(png))...), http.StatusConflict, "sku_taken")
 	var after product
 	s.do(http.MethodGet, productPath(withPhoto), a.token, nil).decode(&after)
-	if fmt.Sprint(after.Photos) != fmt.Sprint(withPhoto.Photos) || s.filesOnDisk() != 1 || !s.onDisk(withPhoto.Photos[0]) {
+	if fmt.Sprint(after.Photos) != fmt.Sprint(withPhoto.Photos) || s.filesOnDisk() != before+1 || !s.onDisk(withPhoto.Photos[0]) {
 		t.Fatalf("a failed update changed the product: photos %v, %d files", after.Photos, s.filesOnDisk())
 	}
 
@@ -226,7 +227,7 @@ func TestProductWithPhotosIsAllOrNothing(t *testing.T) {
 	s.expect(s.productForm(http.MethodPut, productPath(withPhoto), b.token, updateParts(cat, withPhoto.SKU, photoPart(png))...), http.StatusNotFound, "not_found")
 	mine := s.createProduct(b.token, s.categoryID(b.token), 1)
 	s.expect(s.productForm(http.MethodPut, productPath(mine), b.token, updateParts(s.categoryID(b.token), mine.SKU, text("keep_photos", withPhoto.Photos[0]))...), http.StatusBadRequest, "validation_error")
-	if s.filesOnDisk() != 1 || !s.onDisk(withPhoto.Photos[0]) {
+	if s.filesOnDisk() != before+2 || !s.onDisk(withPhoto.Photos[0]) {
 		t.Fatalf("another seller's requests changed the files: %d", s.filesOnDisk())
 	}
 }
@@ -252,6 +253,7 @@ func TestProductsWithPhotosShareTheUploadLimit(t *testing.T) {
 	if limited.header.Get("Retry-After") == "" {
 		t.Fatal("Retry-After missing")
 	}
-	s.expect(s.do(http.MethodPost, "/products", a.token, productBody(cat, uniqueSKU(), 1)), http.StatusCreated, "")
+	// A JSON request stores no image, so it is refused as invalid and never counted against the limit.
+	s.expect(s.do(http.MethodPost, "/products", a.token, productBody(cat, uniqueSKU(), 1)), http.StatusBadRequest, "validation_error")
 	s.expect(s.productForm(http.MethodPost, "/products", b.token, createParts(s.categoryID(b.token), uniqueSKU(), photoPart(png))...), http.StatusCreated, "")
 }

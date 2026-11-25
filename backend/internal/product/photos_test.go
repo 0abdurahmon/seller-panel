@@ -30,18 +30,11 @@ func TestCreateStoresPhotosInOrder(t *testing.T) {
 	}
 }
 
-func TestCreateWithoutPhotos(t *testing.T) {
-	p, err := newService().Create(context.Background(), 1, validInput(), nil)
-	if err != nil || len(p.Photos) != 0 {
-		t.Fatalf("photos = %v, err = %v", p.Photos, err)
-	}
-}
-
 func TestCreateLeavesNoFileWhenTheProductIsRefused(t *testing.T) {
 	ctx := context.Background()
 	store := newFakePhotos()
 	svc := NewService(newMemRepository(), store)
-	if _, err := svc.Create(ctx, 1, validInput(), nil); err != nil {
+	if _, err := svc.Create(ctx, 1, validInput(), onePhoto()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +42,7 @@ func TestCreateLeavesNoFileWhenTheProductIsRefused(t *testing.T) {
 		if _, err := svc.Create(ctx, 1, validInput(), [][]byte{img(1), img(2)}); !errors.Is(err, ErrSKUTaken) {
 			t.Fatalf("err = %v, want ErrSKUTaken", err)
 		}
-		if live := store.live(); len(live) != 0 {
+		if live := store.live(); len(live) != 1 {
 			t.Fatalf("files left behind: %v", live)
 		}
 	})
@@ -84,7 +77,7 @@ func TestCreateLeavesNoFileWhenTheProductIsRefused(t *testing.T) {
 		if _, err := svc.Create(ctx, 1, in, [][]byte{img(1), img(2), img(3)}); !errors.Is(err, ErrUnsupportedMedia) {
 			t.Fatalf("err = %v, want ErrUnsupportedMedia", err)
 		}
-		if live := store.live(); len(live) != 0 {
+		if live := store.live(); len(live) != 1 {
 			t.Fatalf("the first two photos stayed on disk: %v", live)
 		}
 		store.failAt = 0
@@ -131,10 +124,10 @@ func TestUpdatePhotos(t *testing.T) {
 		p.Photos = got.Photos
 		a, b, c = got.Photos[0], got.Photos[1], got.Photos[2]
 	})
-	t.Run("keep nothing removes all", func(t *testing.T) {
+	t.Run("keep nothing and add one replaces all", func(t *testing.T) {
 		store.removed = nil
-		got, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Keep: keep()})
-		if err != nil || len(got.Photos) != 0 || len(store.removed) != 3 {
+		got, err := svc.Update(ctx, 1, p.ID, up, PhotoChange{Keep: keep(), Add: [][]byte{img(10)}})
+		if err != nil || len(got.Photos) != 1 || len(store.removed) != 3 {
 			t.Fatalf("photos = %v, removed = %v, err = %v", got.Photos, store.removed, err)
 		}
 	})
@@ -279,7 +272,7 @@ func TestHandlerMultipartCreate(t *testing.T) {
 	}
 
 	plain := a.multipart(http.MethodPost, "/products", tok, append(baseFields()[:4:4], [2]string{"sku", "PX-2"}), nil)
-	if plain.Code != http.StatusCreated || !strings.Contains(plain.Body.String(), `"photos":[]`) {
+	if plain.Code != http.StatusBadRequest || errorCode(t, plain) != "validation_error" {
 		t.Fatalf("no photos: %d %s", plain.Code, plain.Body)
 	}
 }
@@ -367,20 +360,15 @@ func TestHandlerMultipartErrors(t *testing.T) {
 	})
 }
 
-func TestHandlerJSONIsStillAccepted(t *testing.T) {
+func TestHandlerJSONCreateIsRefused(t *testing.T) {
 	a := newAPI(t)
 	tok := a.token(1)
-	p := a.create(tok, createBody)
-	if len(p.Photos) != 0 {
-		t.Fatalf("photos = %v", p.Photos)
-	}
-	rec := a.do(http.MethodGet, "/products/"+strconv.FormatInt(p.ID, 10), tok, "")
-	if !strings.Contains(rec.Body.String(), `"photos":[]`) {
-		t.Fatalf("a product without photos must show \"photos\":[], got %s", rec.Body)
+	if rec := a.do(http.MethodPost, "/products", tok, createBody); rec.Code != http.StatusBadRequest || errorCode(t, rec) != "validation_error" {
+		t.Fatalf("a product without photos: %d %s", rec.Code, rec.Body)
 	}
 	withPhotos := strings.Replace(createBody, `"stock":10`, `"stock":10,"photos":["/x.webp"]`, 1)
-	if rec := a.do(http.MethodPost, "/products", tok, withPhotos); rec.Code != http.StatusBadRequest {
-		t.Fatalf("a photos list in JSON must be refused, got %d", rec.Code)
+	if rec := a.do(http.MethodPost, "/products", tok, withPhotos); rec.Code != http.StatusBadRequest || errorCode(t, rec) != "invalid_body" {
+		t.Fatalf("a photos list in JSON: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -409,9 +397,9 @@ func TestHandlerMultipartUpdate(t *testing.T) {
 		}
 		created = got
 	})
-	t.Run("an empty keep_photos removes all", func(t *testing.T) {
+	t.Run("an empty keep_photos without a new file is refused", func(t *testing.T) {
 		rec := a.multipart(http.MethodPut, path, tok, fields([2]string{"keep_photos", ""}), nil)
-		if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"photos":[]`) {
+		if rec.Code != 400 || errorCode(t, rec) != "validation_error" {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
 	})

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -81,9 +82,25 @@ const updateBody = `{"category_id":1,"title":"Phone Z","description":"Good","pri
 
 const createBody = `{"category_id":1,"title":"Phone X","description":"Good","price":1000000,"sku":"PX-1","stock":10}`
 
+// post sends the fields of a JSON object as the form of a new product with one photo.
+func (a *api) post(token, body string) *httptest.ResponseRecorder {
+	a.t.Helper()
+	var values map[string]any
+	dec := json.NewDecoder(strings.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&values); err != nil {
+		a.t.Fatal(err)
+	}
+	var fields [][2]string
+	for name, v := range values {
+		fields = append(fields, [2]string{name, fmt.Sprint(v)})
+	}
+	return a.multipart(http.MethodPost, "/products", token, fields, []formFile{photo(0)})
+}
+
 func (a *api) create(token, body string) Product {
 	a.t.Helper()
-	rec := a.do(http.MethodPost, "/products", token, body)
+	rec := a.post(token, body)
 	if rec.Code != http.StatusCreated {
 		a.t.Fatalf("create status = %d, body %s", rec.Code, rec.Body.String())
 	}
@@ -134,7 +151,6 @@ func TestHandlerStatusCodes(t *testing.T) {
 	}{
 		{"bad json", http.MethodPost, "/products", `{`, 400, "invalid_body"},
 		{"invalid price", http.MethodPost, "/products", `{"category_id":1,"title":"T","price":0,"sku":"S"}`, 400, "validation_error"},
-		{"duplicate sku", http.MethodPost, "/products", createBody, 409, "sku_taken"},
 		{"get missing", http.MethodGet, "/products/999", "", 404, "not_found"},
 		{"get non numeric id", http.MethodGet, "/products/abc", "", 404, "not_found"},
 		{"update missing", http.MethodPut, "/products/999", updateBody, 404, "not_found"},
@@ -143,6 +159,9 @@ func TestHandlerStatusCodes(t *testing.T) {
 		{"list bad page", http.MethodGet, "/products?page=x", "", 400, "validation_error"},
 		{"list bad status", http.MethodGet, "/products?status=sold", "", 400, "validation_error"},
 		{"list bad category", http.MethodGet, "/products?category=x", "", 400, "validation_error"},
+	}
+	if rec := a.post(tok, createBody); rec.Code != http.StatusConflict || errorCode(t, rec) != "sku_taken" {
+		t.Errorf("duplicate sku: %d %s", rec.Code, rec.Body)
 	}
 	for _, c := range cases {
 		rec := a.do(c.method, c.path, tok, c.body)
@@ -203,7 +222,7 @@ func TestHandlerShopsAreIsolated(t *testing.T) {
 	if page.Total != 0 || page.Items == nil || len(page.Items) != 0 {
 		t.Fatalf("shop B list = %+v, want empty page with items []", page)
 	}
-	if rec := a.do(http.MethodPost, "/products", tokB, createBody); rec.Code != http.StatusCreated {
+	if rec := a.post(tokB, createBody); rec.Code != http.StatusCreated {
 		t.Fatalf("same sku in another shop: status %d", rec.Code)
 	}
 }
@@ -216,7 +235,7 @@ func TestHandlerListFiltersAndPaging(t *testing.T) {
 		{CategoryID: 2, Title: "Phone Beta", Price: 100, SKU: "B", Status: StatusDraft},
 		{CategoryID: 2, Title: "Lamp", Price: 100, SKU: "C", Status: StatusActive},
 	} {
-		if _, err := a.svc.Create(context.Background(), 1, in, nil); err != nil {
+		if _, err := a.svc.Create(context.Background(), 1, in, onePhoto()); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -160,7 +160,6 @@ Record every important decision here: what you chose, what else you considered, 
 - A sweeper that deleted image files nothing refers to was tried and removed: it cleaned up the leftovers of a crash between writing a file and saving its row, but it deletes files on a timer, and a mistake in it would delete live images. A leftover is a few hundred kilobytes, so they stay. If disk use ever matters, a manual command that lists them first is safer than a timer.
 - The setting `RATE_LIMIT_UPLOADS_PER_MINUTE` is now `RATE_LIMIT_IMAGES_PER_MINUTE`: there is no upload endpoint any more, it limits the requests that save an image. Rename it in a local `.env` if it was set.
 
-
 ## D18 — Real-time order changes
 - Sellers get new orders and status changes as they happen. Transport: Server-Sent Events, `GET /orders/events`, `text/event-stream`, authenticated like every protected route. Events: `order.created` (the order summary, as in `GET /orders`) and `order.status_changed` (id, number, status, `status_changed_at`). Events carry only data of the caller's shop.
 - Fetch, not `EventSource`: the browser's `EventSource` cannot send an `Authorization` header, and a token in the URL would end up in logs. The frontend reads the stream with `fetch` and a `ReadableStream`.
@@ -180,3 +179,9 @@ Record every important decision here: what you chose, what else you considered, 
 - No retries. A failed send is logged with the order number and not sent again, because a retry after a timeout could send the same message twice and the seller can always see the order in the panel.
 - The message contains the buyer's name and total, which the seller already sees in the panel. The buyer's phone and address are not sent.
 - Only one backend instance sends alerts (D10 polling). With several instances, the queue would live in each and alerts would double; the same switch to a shared bus as D18 solves both.
+## D20 — A product always has a photo, the category filter covers subcategories
+- The task asks for at least one photo, so `POST /products` refuses a product without one and `PUT /products/{id}` refuses to leave none. A create is therefore always `multipart/form-data`, a JSON body gets `400 validation_error`, and every create counts against the image rate limit. A JSON edit still works and keeps the photos.
+- Products saved before this rule have no photo: they can be read, sold and archived, and the next edit has to add one. The seed gives every demo product a freely licensed photo of its type, embedded in the binary (`backend/internal/seed/photos`, sources in `SOURCES.md`), and a one colour image where there is none.
+- `GET /products?category=` returns the category and all its subcategories, so filtering by a top category such as Electronics finds the phones.
+- Considered: asking for a photo only when a draft is activated (a product could be created in one JSON call, but the catalogue would hold products without photos), a database constraint (a row count across two tables needs a deferred trigger, the service rule is enough), filtering by the exact category only (a top category looked empty).
+
