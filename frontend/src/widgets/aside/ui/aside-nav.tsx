@@ -1,8 +1,10 @@
-import { Link } from 'react-router';
+import { useRef } from 'react';
+import { Link, useLocation } from 'react-router';
 import { cn } from 'cn';
 import { useDashboardSummary } from '@/entities/dashboard';
 import { bottomMenuItems, mainMenuItems } from '@/shared/config';
 import { Logo, LogoMark } from '@/shared/ui';
+import { useActivePill } from '../model/use-active-pill';
 import { MenuLink } from './menu-link';
 
 /** Logo and navigation links: the content of the desktop sidebar and of the phone menu. */
@@ -16,6 +18,11 @@ export function AsideNav({
 }) {
   // Shares the dashboard's cached summary, so it costs no extra request.
   const waiting = useDashboardSummary().data?.waiting_for_action;
+  const { pathname } = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+
+  useActivePill(navRef, pillRef, pathname);
 
   return (
     <>
@@ -30,7 +37,12 @@ export function AsideNav({
       >
         {collapsed ? <LogoMark className="size-8 shrink-0" /> : <Logo className="h-8 w-auto" />}
       </Link>
-      <nav aria-label="Основное меню" className="flex flex-1 flex-col">
+      <nav ref={navRef} aria-label="Основное меню" className="relative flex flex-1 flex-col">
+        <span
+          ref={pillRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-0 rounded-xl bg-primary opacity-0 will-change-[transform,height] dark:bg-sidebar-accent"
+        />
         <ul className="space-y-1">
           {mainMenuItems.map((item) => (
             <MenuLink

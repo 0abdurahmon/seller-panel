@@ -9,11 +9,11 @@ import {
 } from "@/entities/product";
 import { getProducts, multipart, parseApiError } from "@/shared/api";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaHeader,
+  CredenzaTitle,
 } from "@/shared/ui";
 import { useEditProduct } from "../model/modal.store";
 
@@ -64,17 +64,17 @@ export const EditProductModal = () => {
   const { product, close } = useEditProduct();
 
   return (
-    <Dialog open={product !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-2xl!">
-        <DialogHeader>
-          <DialogTitle>Редактирование товара</DialogTitle>
-          <DialogDescription>
+    <Credenza open={product !== null} onOpenChange={(open) => !open && close()}>
+      <CredenzaContent className="max-w-2xl!">
+        <CredenzaHeader>
+          <CredenzaTitle>Редактирование товара</CredenzaTitle>
+          <CredenzaDescription>
             Остаток меняется отдельно, здесь только данные товара.
-          </DialogDescription>
-        </DialogHeader>
+          </CredenzaDescription>
+        </CredenzaHeader>
         {/* Keyed by id, so opening another product starts from its own values. */}
         {product && <EditProductForm key={product.id} product={product} onDone={close} />}
-      </DialogContent>
-    </Dialog>
+      </CredenzaContent>
+    </Credenza>
   );
 };

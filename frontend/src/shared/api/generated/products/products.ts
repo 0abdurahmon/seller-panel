@@ -28,7 +28,6 @@
  */
 import type {
   CreateProductForm,
-  CreateProductRequest,
   GetProductsParams,
   Product,
   ProductPage,
@@ -58,26 +57,38 @@ const getProducts = (
   /**
  * A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).
  *
- * Two request formats:
- * - `application/json`: the fields only, a product without photos.
- * - `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`
- *   (jpeg, png or webp, 5 MB each). The first image is the cover.
+ * The body is `multipart/form-data`: the fields as form fields plus 1 to 5 images in the field `photos`
+ * (jpeg, png or webp, 5 MB each). The first image is the cover. A product needs at least one photo, so a
+ * JSON body is answered with `validation_error`.
  *
  * The product and its photos are saved together: when anything fails (a bad field, a file that is not an
  * image, a taken SKU) nothing is created and no file stays on the server. The image type is checked from
  * the file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),
  * scaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.
  * The files are public: a photo URL opens in a browser without a token, nginx serves it straight from the
- * uploads volume. A request with images counts against a per shop limit of 20 a minute by default
- * (`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.
+ * uploads volume. Every create counts against a per shop limit of 20 a minute by default
+ * (`RATE_LIMIT_IMAGES_PER_MINUTE`).
  * @summary Create a product in the current shop, with its photos
  */
 const postProducts = (
-    postProductsBody: CreateProductRequest | CreateProductForm,
- options?: SecondParameter<typeof customInstance<Product>>,) => {
+    createProductForm: CreateProductForm,
+ options?: SecondParameter<typeof customInstance<Product>>,) => {const formData = new FormData();
+formData.append(`category_id`, createProductForm.category_id.toString())
+if(createProductForm.description !== undefined) {
+ formData.append(`description`, createProductForm.description);
+ }
+createProductForm.photos.forEach(value => formData.append(`photos`, value));
+formData.append(`price`, createProductForm.price.toString())
+formData.append(`sku`, createProductForm.sku);
+if(createProductForm.stock !== undefined) {
+ formData.append(`stock`, createProductForm.stock.toString())
+ }
+formData.append(`title`, createProductForm.title);
+
       return customInstance<Product>(
       {url: `/products`, method: 'POST',
-      data: postProductsBody
+      headers: {'Content-Type': 'multipart/form-data', },
+       data: formData
     },
       options);
     }
@@ -96,10 +107,11 @@ const getProductsId = (
  * Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.
  * Archived products cannot be edited.
  *
- * Same two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`
- * request changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order
- * wanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;
- * an empty `keep_photos` removes them all. At most 5 photos in the end.
+ * Two formats: `application/json` never touches the photos, a `multipart/form-data` request changes them:
+ * `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order wanted, and new images
+ * in `photos` are added after them. Without `keep_photos` every current photo stays; an empty `keep_photos`
+ * drops them all, which needs new images in `photos`. 1 to 5 photos in the end, so a product that has no photo
+ * yet gets one with its next edit.
  *
  * All or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are
  * no longer listed are deleted from the server once the product is saved.

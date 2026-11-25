@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Skeleton } from "skullet/react";
 import {
   ORDER_STATUS_LABEL,
   OrderStatusBadge,
@@ -16,12 +17,11 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  Spinner,
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaHeader,
+  CredenzaTitle,
   Table,
   TableBody,
   TableCell,
@@ -146,6 +146,24 @@ function OrderView({ order }: { order: Order }) {
   );
 }
 
+const SAMPLE_ORDER: Order = {
+  id: -1,
+  number: "#100012",
+  status: "new",
+  buyer_name: "Дилноза Юсупова",
+  buyer_phone: "+998 90 123 45 67",
+  delivery_address: "г. Ташкент, ул. Амира Темура, 15",
+  items: [
+    { id: -1, product_id: -1, title: "Смартфон Galaxy A55 8/256", price: 4_890_000, quantity: 1 },
+  ],
+  total: 4_890_000,
+  history: [
+    { from_status: null, to_status: "new", created_at: "2026-11-24T09:12:00Z", reason: null },
+  ],
+  created_at: "2026-11-24T09:12:00Z",
+  status_changed_at: "2026-11-24T09:12:00Z",
+};
+
 export const OrderDetails = ({
   orderId,
   onClose,
@@ -158,18 +176,16 @@ export const OrderDetails = ({
   const order = query.data;
 
   return (
-    <Dialog open={orderId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl! overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{order ? `Заказ ${order.number}` : "Заказ"}</DialogTitle>
-          <DialogDescription>
+    <Credenza open={orderId !== null} onOpenChange={(open) => !open && onClose()}>
+      <CredenzaContent className="max-h-[90vh] max-w-2xl! overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <CredenzaHeader>
+          <CredenzaTitle>{order ? `Заказ ${order.number}` : "Заказ"}</CredenzaTitle>
+          <CredenzaDescription>
             {order ? `Создан ${formatDateTime(order.created_at)}` : "Данные заказа"}
-          </DialogDescription>
-        </DialogHeader>
+          </CredenzaDescription>
+        </CredenzaHeader>
 
-        {order ? (
-          <OrderView order={order} />
-        ) : query.isError ? (
+        {query.isError ? (
           <Alert variant="destructive">
             <AlertTitle>Не удалось загрузить заказ</AlertTitle>
             <AlertDescription>{getApiErrorMessage(query.error)}</AlertDescription>
@@ -180,11 +196,16 @@ export const OrderDetails = ({
             </AlertAction>
           </Alert>
         ) : (
-          <div className="flex min-h-48 items-center justify-center">
-            <Spinner className="size-6 text-primary" aria-label="Загрузка заказа" />
-          </div>
+          <Skeleton
+            id="order-details"
+            label="Загрузка заказа"
+            data={query.isLoading ? null : order}
+            sample={SAMPLE_ORDER}
+          >
+            {(data) => <OrderView order={data} />}
+          </Skeleton>
         )}
-      </DialogContent>
-    </Dialog>
+      </CredenzaContent>
+    </Credenza>
   );
 };

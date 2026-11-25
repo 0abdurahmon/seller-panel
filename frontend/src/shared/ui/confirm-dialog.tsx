@@ -2,13 +2,13 @@ import type { ReactNode } from "react"
 import { Alert, AlertDescription } from "./alert"
 import { Button } from "./button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./dialog"
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaFooter,
+  CredenzaHeader,
+  CredenzaTitle,
+} from "./credenza"
 import { Spinner } from "./spinner"
 
 /** A yes/no question before an action, with its pending and error states. */
@@ -34,18 +34,18 @@ function ConfirmDialog({
   onConfirm: () => void
 }) {
   return (
-    <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
-      <DialogContent className="max-w-md!" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
-        </DialogHeader>
+    <Credenza open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
+      <CredenzaContent className="max-w-md!" showCloseButton={false}>
+        <CredenzaHeader>
+          <CredenzaTitle>{title}</CredenzaTitle>
+          {description && <CredenzaDescription>{description}</CredenzaDescription>}
+        </CredenzaHeader>
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        <DialogFooter>
+        <CredenzaFooter>
           <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>
             Отмена
           </Button>
@@ -53,9 +53,9 @@ function ConfirmDialog({
             {pending && <Spinner />}
             {confirmLabel}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </CredenzaFooter>
+      </CredenzaContent>
+    </Credenza>
   )
 }
 

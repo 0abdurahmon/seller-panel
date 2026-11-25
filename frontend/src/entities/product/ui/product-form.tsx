@@ -9,6 +9,7 @@ import {
   FieldError,
   FieldLabel,
   Input,
+  PriceInput,
   Select,
   SelectContent,
   SelectGroup,
@@ -164,7 +165,14 @@ export const ProductForm = ({
           render={({ field }) => (
             <Field data-invalid={!!errorOf("price")}>
               <FieldLabel>Цена, сум</FieldLabel>
-              <Input {...field} inputMode="numeric" aria-invalid={!!errorOf("price")} />
+              <PriceInput
+                name={field.name}
+                value={field.value}
+                onBlur={field.onBlur}
+                getInputRef={field.ref}
+                onValueChange={(values) => field.onChange(values.value)}
+                aria-invalid={!!errorOf("price")}
+              />
               <FieldError errors={[errorOf("price")]} />
             </Field>
           )}
@@ -188,7 +196,14 @@ export const ProductForm = ({
           render={({ field }) => (
             <Field data-invalid={!!errorOf("stock")}>
               <FieldLabel>Остаток</FieldLabel>
-              <Input {...field} inputMode="numeric" aria-invalid={!!errorOf("stock")} />
+              <PriceInput
+                name={field.name}
+                value={field.value}
+                onBlur={field.onBlur}
+                getInputRef={field.ref}
+                onValueChange={(values) => field.onChange(values.value)}
+                aria-invalid={!!errorOf("stock")}
+              />
               <FieldError errors={[errorOf("stock")]} />
             </Field>
           )}

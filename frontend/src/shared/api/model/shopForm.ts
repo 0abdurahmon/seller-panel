@@ -44,6 +44,4 @@ export interface ShopForm {
   name: string;
   /** @maxLength 300 */
   pickup_address?: string;
-  /** `true` removes the logo. Not together with `logo`. */
-  remove_logo?: boolean;
 }

@@ -31,7 +31,8 @@ export interface RegisterRequest {
   /** @maxLength 254 */
   email: string;
   /**
-     * At most 72 bytes, bcrypt ignores the rest
+     * Spaces around the password are dropped, here and at login, before the length is checked. At most
+     * 72 bytes, bcrypt ignores the rest.
      * @minLength 8
      * @maxLength 72
      */

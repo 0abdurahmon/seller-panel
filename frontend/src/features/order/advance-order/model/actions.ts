@@ -1,5 +1,7 @@
-import { Box, TickCircle, TruckFast, Verify } from "iconsax-reactjs";
+import type { ComponentType } from "react";
+import { Box, TickCircle, TruckFast } from "iconsax-reactjs";
 import type { OrderStatus } from "@/entities/order";
+import { CheckIcon } from "@/shared/ui";
 
 type AdvanceAction = {
   /** The button and the menu item. */
@@ -9,7 +11,7 @@ type AdvanceAction = {
   title: (number: string) => string;
   /** What the change does, so the seller knows before confirming. */
   description: string;
-  icon: typeof TickCircle;
+  icon: ComponentType<{ className?: string }>;
 };
 
 // Keyed by the status the order moves to.
@@ -42,6 +44,6 @@ export const ADVANCE_ACTIONS: Partial<Record<OrderStatus, AdvanceAction>> = {
     title: (number) => `Заказ ${number} доставлен?`,
     description:
       "Товары спишутся со склада, а выручка и комиссия попадут в баланс. Отменить это нельзя.",
-    icon: Verify,
+    icon: CheckIcon,
   },
 };

@@ -253,7 +253,7 @@
         "type": "object"
       },
       "CreateProductForm": {
-        "description": "The fields of `CreateProductRequest` as form fields, plus the images.",
+        "description": "The fields of a new product and its images.",
         "properties": {
           "category_id": {
             "format": "int64",
@@ -271,6 +271,7 @@
               "type": "string"
             },
             "maxItems": 5,
+            "minItems": 1,
             "type": "array"
           },
           "price": {
@@ -300,52 +301,8 @@
           "category_id",
           "title",
           "price",
-          "sku"
-        ],
-        "type": "object"
-      },
-      "CreateProductRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "category_id": {
-            "format": "int64",
-            "minimum": 1,
-            "type": "integer"
-          },
-          "description": {
-            "maxLength": 5000,
-            "type": "string"
-          },
-          "price": {
-            "description": "so'm",
-            "format": "int64",
-            "maximum": 1000000000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "sku": {
-            "description": "Unique within the shop",
-            "maxLength": 64,
-            "minLength": 1,
-            "type": "string"
-          },
-          "stock": {
-            "default": 0,
-            "maximum": 1000000,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": {
-            "maxLength": 200,
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": [
-          "category_id",
-          "title",
-          "price",
-          "sku"
+          "sku",
+          "photos"
         ],
         "type": "object"
       },
@@ -740,7 +697,7 @@
             "type": "string"
           },
           "password": {
-            "description": "At most 72 bytes, bcrypt ignores the rest",
+            "description": "Spaces around the password are dropped, here and at login, before the length is checked. At most\n72 bytes, bcrypt ignores the rest.\n",
             "maxLength": 72,
             "minLength": 8,
             "type": "string"
@@ -832,10 +789,6 @@
           "pickup_address": {
             "maxLength": 300,
             "type": "string"
-          },
-          "remove_logo": {
-            "description": "`true` removes the logo. Not together with `logo`.",
-            "type": "boolean"
           }
         },
         "required": [
@@ -865,6 +818,33 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "StatusChange": {
+        "description": "Data of the `order.status_changed` event",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "example": "#100245",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "status_changed_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "status_changed_at"
         ],
         "type": "object"
       },
@@ -1209,7 +1189,7 @@
     },
     "/auth/request-code": {
       "post": {
-        "description": "Always answers `202` with the same body, so the API does not reveal which emails exist.\nNothing is sent for unknown emails, sellers without a linked chat, or a code requested less\nthan 60 seconds ago. The code is valid for 5 minutes.\n",
+        "description": "`202` when a code is sent. `409 telegram_not_linked` when the email is unknown or its seller has\nno linked chat, so no code can be sent. A code requested less than 60 seconds ago is not sent again\nand still answers `202`. The code is valid for 5 minutes.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1233,6 +1213,16 @@
           },
           "400": {
             "$ref": "#/components/responses/ValidationError"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No Telegram chat is linked to this email (`telegram_not_linked`)"
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
@@ -1544,6 +1534,33 @@
         ]
       }
     },
+    "/orders/events": {
+      "get": {
+        "description": "Server-sent events (`text/event-stream`). Each event has an `event:` name and one `data:` line of JSON:\n- `order.created`: an order summary, the same shape as an item of `GET /orders`.\n- `order.status_changed`: a `StatusChange`.\n\nA comment line `: ping` arrives every 25 seconds. Nothing is replayed, so after a reconnect reload\n`GET /orders`. The stream ends when the token expires; open it again with a fresh token.\nAt most 5 streams per shop, the next one gets `429 rate_limited` with `Retry-After`.\n",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Event stream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "summary": "Stream new orders and status changes of the shop",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
     "/orders/{id}": {
       "get": {
         "parameters": [
@@ -1637,6 +1654,7 @@
             }
           },
           {
+            "description": "Products of this category and of all its subcategories",
             "in": "query",
             "name": "category",
             "required": false,
@@ -1684,14 +1702,9 @@
         ]
       },
       "post": {
-        "description": "A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).\n\nTwo request formats:\n- `application/json`: the fields only, a product without photos.\n- `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`\n  (jpeg, png or webp, 5 MB each). The first image is the cover.\n\nThe product and its photos are saved together: when anything fails (a bad field, a file that is not an\nimage, a taken SKU) nothing is created and no file stays on the server. The image type is checked from\nthe file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),\nscaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.\nThe files are public: a photo URL opens in a browser without a token, nginx serves it straight from the\nuploads volume. A request with images counts against a per shop limit of 20 a minute by default\n(`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.\n",
+        "description": "A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).\n\nThe body is `multipart/form-data`: the fields as form fields plus 1 to 5 images in the field `photos`\n(jpeg, png or webp, 5 MB each). The first image is the cover. A product needs at least one photo, so a\nJSON body is answered with `validation_error`.\n\nThe product and its photos are saved together: when anything fails (a bad field, a file that is not an\nimage, a taken SKU) nothing is created and no file stays on the server. The image type is checked from\nthe file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),\nscaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.\nThe files are public: a photo URL opens in a browser without a token, nginx serves it straight from the\nuploads volume. Every create counts against a per shop limit of 20 a minute by default\n(`RATE_LIMIT_IMAGES_PER_MINUTE`).\n",
         "requestBody": {
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateProductRequest"
-              }
-            },
             "multipart/form-data": {
               "encoding": {
                 "photos": {
@@ -1724,7 +1737,7 @@
                 }
               }
             },
-            "description": "Invalid field, an unknown or repeated form field, more than 5 photos, an empty file or a file that is not a\ndecodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)\n"
+            "description": "Invalid field, an unknown or repeated form field, no photo or more than 5, an empty file or a file that is not\na decodable image (`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)\n"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -1817,7 +1830,7 @@
         ]
       },
       "put": {
-        "description": "Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.\nArchived products cannot be edited.\n\nSame two formats as `POST /products`. A JSON request never touches the photos. A `multipart/form-data`\nrequest changes them: `keep_photos` (repeat the field) lists the current photo URLs that stay, in the order\nwanted, and new images in `photos` are added after them. Without `keep_photos` every current photo stays;\nan empty `keep_photos` removes them all. At most 5 photos in the end.\n\nAll or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are\nno longer listed are deleted from the server once the product is saved.\n",
+        "description": "Does not change `stock` or `reserved`, use `PATCH /products/{id}/stock` for that.\nArchived products cannot be edited.\n\nTwo formats: `application/json` never touches the photos, a `multipart/form-data` request changes them:\n`keep_photos` (repeat the field) lists the current photo URLs that stay, in the order wanted, and new images\nin `photos` are added after them. Without `keep_photos` every current photo stays; an empty `keep_photos`\ndrops them all, which needs new images in `photos`. 1 to 5 photos in the end, so a product that has no photo\nyet gets one with its next edit.\n\nAll or nothing: when the update fails, the old photos stay and the new files are removed. Photos that are\nno longer listed are deleted from the server once the product is saved.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/ProductId"
@@ -1862,7 +1875,7 @@
                 }
               }
             },
-            "description": "Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of\nthis product, more than 5 photos in the end, or a file that is not a decodable image (`validation_error`);\na body that is not valid JSON or multipart (`invalid_body`)\n"
+            "description": "Invalid field, an unknown or repeated form field, a `keep_photos` URL that is not a current photo of\nthis product, no photo or more than 5 in the end, or a file that is not a decodable image (`validation_error`);\na body that is not valid JSON or multipart (`invalid_body`)\n"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -2044,7 +2057,7 @@
         ]
       },
       "put": {
-        "description": "Replaces all editable fields. An empty optional field clears the stored value.\nThe shop is taken from the token, never from the request.\n\nTwo request formats:\n- `application/json`: the fields only, the logo does not change.\n- `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`\n  (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.\n\nThe profile and the logo are saved together: when anything fails nothing changes and no file stays on\nthe server; the old logo file is deleted once the new one is saved. The image type is checked from the file\ncontent, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most\n2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:\nthe `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.\nA request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_IMAGES_PER_MINUTE`);\na JSON request does not. `logo_url` is not an input, the server writes it.\n",
+        "description": "Replaces all editable fields. An empty optional field clears the stored value.\nThe shop is taken from the token, never from the request.\n\nTwo request formats:\n- `application/json`: the fields only, the logo does not change.\n- `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`\n  (jpeg, png or webp, 5 MB). Without it the logo stays. A logo can be replaced, not removed.\n\nThe profile and the logo are saved together: when anything fails nothing changes and no file stays on\nthe server; the old logo file is deleted once the new one is saved. The image type is checked from the file\ncontent, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most\n2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:\nthe `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.\nA request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_IMAGES_PER_MINUTE`);\na JSON request does not. `logo_url` is not an input, the server writes it.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2084,7 +2097,7 @@
                 }
               }
             },
-            "description": "Invalid field, an unknown or repeated form field, `logo` together with `remove_logo`, an empty file or a\nfile that is not a decodable image (`validation_error`); a body that is not valid JSON or multipart\n(`invalid_body`)\n"
+            "description": "Invalid field, an unknown or repeated form field, an empty file or a file that is not a decodable image\n(`validation_error`); a body that is not valid JSON or multipart (`invalid_body`)\n"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

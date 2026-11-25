@@ -25,6 +25,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-hook-form": "^7.92.0",
+    "react-number-format": "^5.4.5",
     "react-router": "^8.5.2",
     "shadcn": "^4.23.0",
     "skullet": "^0.0.3",

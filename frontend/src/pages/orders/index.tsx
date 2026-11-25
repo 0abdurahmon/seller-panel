@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { cn } from "cn";
 import { useOrderCounts, useOrders, type OrderStatusFilter } from "@/entities/order";
 import { AdvanceOrderDialog } from "@/features/order/advance-order";
 import { CancelOrderDialog } from "@/features/order/cancel-order";
@@ -31,6 +32,7 @@ const STATUS_TABS: { value: OrderStatusFilter; label: string }[] = [
 ];
 
 function parseStatus(value: string | null): OrderStatusFilter {
+  if (value === "waiting") return "waiting";
   return STATUS_TABS.some((tab) => tab.value === value) ? (value as OrderStatusFilter) : "all";
 }
 
@@ -78,9 +80,25 @@ export const OrdersPage = () => {
 
   const orders = useOrders({
     page_size: PAGE_SIZE,
-    ...(status === "all" ? {} : { status }),
+    status,
   });
   const counts = useOrderCounts();
+
+  const stickySentinel = useRef<HTMLDivElement>(null);
+  const [isTabsStuck, setIsTabsStuck] = useState(false);
+
+  useEffect(() => {
+    const node = stickySentinel.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]) setIsTabsStuck(!entries[0].isIntersecting);
+      },
+      { root: getScrollParent(node), threshold: 0 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   // The next page is requested while the sentinel is still 800px below the screen,
   // so by the time the reader gets there the rows are already in.
@@ -106,11 +124,17 @@ export const OrdersPage = () => {
       <CancelOrderDialog />
       <OrderDetails orderId={orderId} onClose={closeOrder} />
 
+      <div ref={stickySentinel} className="-mb-6 h-px" aria-hidden />
       <Tabs
-        value={status}
+        value={status === "waiting" ? "" : status}
         onValueChange={(value) => changeStatus(value as OrderStatusFilter)}
         // Stays at the top while the list scrolls, so the filters and the column titles are always in view.
-        className="sticky -top-3 z-20 -mt-6 bg-background pt-6 pb-3"
+        className={cn(
+          "sticky -top-3 z-20 -mx-5 -mt-6 border-b bg-background px-5 py-3 transition-[box-shadow,border-color] duration-200",
+          isTabsStuck
+            ? "border-border/60 shadow-lg shadow-foreground/5"
+            : "border-transparent",
+        )}
       >
         <TabsList>
           {STATUS_TABS.map((tab) => (

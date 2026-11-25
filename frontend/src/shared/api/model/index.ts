@@ -64,6 +64,7 @@ export * from './requestCodeRequest';
 export * from './shop';
 export * from './shopForm';
 export * from './shopUpdate';
+export * from './statusChange';
 export * from './stockLabel';
 export * from './stockLevel';
 export * from './stockUpdateRequest';
