@@ -7,7 +7,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { ReceiptText } from "iconsax-reactjs";
-import { Skeleton } from "skullet/react";
+import { Skeleton, SkeletonBox } from "skullet/react";
 import {
   canCancel,
   getNextStatus,
@@ -148,11 +148,39 @@ const SAMPLE_ORDERS: OrderSummary[] = Array.from({ length: 5 }, (_, i) => ({
   status: "new",
 }));
 
+/** Rows that stand where the next orders are about to appear, one for each order on its way. */
+function LoadingRows({ count }: { count: number }) {
+  return Array.from({ length: count }, (_, i) => (
+    <TableRow key={`loading-${i}`} aria-hidden data-slot="loading-row">
+      <TableCell className="py-5 first:pl-5">
+        <SkeletonBox width={64} height={14} />
+      </TableCell>
+      <TableCell className="py-5">
+        <SkeletonBox width={128} height={14} />
+      </TableCell>
+      <TableCell className="py-5">
+        <SkeletonBox width={160} height={14} />
+      </TableCell>
+      <TableCell className="py-5">
+        <div className="flex justify-end">
+          <SkeletonBox width={96} height={14} />
+        </div>
+      </TableCell>
+      <TableCell className="py-5">
+        <SkeletonBox width={76} height={20} radius={999} />
+      </TableCell>
+      <TableCell className="py-5 last:pr-5" />
+    </TableRow>
+  ));
+}
+
 function OrdersTableView({
   orders,
+  loadingMore,
   onOpenOrder,
 }: {
   orders: OrderSummary[];
+  loadingMore: number;
   onOpenOrder: (order: OrderSummary) => void;
 }) {
   const columns = useMemo(() => buildColumns(onOpenOrder), [onOpenOrder]);
@@ -188,6 +216,7 @@ function OrdersTableView({
               ))}
             </TableRow>
           ))}
+          <LoadingRows count={loadingMore} />
         </TableBody>
       </Table>
     </div>
@@ -197,11 +226,14 @@ function OrdersTableView({
 export function OrdersTable({
   orders,
   isLoading,
+  loadingMore = 0,
   status,
   onOpenOrder,
 }: {
   orders: OrderSummary[] | undefined;
   isLoading?: boolean;
+  /** How many orders of the next page are on their way; 0 when none is being loaded. */
+  loadingMore?: number;
   /** The tab on screen, so the empty state says what is empty. */
   status: OrderStatusFilter;
   onOpenOrder: (order: OrderSummary) => void;
@@ -220,7 +252,9 @@ export function OrdersTable({
       empty={isEmpty}
       emptyMessage={<OrdersEmptyState status={status} />}
     >
-      {(rows) => <OrdersTableView orders={rows} onOpenOrder={onOpenOrder} />}
+      {(rows) => (
+        <OrdersTableView orders={rows} loadingMore={loadingMore} onOpenOrder={onOpenOrder} />
+      )}
     </Skeleton>
   );
 }
