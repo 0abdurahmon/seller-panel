@@ -68,5 +68,5 @@ func (l shopLogos) Save(ctx context.Context, shopID int64, image io.Reader) (str
 }
 
 func (l shopLogos) Remove(ctx context.Context, shopID int64, urls []string) {
-	productPhotos{uploads: l.uploads}.Remove(ctx, shopID, urls)
+	productPhotos(l).Remove(ctx, shopID, urls)
 }

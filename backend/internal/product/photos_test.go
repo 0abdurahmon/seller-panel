@@ -238,7 +238,9 @@ func multipartBody(t *testing.T, fields [][2]string, files []formFile) (*bytes.B
 		if err != nil {
 			t.Fatal(err)
 		}
-		fw.Write(f.data)
+		if _, err := fw.Write(f.data); err != nil {
+			t.Fatal(err)
+		}
 	}
 	mw.Close()
 	return &body, mw.FormDataContentType()

@@ -57,10 +57,14 @@ func (a *multipartAPI) put(token string, parts ...part) *httptest.ResponseRecord
 			if err != nil {
 				a.t.Fatal(err)
 			}
-			fw.Write(p.file)
+			if _, err := fw.Write(p.file); err != nil {
+				a.t.Fatal(err)
+			}
 			continue
 		}
-		mw.WriteField(p.field, p.value)
+		if err := mw.WriteField(p.field, p.value); err != nil {
+			a.t.Fatal(err)
+		}
 	}
 	mw.Close()
 	return a.send(token, mw.FormDataContentType(), &body)
@@ -196,9 +200,16 @@ func TestMultipartUpdateErrors(t *testing.T) {
 	t.Run("truncated body", func(t *testing.T) {
 		var body bytes.Buffer
 		mw := multipart.NewWriter(&body)
-		mw.WriteField("name", "X")
-		fw, _ := mw.CreateFormFile("logo", "l.png")
-		fw.Write([]byte("image"))
+		if err := mw.WriteField("name", "X"); err != nil {
+			t.Fatal(err)
+		}
+		fw, err := mw.CreateFormFile("logo", "l.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fw.Write([]byte("image")); err != nil {
+			t.Fatal(err)
+		}
 		mw.Close()
 		cut := bytes.NewBuffer(body.Bytes()[:body.Len()/2])
 		if rec := a.send(a.token, mw.FormDataContentType(), cut); rec.Code != http.StatusBadRequest {
