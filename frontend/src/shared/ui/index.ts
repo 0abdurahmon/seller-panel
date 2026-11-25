@@ -16,6 +16,7 @@ export * from './input-group';
 export * from './label';
 export * from './logo';
 export * from './password-input';
+export * from './progress';
 export * from './select';
 export * from './separator';
 export * from './sheet';
