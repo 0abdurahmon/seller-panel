@@ -12,7 +12,7 @@ Merge captain: @iskanderovv
 | @Nuriddin1999 | Filled TEAM.md (#39, replaces #37). Stock change endpoint (#54) and stock badge (#55) opened and closed without merge. Reviewed #3, #22–#26, #40, #41, #43 | Stock backend (#51) | To confirm: why #54 and #55 were closed |
 
 ## Day 2 — 2026-11-24
-Merge captain: @Nuriddin1999
+Merge captain: @Nuriddin1999 by the rotation in TEAM.md. Merged that day: @iskanderovv 34 PRs (26 own), @Nuriddin1999 10, @01110011r 4, @uicodee 3 (all own).
 
 | Who | Done | Next | Blockers |
 |-----|------|------|----------|
