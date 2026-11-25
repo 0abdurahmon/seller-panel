@@ -48,16 +48,20 @@ func (r *memRepository) Get(_ context.Context, shopID, id int64) (Product, error
 	return p, nil
 }
 
-func (r *memRepository) Update(_ context.Context, shopID int64, p Product) (Product, error) {
-	cur, ok := r.items[p.ID]
+func (r *memRepository) Update(_ context.Context, shopID, id int64, change func(Product) (Product, error)) (Product, error) {
+	cur, ok := r.items[id]
 	if !ok || cur.ShopID != shopID {
 		return Product{}, ErrNotFound
 	}
-	if r.skuTaken(shopID, p.SKU, p.ID) {
+	p, err := change(cur)
+	if err != nil {
+		return Product{}, err
+	}
+	if r.skuTaken(shopID, p.SKU, id) {
 		return Product{}, ErrSKUTaken
 	}
 	p.UpdatedAt = time.Now()
-	r.items[p.ID] = p
+	r.items[id] = p
 	return p, nil
 }
 
@@ -95,11 +99,17 @@ type fakePhotoStore struct {
 	removed []string
 	failAt  int
 	failErr error
+	// during runs once inside the next Save, where another request can slip in.
+	during func()
 }
 
 func newFakePhotos() *fakePhotoStore { return &fakePhotoStore{} }
 
 func (f *fakePhotoStore) Save(_ context.Context, shopID int64, image io.Reader) (string, error) {
+	if during := f.during; during != nil {
+		f.during = nil
+		during()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	data, _ := io.ReadAll(image)

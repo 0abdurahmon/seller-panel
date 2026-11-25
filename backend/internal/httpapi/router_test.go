@@ -249,7 +249,7 @@ func (fakeProductRepository) Get(context.Context, int64, int64) (product.Product
 	return product.Product{}, product.ErrNotFound
 }
 
-func (fakeProductRepository) Update(context.Context, int64, product.Product) (product.Product, error) {
+func (fakeProductRepository) Update(context.Context, int64, int64, func(product.Product) (product.Product, error)) (product.Product, error) {
 	return product.Product{}, product.ErrNotFound
 }
 

@@ -63,16 +63,28 @@ func (r *PgRepository) Get(ctx context.Context, shopID, id int64) (Product, erro
 	return items[0], nil
 }
 
-func (r *PgRepository) Update(ctx context.Context, shopID int64, p Product) (Product, error) {
+func (r *PgRepository) Update(ctx context.Context, shopID, id int64, change func(Product) (Product, error)) (Product, error) {
 	var updated Product
 	err := database.InTx(ctx, r.pool, func(tx pgx.Tx) error {
-		var err error
+		current, err := scanRead(tx.QueryRow(ctx,
+			`SELECT `+columns+` FROM products WHERE id = $1 AND shop_id = $2 FOR NO KEY UPDATE`, id, shopID))
+		if err != nil {
+			return err
+		}
+		locked := []Product{current}
+		if err := loadPhotos(ctx, tx, locked); err != nil {
+			return err
+		}
+		p, err := change(locked[0])
+		if err != nil {
+			return err
+		}
 		updated, err = scanWrite(tx.QueryRow(ctx,
 			`UPDATE products
 			    SET category_id = $3, title = $4, description = $5, price = $6, sku = $7, status = $8, updated_at = now()
 			  WHERE id = $1 AND shop_id = $2
 			RETURNING `+columns,
-			p.ID, shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Status))
+			id, shopID, p.CategoryID, p.Title, p.Description, p.Price, p.SKU, p.Status))
 		if err != nil {
 			return err
 		}

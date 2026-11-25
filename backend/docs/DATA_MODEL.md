@@ -1,6 +1,6 @@
 # Data model and schema
 
-Entities, relations, constraints and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](../../docs/DOMAIN.md); every change from it is listed in section 8. Conventions and layers are in [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+Entities, relations, constraints and the rules that keep stock and money correct. Starts from the suggested model in [`DOMAIN.md`](../../docs/DOMAIN.md); every change from it is listed in section 8. Conventions and layers are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 **Source of truth:** the SQL files in `backend/migrations`. This document and [`schema.dbml`](schema.dbml) explain them and show the target schema. When they disagree, the migration wins and the docs get fixed. A merged migration is never edited, a change is a new migration.
 

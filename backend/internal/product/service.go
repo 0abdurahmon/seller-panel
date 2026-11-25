@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -79,6 +80,29 @@ func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput, 
 	if err != nil {
 		return Product{}, err
 	}
+	// A refused request must not store files, so it is checked before they are saved and again under the lock.
+	if _, err := edited(p, in, pc.Keep, make([]string, len(pc.Add))); err != nil {
+		return Product{}, err
+	}
+	saved, err := s.savePhotos(ctx, shopID, pc.Add)
+	if err != nil {
+		return Product{}, err
+	}
+	var previous []string
+	updated, err := s.repo.Update(ctx, shopID, id, func(current Product) (Product, error) {
+		previous = current.Photos
+		return edited(current, in, pc.Keep, saved)
+	})
+	if err != nil {
+		s.photos.Remove(ctx, shopID, saved)
+		return Product{}, err
+	}
+	s.photos.Remove(ctx, shopID, dropped(previous, updated.Photos))
+	return updated, nil
+}
+
+// edited returns p with the request applied, or why the request is refused for p.
+func edited(p Product, in UpdateInput, keep *[]string, added []string) (Product, error) {
 	if p.Status == StatusArchived {
 		return Product{}, ErrArchived
 	}
@@ -93,26 +117,15 @@ func (s *Service) Update(ctx context.Context, shopID, id int64, in UpdateInput, 
 	if err := validate(&p); err != nil {
 		return Product{}, err
 	}
-	current := p.Photos
-	kept, err := keptPhotos(current, pc.Keep)
+	kept, err := keptPhotos(p.Photos, keep)
 	if err != nil {
 		return Product{}, err
 	}
-	if len(kept)+len(pc.Add) > maxPhotos {
-		return Product{}, invalid("a product has at most %d photos, %d kept and %d new", maxPhotos, len(kept), len(pc.Add))
+	if len(kept)+len(added) > maxPhotos {
+		return Product{}, invalid("a product has at most %d photos, %d kept and %d new", maxPhotos, len(kept), len(added))
 	}
-	saved, err := s.savePhotos(ctx, shopID, pc.Add)
-	if err != nil {
-		return Product{}, err
-	}
-	p.Photos = append(append([]string{}, kept...), saved...)
-	updated, err := s.repo.Update(ctx, shopID, p)
-	if err != nil {
-		s.photos.Remove(ctx, shopID, saved)
-		return Product{}, err
-	}
-	s.photos.Remove(ctx, shopID, dropped(current, kept))
-	return updated, nil
+	p.Photos = append(append([]string{}, kept...), added...)
+	return p, nil
 }
 
 func (s *Service) Archive(ctx context.Context, shopID, id int64) (Product, error) {
@@ -123,13 +136,15 @@ func (s *Service) Archive(ctx context.Context, shopID, id int64) (Product, error
 	if p.Status == StatusArchived {
 		return p, nil
 	}
-	p.Status = StatusArchived
-	return s.repo.Update(ctx, shopID, p)
+	return s.repo.Update(ctx, shopID, id, func(current Product) (Product, error) {
+		current.Status = StatusArchived
+		return current, nil
+	})
 }
 
 func (s *Service) List(ctx context.Context, shopID int64, f ListFilter) (Page, error) {
 	f.Query = strings.TrimSpace(f.Query)
-	if len(f.Query) > maxQueryLen {
+	if utf8.RuneCountInString(f.Query) > maxQueryLen {
 		return Page{}, invalid("q must be at most %d characters", maxQueryLen)
 	}
 	if f.CategoryID < 0 {
@@ -220,11 +235,11 @@ func validate(p *Product) error {
 	switch {
 	case p.CategoryID <= 0:
 		return invalid("category_id is required")
-	case p.Title == "" || len(p.Title) > maxTitleLen:
+	case p.Title == "" || utf8.RuneCountInString(p.Title) > maxTitleLen:
 		return invalid("title must be 1-%d characters", maxTitleLen)
-	case len(p.Description) > maxDescriptionLen:
+	case utf8.RuneCountInString(p.Description) > maxDescriptionLen:
 		return invalid("description must be at most %d characters", maxDescriptionLen)
-	case p.SKU == "" || len(p.SKU) > maxSKULen:
+	case p.SKU == "" || utf8.RuneCountInString(p.SKU) > maxSKULen:
 		return invalid("sku must be 1-%d characters", maxSKULen)
 	case p.Price <= 0 || p.Price > maxPrice:
 		return invalid("price must be a positive integer up to %d", int64(maxPrice))

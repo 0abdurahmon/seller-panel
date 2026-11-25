@@ -1,6 +1,6 @@
 # Architecture
 
-How the Seller Panel is built and the rules every feature follows. Business rules live in [`DOMAIN.md`](DOMAIN.md), stack choices in [`DECISIONS.md`](DECISIONS.md). Status: **draft for team review** (issue #29).
+How the Seller Panel backend is built and the rules every feature follows. Business rules live in [`DOMAIN.md`](../../docs/DOMAIN.md), stack choices in [`DECISIONS.md`](../../docs/DECISIONS.md). The frontend rules are in [`frontend/AGENTS.md`](../../frontend/AGENTS.md). Status: **draft for team review** (issue #29).
 
 ## 1. System overview
 
@@ -119,22 +119,7 @@ Images: a product is saved with its photos and the shop with its logo in one req
 - **Shutdown:** `http.Server.Shutdown` on SIGTERM, then close the pool.
 - **Time zone:** "today", "last 7 days" and "last 30 days" on the dashboard use one fixed business time zone, `BUSINESS_TIMEZONE`, default `Asia/Tashkent` (see D10).
 
-## 7. Frontend structure
-
-```
-frontend/src/
-  app/          router, providers, layout
-  features/     auth, shop, products, orders, dashboard, balance (pages, components, hooks per feature)
-  shared/       api client, ui components, formatting helpers
-```
-
-- React + TypeScript + Vite, React Router for routes.
-- Server state with TanStack Query: each screen has loading, empty and error states (graded in `EVALUATION.md`).
-- API types generated from `api/openapi.yaml`, so the client cannot drift from the contract.
-- A protected-route wrapper redirects to login when there is no token. A `401` response clears the token and redirects.
-- Features mirror the backend packages, so `features/orders/` shows the screens of the `order/` package. The backend package belongs to its owner and the whole `frontend/` folder to the frontend owner (`TEAM.md`).
-
-## 8. Testing strategy
+## 7. Testing strategy
 
 | What | How | Where |
 |------|-----|-------|
@@ -144,11 +129,10 @@ frontend/src/
 | Data isolation | Per feature: seller B requesting seller A's resource gets `404` | handler or integration |
 | HTTP behaviour | `httptest` against the router | each `handler` |
 | Whole journeys, isolation, error shape, limits | Real router and PostgreSQL through `app.NewHandler`, build tag `e2e` | `backend/e2e` |
-| Frontend | A few component tests for critical flows (login, stock change, order transition) | `features/*` |
 
 CI (`.github/workflows/ci.yml`) already runs lint, vet, build and tests. Integration tests need a database, see open questions.
 
-## 9. Open questions for the team
+## 8. Open questions for the team
 
 Reviewers: please answer these in the PR. A recommendation is given for each.
 
@@ -157,4 +141,3 @@ Reviewers: please answer these in the PR. A recommendation is given for each.
 3. **Business time zone** for the dashboard. *Recommend:* `Asia/Tashkent`, a constant in config. *Decided in D10:* `Asia/Tashkent` by default, set with `BUSINESS_TIMEZONE`.
 4. **Order number.** A global sequence starting at 100000 (`#100245`) or per-shop numbering. *Recommend:* global sequence, unique and simple.
 5. **Photos on disk vs object storage.** *Recommend:* local volume for the MVP, object storage is out of scope.
-6. **Frontend libraries.** TanStack Query, React Router and generated OpenAPI types as above. Any objection or a UI kit the team prefers?

@@ -87,6 +87,7 @@ type PhotoChange struct {
 type Repository interface {
 	Create(ctx context.Context, shopID int64, p Product) (Product, error)
 	Get(ctx context.Context, shopID, id int64) (Product, error)
-	Update(ctx context.Context, shopID int64, p Product) (Product, error)
+	// Update locks the product and stores what change makes of its current state, or nothing when change fails.
+	Update(ctx context.Context, shopID, id int64, change func(current Product) (Product, error)) (Product, error)
 	List(ctx context.Context, shopID int64, f ListFilter) ([]Product, int, error)
 }
