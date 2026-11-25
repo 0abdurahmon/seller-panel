@@ -2,7 +2,7 @@
 
 These rules add to the root [`AGENTS.md`](../AGENTS.md) for everything under `backend/`. If a rule here is wrong, change this file in a PR, do not work around it.
 
-Read first: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) (tables).
+Read first: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (layers, conventions), [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) (tables).
 
 ## Commands
 

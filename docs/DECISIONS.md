@@ -23,7 +23,7 @@ Record every important decision here: what you chose, what else you considered, 
 - The contract is OpenAPI 3.0 in `api/openapi.yaml`. It is the single source of truth for paths, request and response schemas and error cases; field names equal the JSON tags in Go.
 - Every new or changed endpoint is described in the same PR as its code (AGENTS.md). Swagger UI at `/docs/` (open, no login) shows the file; `npx @redocly/cli lint api/openapi.yaml` validates it.
 - Shared conventions live in the file once: Bearer auth, `snake_case` JSON, money as integer so'm, `?page=&page_size=` lists returning `{items, page, page_size, total}`, and errors as `{code, message}` with the codes from backend/AGENTS.md.
-- The frontend will generate its API types from this file (ARCHITECTURE section 7), so the client cannot drift from the backend.
+- The frontend will generate its API types from this file (`frontend/AGENTS.md`), so the client cannot drift from the backend.
 - Why: frontend and backend can work in parallel against one agreed contract, reviewers see API changes as a diff, and the docs page comes for free.
 - Considered: a shared TypeScript types package (no docs page, Go side still hand-written), a markdown table in the README (drifts silently, no validation), GraphQL / tRPC (new tooling for the team, tRPC needs a TypeScript backend).
 

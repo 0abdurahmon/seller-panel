@@ -7,7 +7,7 @@ These are the rules for the whole repository. Each part adds its own, read them 
 - `backend/`: [`backend/AGENTS.md`](backend/AGENTS.md)
 - `frontend/`: [`frontend/AGENTS.md`](frontend/AGENTS.md)
 
-Read first: `docs/ARCHITECTURE.md` (layers, conventions), `docs/DOMAIN.md` (business rules), `docs/DECISIONS.md` (why), `TEAM.md` (who owns what). The API contract is `api/openapi.yaml`.
+Read first: `docs/DOMAIN.md` (business rules), `docs/DECISIONS.md` (why), `TEAM.md` (who owns what). The API contract is `api/openapi.yaml`.
 
 ## Stack and commands
 
