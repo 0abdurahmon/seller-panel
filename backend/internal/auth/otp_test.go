@@ -129,8 +129,9 @@ func TestRequestCodeCooldown(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.advance(codeCooldown - time.Second)
-	if err := f.svc.RequestCode(ctx, f.email); err != nil {
-		t.Fatal(err)
+	var cooldown *CooldownError
+	if err := f.svc.RequestCode(ctx, f.email); !errors.As(err, &cooldown) || cooldown.RetryAfter != time.Second {
+		t.Fatalf("during cooldown: err = %v, want CooldownError with 1s left", err)
 	}
 	if n := len(f.tg.messages()); n != 1 {
 		t.Fatalf("%d messages during cooldown, want 1", n)
@@ -302,5 +303,52 @@ func TestTelegramIsOptional(t *testing.T) {
 	}
 	if _, err := svc.Login(ctx, LoginRequest{Email: "a@example.com", Password: "x"}); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("password login still works without telegram: err = %v", err)
+	}
+}
+
+func TestCodeLimitsCanBeConfigured(t *testing.T) {
+	f := newOTPFixture(t)
+	tokens, err := NewTokenIssuer("test-secret", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := NewService(f.repo, tokens, f.tg, WithCodeLimits(10*time.Second, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.now = func() time.Time { return *f.clock }
+	ctx := context.Background()
+
+	if err := svc.RequestCode(ctx, f.email); err != nil {
+		t.Fatal(err)
+	}
+	f.advance(9 * time.Second)
+	var cooldown *CooldownError
+	if err := svc.RequestCode(ctx, f.email); !errors.As(err, &cooldown) || cooldown.RetryAfter != time.Second {
+		t.Fatalf("inside a 10s cooldown: err = %v, want CooldownError with 1s left", err)
+	}
+	if n := len(f.tg.messages()); n != 1 {
+		t.Fatalf("%d messages inside a 10s cooldown, want 1", n)
+	}
+	f.advance(2 * time.Second)
+	if err := svc.RequestCode(ctx, f.email); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(f.tg.messages()); n != 2 {
+		t.Fatalf("%d messages after the cooldown, want 2", n)
+	}
+
+	code := f.tg.lastCode(t)
+	wrong := "000000"
+	if code == wrong {
+		wrong = "111111"
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := svc.VerifyCode(ctx, f.email, wrong); !errors.Is(err, ErrInvalidCode) {
+			t.Fatalf("wrong code %d: err = %v", i+1, err)
+		}
+	}
+	if _, err := svc.VerifyCode(ctx, f.email, code); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("right code after 2 wrong tries: err = %v, want ErrInvalidCode", err)
 	}
 }

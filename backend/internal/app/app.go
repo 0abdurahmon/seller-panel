@@ -27,10 +27,9 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/upload"
 )
 
-// Open order streams per shop, and events buffered per stream before a slow client is dropped.
+// Events buffered per order stream before a slow client is dropped.
 const (
-	maxStreamsPerShop = 5
-	streamBuffer      = 16
+	streamBuffer = 16
 	// Unsent order alerts kept before new ones are dropped.
 	orderAlertQueue = 100
 )
@@ -66,13 +65,14 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		bot = telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramAPIURL)
 		tg = bot
 	}
-	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens, tg)
+	authSvc, err := auth.NewService(auth.NewPgRepository(pool), tokens, tg,
+		auth.WithCodeLimits(cfg.CodeCooldown, cfg.CodeAttempts))
 	if err != nil {
 		return nil, err
 	}
 	stockSvc := stock.NewService(stock.NewPgRepository(pool))
 
-	hub := realtime.NewHub(maxStreamsPerShop, streamBuffer)
+	hub := realtime.NewHub(cfg.StreamsPerShop, streamBuffer)
 	var alerts *orderalert.Alerts
 	var publisher order.Publisher = hub
 	if bot != nil {

@@ -41,18 +41,39 @@ type Service struct {
 	tokens   *TokenIssuer
 	telegram Telegram
 	now      func() time.Time
+	// codeCooldown and codeMaxAttempts default to the constants and can be changed with WithCodeLimits.
+	codeCooldown    time.Duration
+	codeMaxAttempts int
 	// dummyHash is compared on unknown emails so that login takes about the
 	// same time whether or not the account exists.
 	dummyHash []byte
 }
 
+// Option changes a Service built by NewService.
+type Option func(*Service)
+
+// WithCodeLimits sets how long a seller waits before a new sign-in code and how many wrong tries a code takes.
+func WithCodeLimits(cooldown time.Duration, maxAttempts int) Option {
+	return func(s *Service) {
+		s.codeCooldown = cooldown
+		s.codeMaxAttempts = maxAttempts
+	}
+}
+
 // NewService builds the auth service.
-func NewService(repo Repository, tokens *TokenIssuer, tg Telegram) (*Service, error) {
+func NewService(repo Repository, tokens *TokenIssuer, tg Telegram, opts ...Option) (*Service, error) {
 	dummy, err := bcrypt.GenerateFromPassword([]byte("dummy-password"), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("prepare dummy hash: %w", err)
 	}
-	return &Service{repo: repo, tokens: tokens, telegram: tg, now: time.Now, dummyHash: dummy}, nil
+	s := &Service{
+		repo: repo, tokens: tokens, telegram: tg, now: time.Now, dummyHash: dummy,
+		codeCooldown: codeCooldown, codeMaxAttempts: codeMaxAttempts,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 // Register creates a seller and their shop, then returns a token.
@@ -180,6 +201,14 @@ func (s *Service) HandleBotMessage(ctx context.Context, chatID int64, text strin
 
 // RequestCode sends a sign-in code to the seller's linked chat. Unknown emails and
 // unlinked sellers both get ErrTelegramNotLinked, so the answer does not show which accounts exist.
+// CooldownError says how long a seller must wait before the next sign-in code.
+type CooldownError struct{ RetryAfter time.Duration }
+
+func (e *CooldownError) Error() string { return "a sign-in code was requested recently" }
+
+// CodeCooldown is the time a seller waits between two sign-in codes.
+func (s *Service) CodeCooldown() time.Duration { return s.codeCooldown }
+
 func (s *Service) RequestCode(ctx context.Context, email string) error {
 	if s.telegram == nil {
 		return ErrTelegramUnavailable
@@ -193,9 +222,13 @@ func (s *Service) RequestCode(ctx context.Context, email string) error {
 	}
 
 	now := s.now()
-	if prev, err := s.repo.FindLoginCode(ctx, sellerID); err == nil && now.Before(prev.CreatedAt.Add(codeCooldown)) {
-		return nil
-	} else if err != nil && !errors.Is(err, ErrNotFound) {
+	prev, err := s.repo.FindLoginCode(ctx, sellerID)
+	switch {
+	case err == nil:
+		if wait := prev.CreatedAt.Add(s.codeCooldown).Sub(now); wait > 0 {
+			return &CooldownError{RetryAfter: wait}
+		}
+	case !errors.Is(err, ErrNotFound):
 		return err
 	}
 
@@ -216,7 +249,7 @@ func (s *Service) RequestCode(ctx context.Context, email string) error {
 }
 
 // VerifyCode checks a sign-in code and returns a token. A code is single use and
-// stops working after codeMaxAttempts wrong tries.
+// stops working after the configured number of wrong tries.
 func (s *Service) VerifyCode(ctx context.Context, email, code string) (TokenResponse, error) {
 	code = strings.TrimSpace(code)
 	if len(code) != codeDigits || strings.Trim(code, "0123456789") != "" {
@@ -236,7 +269,7 @@ func (s *Service) VerifyCode(ctx context.Context, email, code string) (TokenResp
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if !s.now().Before(lc.ExpiresAt) || lc.Attempts >= codeMaxAttempts {
+	if !s.now().Before(lc.ExpiresAt) || lc.Attempts >= s.codeMaxAttempts {
 		if err := s.repo.DeleteLoginCode(ctx, c.SellerID); err != nil {
 			return TokenResponse{}, err
 		}

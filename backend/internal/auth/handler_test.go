@@ -49,11 +49,35 @@ func TestRequestCodeAcceptsLinkedAndExplainsUnlinked(t *testing.T) {
 	repo.chats[sellerID] = linkedChat
 
 	rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
-	if rec.Code != http.StatusAccepted || rec.Body.String() != `{"status":"sent"}`+"\n" {
+	var sent CodeSentResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusAccepted || sent != (CodeSentResponse{Status: "sent", RetryAfter: 60}) {
 		t.Fatalf("linked: %d %s", rec.Code, rec.Body.String())
 	}
 	assertError(t, postJSON(t, h.RequestCode, RequestCodeRequest{Email: "nobody@example.com"}, nil),
 		http.StatusConflict, "telegram_not_linked")
+}
+
+func TestRequestCodeInsideCooldownAnswersRateLimited(t *testing.T) {
+	tg := &fakeTelegram{}
+	h, repo, _ := newOTPHandler(t, tg)
+	sellerID, _, err := repo.CreateSellerWithShop(context.Background(), "seller@example.com", "hash", "Shop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.chats[sellerID] = linkedChat
+	postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
+
+	rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "60" {
+		t.Fatalf("inside cooldown: %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	assertError(t, rec, http.StatusTooManyRequests, "rate_limited")
+	if n := len(tg.messages()); n != 1 {
+		t.Fatalf("%d messages, want 1", n)
+	}
 }
 
 func TestRequestCodeUnavailableWithoutTelegram(t *testing.T) {

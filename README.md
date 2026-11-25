@@ -171,7 +171,12 @@ cp .env.example .env
 | `OPENAPI_FILE` | empty (off); `/app/api/openapi.yaml` in Docker Compose | Path of the OpenAPI file the backend turns into JSON at `GET /openapi.json`. Running the backend from `backend/` use `../api/openapi.yaml` |
 | `COMMISSION_PERCENT` | `10` | Platform commission on delivered orders |
 | `RATE_LIMIT_SHOP_RPS`, `RATE_LIMIT_SHOP_BURST` | `20`, `40` | Requests per second and burst allowed for each shop on protected routes (see D6) |
-| `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Failed logins allowed per IP and email in the window before `429` |
+| `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Attempts allowed per IP and email in the window before `429`, for login, code requests and code checks (see [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md)) |
+| `RATE_LIMIT_CODE_COOLDOWN`, `RATE_LIMIT_CODE_ATTEMPTS` | `60s`, `5` | Time between two sign-in codes for a seller (a request inside it gets `429` with `Retry-After`), and wrong codes allowed before the code stops working |
+| `RATE_LIMIT_STREAMS_PER_SHOP` | `5` | Open order event streams (`GET /orders/events`) per shop; more get `429` |
+| `RATE_LIMIT_NGINX_API_RATE`, `RATE_LIMIT_NGINX_API_BURST` | `10r/s`, `30` | nginx limit per client IP on `/api/` (see [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md)) |
+| `RATE_LIMIT_NGINX_AUTH_RATE`, `RATE_LIMIT_NGINX_AUTH_BURST` | `10r/m`, `5` | nginx limit per client IP on `/api/auth/` |
+| `RATE_LIMIT_NGINX_FILES_RATE`, `RATE_LIMIT_NGINX_FILES_BURST` | `50r/s`, `100` | nginx limit per client IP on uploaded images |
 | `BUSINESS_TIMEZONE` | `Asia/Tashkent` | Time zone that defines "today", "last 7 days" and "last 30 days" on the dashboard (see D10) |
 | `TRUSTED_PROXIES` | private ranges and loopback | Networks whose `X-Real-IP` header the backend trusts (the nginx container) |
 | `UPLOAD_DIR`, `UPLOAD_PUBLIC_URL` | `./uploads`, `/api/uploads` | Where converted images are stored (the `uploads` volume in Docker Compose, which nginx serves read only) and the URL prefix returned in `photos` and `logo_url` (see D12) |

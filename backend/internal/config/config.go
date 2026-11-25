@@ -32,6 +32,9 @@ type Config struct {
 	ShopBurst           int
 	LoginAttempts       int
 	LoginWindow         time.Duration
+	CodeCooldown        time.Duration
+	CodeAttempts        int
+	StreamsPerShop      int
 	TrustedProxies      []string
 	TelegramBotToken    string
 	TelegramBotUsername string
@@ -61,6 +64,8 @@ func Load() (Config, error) {
 		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
 		UploadPublicURL:     getEnv("UPLOAD_PUBLIC_URL", "/api/uploads"),
 		ImagesPerMinute:     20,
+		CodeAttempts:        5,
+		StreamsPerShop:      5,
 	}
 
 	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
@@ -87,12 +92,21 @@ func Load() (Config, error) {
 	if cfg.ImagesPerMinute, err = getInt("RATE_LIMIT_IMAGES_PER_MINUTE", cfg.ImagesPerMinute); err != nil {
 		return Config{}, err
 	}
-	window := getEnv("RATE_LIMIT_LOGIN_WINDOW", "15m")
-	if cfg.LoginWindow, err = time.ParseDuration(window); err != nil {
-		return Config{}, fmt.Errorf("RATE_LIMIT_LOGIN_WINDOW must be a duration like 15m: %w", err)
+	if cfg.LoginWindow, err = getDuration("RATE_LIMIT_LOGIN_WINDOW", 15*time.Minute); err != nil {
+		return Config{}, err
 	}
-	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.ImagesPerMinute < 1 {
-		return Config{}, fmt.Errorf("rate limit settings must be positive")
+	if cfg.CodeCooldown, err = getDuration("RATE_LIMIT_CODE_COOLDOWN", 60*time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.CodeAttempts, err = getInt("RATE_LIMIT_CODE_ATTEMPTS", cfg.CodeAttempts); err != nil {
+		return Config{}, err
+	}
+	if cfg.StreamsPerShop, err = getInt("RATE_LIMIT_STREAMS_PER_SHOP", cfg.StreamsPerShop); err != nil {
+		return Config{}, err
+	}
+	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.ImagesPerMinute < 1 ||
+		cfg.CodeAttempts < 1 || cfg.CodeCooldown < 0 || cfg.StreamsPerShop < 1 {
+		return Config{}, fmt.Errorf("rate limit settings must be positive, and the code cooldown must not be negative")
 	}
 	if cfg.TelegramBotToken != "" && cfg.TelegramBotUsername == "" {
 		return Config{}, fmt.Errorf("TELEGRAM_BOT_USERNAME is required when TELEGRAM_BOT_TOKEN is set")
@@ -136,6 +150,18 @@ func getInt(key string, fallback int) (int, error) {
 		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
 	}
 	return n, nil
+}
+
+func getDuration(key string, fallback time.Duration) (time.Duration, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a duration like %s: %w", key, fallback, err)
+	}
+	return d, nil
 }
 
 func getFloat(key string, fallback float64) (float64, error) {

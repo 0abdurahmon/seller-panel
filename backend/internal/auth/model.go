@@ -26,6 +26,12 @@ type RequestCodeRequest struct {
 	Email string `json:"email"`
 }
 
+// CodeSentResponse is the answer to POST /auth/request-code: RetryAfter is the seconds before the next code.
+type CodeSentResponse struct {
+	Status     string `json:"status"`
+	RetryAfter int    `json:"retry_after"`
+}
+
 // VerifyRequest is the body of POST /auth/verify.
 type VerifyRequest struct {
 	Email string `json:"email"`
