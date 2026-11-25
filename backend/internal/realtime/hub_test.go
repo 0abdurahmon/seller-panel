@@ -71,3 +71,28 @@ func TestCloseIsIdempotentAndPublishAfterCloseIsSafe(t *testing.T) {
 	s.Close()
 	h.Publish(1, "a", event{})
 }
+
+func TestHubCloseEndsEveryStream(t *testing.T) {
+	h := NewHub(1, 1)
+	first, _ := h.Subscribe(1)
+	second, _ := h.Subscribe(2)
+
+	h.Close()
+	h.Close()
+	late, err := h.Subscribe(1)
+	if err != nil {
+		t.Fatalf("subscribe after close: %v", err)
+	}
+	for name, s := range map[string]*Subscription{"first": first, "second": second, "late": late} {
+		select {
+		case m, ok := <-s.Messages():
+			if ok {
+				t.Fatalf("%s got %+v", name, m)
+			}
+		default:
+			t.Fatalf("%s is still open", name)
+		}
+		s.Close()
+	}
+	h.Publish(1, "a", event{})
+}

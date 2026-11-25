@@ -15,7 +15,12 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/database"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout   = 10 * time.Second
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = time.Minute
+	idleTimeout       = 2 * time.Minute
+)
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -52,11 +57,7 @@ func run(logger *slog.Logger) error {
 	}
 	defer func() { _ = application.Close() }()
 	application.Start(ctx)
-	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           application.Handler,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := newServer(":"+cfg.Port, application.Handler, application.CloseStreams)
 
 	serverErr := make(chan error, 1)
 	go func() {
@@ -73,4 +74,17 @@ func run(logger *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// There is no WriteTimeout: it would cut the order event streams.
+func newServer(addr string, handler http.Handler, onShutdown func()) *http.Server {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+	srv.RegisterOnShutdown(onShutdown)
+	return srv
 }

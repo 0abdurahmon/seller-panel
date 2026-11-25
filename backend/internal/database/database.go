@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -82,11 +83,34 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) (er
 
 // toPgx5URL converts a postgres:// URL to the scheme golang-migrate's pgx
 // driver expects.
-func toPgx5URL(url string) string {
+func toPgx5URL(databaseURL string) string {
 	for _, prefix := range []string{"postgres://", "postgresql://"} {
-		if strings.HasPrefix(url, prefix) {
-			return "pgx5://" + strings.TrimPrefix(url, prefix)
+		if rest, found := strings.CutPrefix(databaseURL, prefix); found {
+			return "pgx5://" + withoutPoolParams(rest)
 		}
 	}
-	return url
+	return databaseURL
+}
+
+// golang-migrate passes pool_* parameters on to PostgreSQL, which refuses them.
+// The query is edited as text so nothing else in the URL is re-encoded.
+func withoutPoolParams(databaseURL string) string {
+	base, query, found := strings.Cut(databaseURL, "?")
+	if !found {
+		return databaseURL
+	}
+	var kept []string
+	for _, param := range strings.Split(query, "&") {
+		name, _, _ := strings.Cut(param, "=")
+		if decoded, err := url.QueryUnescape(name); err == nil {
+			name = decoded
+		}
+		if !strings.HasPrefix(name, "pool_") {
+			kept = append(kept, param)
+		}
+	}
+	if len(kept) == 0 {
+		return base
+	}
+	return base + "?" + strings.Join(kept, "&")
 }

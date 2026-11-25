@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -139,6 +140,38 @@ func TestCancelNeedsReason(t *testing.T) {
 		TransitionRequest{To: StatusCancelled, Reason: "   "})
 	if !errors.Is(err, ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
+	}
+}
+
+func TestCancelReasonLength(t *testing.T) {
+	longest := strings.Repeat("ж", maxReasonLen)
+	cases := map[string]struct {
+		reason string
+		valid  bool
+	}{
+		"longest":                       {longest, true},
+		"spaces around the longest one": {"  " + longest + "\n", true},
+		"one character too long":        {longest + "ж", false},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := newMemRepository()
+			repo.AddOrder(order(1, shopA, StatusNew, 0))
+			svc := newTestService(t, repo)
+			o, err := svc.Transition(context.Background(), shopA, 1, TransitionRequest{To: StatusCancelled, Reason: c.reason})
+			if c.valid {
+				if err != nil || o.CancelReason == nil || *o.CancelReason != longest {
+					t.Fatalf("err = %v, reason = %v; want the trimmed reason saved", err, o.CancelReason)
+				}
+				return
+			}
+			if !errors.Is(err, ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation", err)
+			}
+			if stored, err := svc.Get(context.Background(), shopA, 1); err != nil || stored.Status != StatusNew {
+				t.Fatalf("order = %+v, %v; want it unchanged", stored, err)
+			}
+		})
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -468,6 +469,8 @@ func TestOrderRequestErrors(t *testing.T) {
 	s.expect(s.do(http.MethodPost, orderPath(id)+"/transition", sel.token, `{`), http.StatusBadRequest, "invalid_body")
 	s.expect(s.do(http.MethodPost, orderPath(id)+"/transition", sel.token, `{"to":"accepted","extra":1}`), http.StatusBadRequest, "invalid_body")
 	s.expect(s.transition(sel.token, id, "shipped", ""), http.StatusBadRequest, "validation_error")
+	s.expect(s.transition(sel.token, id, "cancelled", strings.Repeat("ж", 501)), http.StatusBadRequest, "validation_error")
+	s.expect(s.transition(sel.token, id, "cancelled", strings.Repeat("ж", 500)), http.StatusOK, "")
 	s.expect(s.do(http.MethodGet, "/orders?status=shipped", sel.token, nil), http.StatusBadRequest, "validation_error")
 	s.expect(s.do(http.MethodGet, "/orders?page=x", sel.token, nil), http.StatusBadRequest, "validation_error")
 	s.expect(s.do(http.MethodGet, "/orders?page_size=x", sel.token, nil), http.StatusBadRequest, "validation_error")

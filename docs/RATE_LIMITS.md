@@ -12,8 +12,9 @@ Every limit in the stack, where it is enforced, what the caller gets when it is 
 | Backend, login, code request, code check | failed attempts in a window | client IP and email | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` |
 | Backend, sign-in codes | time between codes, wrong tries per code | seller | `RATE_LIMIT_CODE_COOLDOWN`, `RATE_LIMIT_CODE_ATTEMPTS` |
 | Backend, order event streams | open streams | shop | `RATE_LIMIT_STREAMS_PER_SHOP` |
+| Backend, requests in progress | requests served at once | the whole backend process | `MAX_REQUESTS_IN_FLIGHT` |
 
-The layers stack: a request must pass nginx, then the shop limit, then the route's own limit.
+The layers stack: a request must pass nginx, then the limit on requests in progress, then the shop limit, then the route's own limit.
 
 ## Backend settings
 
@@ -27,8 +28,9 @@ The layers stack: a request must pass nginx, then the shop limit, then the route
 | `RATE_LIMIT_CODE_COOLDOWN` | `60s` | Minimum time between two sign-in codes for one seller. A request inside it gets `429`. `0s` removes the wait. Must not be negative |
 | `RATE_LIMIT_CODE_ATTEMPTS` | `5` | Wrong codes allowed for one sign-in code before it stops working. At least 1 |
 | `RATE_LIMIT_STREAMS_PER_SHOP` | `5` | Open `GET /orders/events` streams per shop. At least 1 |
+| `MAX_REQUESTS_IN_FLIGHT` | `200` | Requests served at once by one backend process. At least 1 |
 
-A value that is not a number or a duration stops the backend at start with a message that names the variable. A value out of range (for example `0` for attempts) stops it too, with a general "rate limit settings must be positive" message.
+A value that is not a number or a duration stops the backend at start with a message that names the variable. A value out of range (for example `0` for attempts) stops it too, with a general "rate limit settings must be positive" message; `MAX_REQUESTS_IN_FLIGHT` below 1 has its own message with its name.
 
 ## nginx settings
 
@@ -53,6 +55,7 @@ The rate is written as nginx writes it: a number, then `r/s` (per second) or `r/
 | shop rate, login, code request, code check, image save, event stream | `429` with `Retry-After` | `rate_limited` |
 | sign-in code asked again during the cooldown | `429` with `Retry-After` set to the seconds left | `rate_limited` |
 | wrong sign-in code past the limit, or an expired code | `401` | `invalid_code` |
+| requests in progress | `503` with `Retry-After: 1` | `busy` |
 
 A code that is sent answers `202` with `retry_after`, the cooldown in seconds, so the screen can count down at once. The cooldown answers `429` with `Retry-After` so the caller knows the request was refused and when it can ask again, for example after a reload.
 
@@ -65,6 +68,7 @@ A code that is sent answers `202` with `retry_after`, the cooldown in seconds, s
   - Code requests count every call, successful or not, because each call can send a Telegram message. Five code requests within the window stop the next one, even if all five were sent.
 - **Code cooldown and wrong tries** (`backend/internal/auth/service.go`): one code per seller at a time. A new code replaces the old one and starts with 0 wrong tries, so the cooldown is the only thing that limits how often codes are sent.
 - **Event streams** (`backend/internal/realtime`): a stream that would be the sixth for a shop gets `429` and `Retry-After: 5`. Streams close when the token expires.
+- **Requests in progress** (`backend/internal/httpx/inflight.go`): every request except `/health` and `/orders/events`, public ones too. A request over the limit is refused at once and not queued, so the accepted ones stay fast. Nothing of it was processed, so it can be sent again. A request counts while its body is still arriving; the server gives a client 1 minute to send it.
 
 ## nginx limits in the frontend container
 
@@ -83,6 +87,7 @@ Because nginx sees the client IP as `$binary_remote_addr`, every user behind one
 - Busy shop on a fast connection: `RATE_LIMIT_SHOP_RPS=50`, `RATE_LIMIT_SHOP_BURST=100`.
 - Stricter sign-in codes: `RATE_LIMIT_CODE_COOLDOWN=5m`, `RATE_LIMIT_CODE_ATTEMPTS=3`.
 - Several staff at the same time on the orders screen: `RATE_LIMIT_STREAMS_PER_SHOP=10`. Each open browser window holds one stream, and a hidden tab holds none.
+- `503 busy` during normal traffic: raise `MAX_REQUESTS_IN_FLIGHT`. Lower it when accepted requests get slow under load.
 - A shared office IP that gets `429` from nginx: `RATE_LIMIT_NGINX_API_RATE=30r/s`, `RATE_LIMIT_NGINX_API_BURST=100`.
 
 Backend changes apply on the next start of the backend (`docker compose up -d --no-deps backend`). The buckets for the shop, image, login and stream limits are in memory, so a restart empties them. The code cooldown is kept in the database, so a restart does not allow an early code.

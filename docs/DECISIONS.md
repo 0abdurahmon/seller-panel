@@ -157,6 +157,7 @@ Record every important decision here: what you chose, what else you considered, 
 - Publish after commit: the order service publishes an event only after `InTx` succeeds, so a rolled-back change is never announced. The publisher is an interface declared in `order`, implemented by an in-process hub in `internal/realtime`. Feature packages do not import each other's concrete types.
 - Hub: one subscriber list per shop. Each subscriber has a small buffer. A subscriber whose buffer is full is dropped and its stream closed, so one slow client cannot block a publish. The client then reconnects and refetches the list; nothing is replayed, so no event log is kept.
 - Heartbeat: a comment line every 25 seconds keeps proxies from closing an idle stream.
+- Shutdown: the server closes the hub as soon as it starts to shut down, so every stream ends at once and clients reconnect. An open stream is never idle, and each restart used to wait the whole 10 second shutdown timeout and report an error.
 - Limits: at most 5 open streams per shop; the sixth gets `429 rate_limited`. The stream ends when the token expires, and the client reconnects with a fresh token. The stream counts once against the per-shop limiter, when it opens.
 - nginx: the `/api/orders/events` location turns off `proxy_buffering`, disables gzip and sets a read timeout longer than the heartbeat.
 - Why SSE and not polling or WebSocket: it is the fastest option that fits the need. The server pushes, the client only reads, and SSE reconnects by itself. Polling would wait up to a polling interval. WebSocket adds a library and an origin check for a direction nobody uses.
@@ -188,3 +189,18 @@ Record every important decision here: what you chose, what else you considered, 
 - Why: it reverses the D2 trade-off without an SMS provider. Telegram is already the team's channel, costs nothing, and a bot can deliver codes. Password login stays so a seller who has not linked yet is not locked out.
 - Considered: SMS codes (needs a paid provider, and phone numbers must be verified), email codes (needs an SMTP service, and the email is already the login name), TOTP apps (the seller must set up an app, more friction for a shop owner), and a webhook instead of polling (needs a public HTTPS address, which the MVP deployment does not have).
 - Trade-off: the code is sent in plain Telegram chat and the seller must keep access to that account. A stolen Telegram account can sign in, which is why password login remains available and a relink replaces the chat.
+
+## D22 — Limits on request values
+- A list `page` is at most 1 000 000 on products, as on orders and balance entries; a larger one is `400 validation_error`. A huge page overflowed the SQL offset and answered `500`.
+- A cancel reason is at most 500 characters, counted after trimming. It is checked in the order service; there is no database constraint, so reasons saved earlier stay.
+- `DATABASE_URL` may carry the pool settings (`pool_max_conns` and the other `pool_*` parameters). The pool reads them; they are cut from the URL the migrations use, because PostgreSQL refuses them.
+
+## D23 — Overload and server timeouts
+- One backend process serves at most `MAX_REQUESTS_IN_FLIGHT` requests at once (default 200). The next one is answered at once with `503 busy` and `Retry-After: 1`, so work does not queue for seconds behind the database pool. `/health` is exempt because it must answer under load, `/orders/events` because a stream stays open and has its own per shop limit.
+- The server gives a client 5 seconds for the headers and 1 minute for the whole request, and closes an idle connection after 2 minutes. There is no write timeout: it would cut the event streams. The read timeout does not, `net/http` removes the read deadline once the request is read.
+- Considered: a per request timeout (`http.TimeoutHandler` buffers the answer and breaks streaming), queueing with a short wait (the queue is the problem being removed).
+
+## D24 — The health check includes the database
+- `GET /health` pings the database and answers `503 database_unavailable` after at most 2 seconds, below the 3 second timeout of the container health check. The cause is logged and not sent. Without the database nothing but this route and the spec works, so a container that reports healthy then was misleading.
+- The ping uses the request pool: a pool kept busy for more than 2 seconds also reports unhealthy. Docker Compose does not restart a container for that.
+- Considered: separate liveness and readiness routes (nothing in the stack would tell them apart).

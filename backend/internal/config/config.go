@@ -35,6 +35,7 @@ type Config struct {
 	CodeCooldown        time.Duration
 	CodeAttempts        int
 	StreamsPerShop      int
+	MaxRequestsInFlight int
 	TrustedProxies      []string
 	TelegramBotToken    string
 	TelegramBotUsername string
@@ -66,6 +67,7 @@ func Load() (Config, error) {
 		ImagesPerMinute:     20,
 		CodeAttempts:        5,
 		StreamsPerShop:      5,
+		MaxRequestsInFlight: 200,
 	}
 
 	if cfg.Env != EnvProduction && cfg.Env != EnvDevelopment {
@@ -107,6 +109,12 @@ func Load() (Config, error) {
 	if cfg.ShopRPS <= 0 || cfg.ShopBurst < 1 || cfg.LoginAttempts < 1 || cfg.LoginWindow <= 0 || cfg.ImagesPerMinute < 1 ||
 		cfg.CodeAttempts < 1 || cfg.CodeCooldown < 0 || cfg.StreamsPerShop < 1 {
 		return Config{}, fmt.Errorf("rate limit settings must be positive, and the code cooldown must not be negative")
+	}
+	if cfg.MaxRequestsInFlight, err = getInt("MAX_REQUESTS_IN_FLIGHT", cfg.MaxRequestsInFlight); err != nil {
+		return Config{}, err
+	}
+	if cfg.MaxRequestsInFlight < 1 {
+		return Config{}, fmt.Errorf("MAX_REQUESTS_IN_FLIGHT must be at least 1, got %d", cfg.MaxRequestsInFlight)
 	}
 	if cfg.TelegramBotToken != "" && cfg.TelegramBotUsername == "" {
 		return Config{}, fmt.Errorf("TELEGRAM_BOT_USERNAME is required when TELEGRAM_BOT_TOKEN is set")

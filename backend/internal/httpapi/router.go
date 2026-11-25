@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,6 +20,9 @@ import (
 
 // liveShopFor is how long a shop found for a token is remembered, see auth.RequireLiveShop.
 const liveShopFor = 30 * time.Second
+
+// healthTimeout stays below the 3 s timeout of the container health check.
+const healthTimeout = 2 * time.Second
 
 // Deps are the handlers and services the router is wired with.
 type Deps struct {
@@ -37,12 +42,17 @@ type Deps struct {
 	ShopChecker  auth.ShopChecker
 	DevEndpoints bool
 	Spec         http.Handler
+
+	// MaxInFlight is how many requests are served at once, 0 means no limit.
+	MaxInFlight int
+	// Ping checks the database for GET /health, nil skips the check.
+	Ping func(ctx context.Context) error
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
 func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /health", health(d.Ping))
 	mux.HandleFunc("POST /auth/register", d.Auth.Register)
 	mux.HandleFunc("POST /auth/login", d.Auth.Login)
 	mux.HandleFunc("POST /auth/request-code", d.Auth.RequestCode)
@@ -98,9 +108,29 @@ func NewRouter(d Deps) http.Handler {
 	if d.DevEndpoints {
 		mux.Handle("POST /dev/simulate-order", protected(d.Order.Simulate))
 	}
-	return httpx.JSONErrors(mux)
+	router := httpx.JSONErrors(mux)
+	if d.MaxInFlight > 0 {
+		router = httpx.LimitInFlight(d.MaxInFlight, neverShed)(router)
+	}
+	return router
 }
 
-func health(w http.ResponseWriter, _ *http.Request) {
-	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+// The health check has to answer under load, and a stream stays open for hours under its own per shop limit.
+func neverShed(r *http.Request) bool {
+	return r.URL.Path == "/health" || r.URL.Path == "/orders/events"
+}
+
+func health(ping func(ctx context.Context) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ping != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), healthTimeout)
+			defer cancel()
+			if err := ping(ctx); err != nil {
+				slog.ErrorContext(r.Context(), "health check failed", "err", err)
+				httpx.WriteError(w, http.StatusServiceUnavailable, "database_unavailable", "the database does not answer")
+				return
+			}
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
 }

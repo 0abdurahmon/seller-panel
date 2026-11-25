@@ -39,6 +39,7 @@ type App struct {
 	Handler    http.Handler
 	background []func(ctx context.Context)
 	closer     io.Closer
+	hub        *realtime.Hub
 }
 
 // Start runs the background work until ctx ends. It returns at once.
@@ -46,6 +47,11 @@ func (a *App) Start(ctx context.Context) {
 	for _, run := range a.background {
 		go run(ctx)
 	}
+}
+
+// CloseStreams ends the order event streams, which would otherwise hold up the server shutdown.
+func (a *App) CloseStreams() {
+	a.hub.Close()
 }
 
 // Close releases the upload directory. Call it after the server stops.
@@ -125,8 +131,10 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		ShopChecker:  authSvc.OwnsShop,
 		DevEndpoints: cfg.Env == config.EnvDevelopment,
 		Spec:         spec,
+		MaxInFlight:  cfg.MaxRequestsInFlight,
+		Ping:         pool.Ping,
 	})
-	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo}
+	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo, hub: hub}
 	if bot != nil {
 		application.background = append(application.background,
 			func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) },

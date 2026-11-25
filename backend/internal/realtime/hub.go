@@ -23,6 +23,7 @@ type Hub struct {
 	maxPerShop int
 	buffer     int
 	shops      map[int64]map[*Subscription]struct{}
+	closed     bool
 }
 
 // Subscription receives the events of one shop until it is closed or dropped.
@@ -41,6 +42,11 @@ func NewHub(maxPerShop, buffer int) *Hub {
 func (h *Hub) Subscribe(shopID int64) (*Subscription, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	s := &Subscription{hub: h, shopID: shopID, ch: make(chan Message, h.buffer)}
+	if h.closed {
+		close(s.ch)
+		return s, nil
+	}
 	subs := h.shops[shopID]
 	if len(subs) >= h.maxPerShop {
 		return nil, ErrTooManyStreams
@@ -49,9 +55,21 @@ func (h *Hub) Subscribe(shopID int64) (*Subscription, error) {
 		subs = make(map[*Subscription]struct{})
 		h.shops[shopID] = subs
 	}
-	s := &Subscription{hub: h, shopID: shopID, ch: make(chan Message, h.buffer)}
 	subs[s] = struct{}{}
 	return s, nil
+}
+
+// Close ends every stream, and streams opened afterwards end at once. The server calls it on shutdown.
+func (h *Hub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.closed = true
+	for _, subs := range h.shops {
+		for s := range subs {
+			close(s.ch)
+		}
+	}
+	clear(h.shops)
 }
 
 // Publish sends an event to every stream of the shop. A stream that cannot keep up is dropped:
