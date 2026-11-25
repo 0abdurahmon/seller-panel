@@ -13,6 +13,7 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -88,7 +89,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	shopName := strings.TrimSpace(req.ShopName)
-	if shopName == "" || len(shopName) > maxShopNameLen {
+	if shopName == "" || utf8.RuneCountInString(shopName) > maxShopNameLen {
 		return TokenResponse{}, fmt.Errorf("%w: shop_name must be 1-%d characters", ErrValidation, maxShopNameLen)
 	}
 
