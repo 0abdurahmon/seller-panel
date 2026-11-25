@@ -54,11 +54,13 @@ export function AsideNav({
             />
           ))}
         </ul>
-        <ul className="mt-auto space-y-1">
-          {bottomMenuItems.map((item) => (
-            <MenuLink key={item.href} item={item} collapsed={collapsed} onNavigate={onNavigate} />
-          ))}
-        </ul>
+        {bottomMenuItems.length > 0 && (
+          <ul className="mt-auto space-y-1">
+            {bottomMenuItems.map((item) => (
+              <MenuLink key={item.href} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        )}
       </nav>
     </>
   );

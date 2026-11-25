@@ -11,8 +11,7 @@ export const mainMenuItems: MenuItem[] = [
   { label: 'Товары', href: '/products', icon: Box },
   { label: 'Заказы', href: '/orders', icon: ReceiptText },
   { label: 'Баланс', href: '/balance', icon: Wallet },
-];
-
-export const bottomMenuItems: MenuItem[] = [
   { label: 'Магазин', href: '/shop', icon: Shop },
 ];
+
+export const bottomMenuItems: MenuItem[] = [];
