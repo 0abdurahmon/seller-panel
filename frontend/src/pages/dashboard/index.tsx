@@ -13,11 +13,12 @@ import { DashboardStats } from "@/widgets/dashboard-stats";
 import { TopProducts } from "@/widgets/top-products";
 
 // Stands in for the real numbers while loading, so skullet can measure the layout.
+// Lengths are close to real numbers on purpose; skullet later remembers the real shape.
 const SAMPLE: DashboardSummary = {
-  today_orders: 10,
-  waiting_for_action: 0,
-  revenue_7d: 10_000_000,
-  revenue_30d: 10_000_000,
+  today_orders: 12,
+  waiting_for_action: 5,
+  revenue_7d: 18_000_000,
+  revenue_30d: 64_000_000,
   top_products: Array.from({ length: 5 }, (_, i) => ({
     product_id: -1 - i,
     title: "Смартфон Galaxy A55 8/256",
