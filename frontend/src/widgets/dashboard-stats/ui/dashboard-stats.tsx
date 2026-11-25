@@ -17,9 +17,8 @@ export const DashboardStats = ({ summary }: { summary: DashboardSummary }) => {
       <StatCard
         label="Ждут действия"
         value={waiting}
-        hint={waiting > 0 ? 'Новые, принятые и собранные · Перейти к заказам →' : 'Всё обработано'}
+        hint={waiting > 0 ? 'Новые, принятые и собранные' : 'Всё обработано'}
         icon={<Clock />}
-        tone={waiting > 0 ? 'attention' : 'neutral'}
         to={waiting > 0 ? '/orders' : undefined}
       />
       <StatCard
@@ -28,7 +27,6 @@ export const DashboardStats = ({ summary }: { summary: DashboardSummary }) => {
         unit="сум"
         hint="Сегодня и 6 дней до, доставленные заказы"
         icon={<TrendUp />}
-        tone="success"
       />
       <StatCard
         label="Выручка за 30 дней"
@@ -36,7 +34,6 @@ export const DashboardStats = ({ summary }: { summary: DashboardSummary }) => {
         unit="сум"
         hint="Сегодня и 29 дней до, доставленные заказы"
         icon={<Chart />}
-        tone="success"
       />
     </section>
   );
