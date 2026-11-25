@@ -8,3 +8,4 @@ export {
   type ParsedApiError,
 } from './http/error';
 export { multipart } from './http';
+export { EventStreamError, followOrderEvents } from './http/events';
