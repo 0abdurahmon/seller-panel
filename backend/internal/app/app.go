@@ -18,6 +18,7 @@ import (
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpapi"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
 	"github.com/0abdurahmon/seller-panel/backend/internal/order"
+	"github.com/0abdurahmon/seller-panel/backend/internal/orderalert"
 	"github.com/0abdurahmon/seller-panel/backend/internal/product"
 	"github.com/0abdurahmon/seller-panel/backend/internal/realtime"
 	"github.com/0abdurahmon/seller-panel/backend/internal/shop"
@@ -30,19 +31,21 @@ import (
 const (
 	maxStreamsPerShop = 5
 	streamBuffer      = 16
+	// Unsent order alerts kept before new ones are dropped.
+	orderAlertQueue = 100
 )
 
 // App is the HTTP handler and the background work that runs next to it.
 type App struct {
-	Handler http.Handler
-	poll    func(ctx context.Context)
-	closer  io.Closer
+	Handler    http.Handler
+	background []func(ctx context.Context)
+	closer     io.Closer
 }
 
 // Start runs the background work until ctx ends. It returns at once.
 func (a *App) Start(ctx context.Context) {
-	if a.poll != nil {
-		go a.poll(ctx)
+	for _, run := range a.background {
+		go run(ctx)
 	}
 }
 
@@ -70,7 +73,13 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	stockSvc := stock.NewService(stock.NewPgRepository(pool))
 
 	hub := realtime.NewHub(maxStreamsPerShop, streamBuffer)
-	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent, hub)
+	var alerts *orderalert.Alerts
+	var publisher order.Publisher = hub
+	if bot != nil {
+		alerts = orderalert.New(orderalert.NewPgRepository(pool), bot, logger, orderAlertQueue)
+		publisher = fanout{hub, alerts}
+	}
+	orderSvc, err := order.NewService(order.NewPgRepository(pool), cfg.CommissionPercent, publisher)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +128,10 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 	})
 	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo}
 	if bot != nil {
-		application.poll = func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) }
+		application.background = append(application.background,
+			func(ctx context.Context) { bot.Poll(ctx, logger, authSvc.HandleBotMessage) },
+			alerts.Run,
+		)
 	}
 	return application, nil
 }
