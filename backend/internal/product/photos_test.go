@@ -409,6 +409,18 @@ func TestHandlerMultipartUpdate(t *testing.T) {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
 	})
+	t.Run("status changes the status", func(t *testing.T) {
+		rec := a.multipart(http.MethodPut, path, tok, fields([2]string{"status", "active"}), nil)
+		if got := decode[Product](t, rec); rec.Code != 200 || got.Status != StatusActive {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+	})
+	t.Run("status cannot archive", func(t *testing.T) {
+		rec := a.multipart(http.MethodPut, path, tok, fields([2]string{"status", "archived"}), nil)
+		if rec.Code != 400 || errorCode(t, rec) != "validation_error" {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+	})
 	t.Run("stock is not an update field", func(t *testing.T) {
 		rec := a.multipart(http.MethodPut, path, tok, fields([2]string{"stock", "5"}), nil)
 		if rec.Code != 400 {

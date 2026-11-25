@@ -3,6 +3,7 @@ package product
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -30,9 +31,10 @@ type form struct {
 func readForm(w http.ResponseWriter, r *http.Request, update bool) (form, error) {
 	spec := httpx.FormSpec{Fields: formFields, FileField: photosField, MaxFiles: maxPhotos, MaxFileBytes: maxPhotoBytes}
 	if update {
+		spec.Fields = append(slices.Clone(formFields), "status")
 		spec.Lists = []string{keepPhotosField}
 	} else {
-		spec.Fields = append(append([]string{}, formFields...), "stock")
+		spec.Fields = append(slices.Clone(formFields), "stock")
 	}
 	raw, err := httpx.ReadForm(w, r, spec)
 	if err != nil {
