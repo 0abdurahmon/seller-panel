@@ -8,7 +8,7 @@ Read first: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (layers, conventions)
 
 | Task | Command |
 |------|---------|
-| Backend checks | `cd backend && gofmt -l . && go vet -tags e2e ./... && go test -race ./...` |
+| Backend checks | `cd backend && gofmt -l . && go vet -tags e2e ./... && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --build-tags=e2e && go test -race ./...` |
 | End-to-end tests | `cd backend && go test -race -tags e2e ./e2e/...` (needs `TEST_DATABASE_URL`) |
 | Database tests | need `TEST_DATABASE_URL` and CI runs them against PostgreSQL. It must name a throwaway database ending in `_test` (`seller_test`), never the one the app uses: the tests truncate tables and refuse other names. New database tests use `dbtest.NewPool(t, "<feature>")`, not the URL directly |
 
