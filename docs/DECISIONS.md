@@ -175,7 +175,7 @@ Record every important decision here: what you chose, what else you considered, 
 
 ## D19 — A product always has a photo, the category filter covers subcategories
 - The task asks for at least one photo, so `POST /products` refuses a product without one and `PUT /products/{id}` refuses to leave none. A create is therefore always `multipart/form-data`, a JSON body gets `400 validation_error`, and every create counts against the image rate limit. A JSON edit still works and keeps the photos.
-- Products saved before this rule have no photo: they can be read, sold and archived, and the next edit has to add one. The seed draws a one colour image for every demo product.
+- Products saved before this rule have no photo: they can be read, sold and archived, and the next edit has to add one. The seed gives every demo product a freely licensed photo of its type, embedded in the binary (`backend/internal/seed/photos`, sources in `SOURCES.md`), and a one colour image where there is none.
 - `GET /products?category=` returns the category and all its subcategories, so filtering by a top category such as Electronics finds the phones.
 - Considered: asking for a photo only when a draft is activated (a product could be created in one JSON call, but the catalogue would hold products without photos), a database constraint (a row count across two tables needs a deferred trigger, the service rule is enough), filtering by the exact category only (a top category looked empty).
 

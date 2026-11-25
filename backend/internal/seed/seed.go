@@ -189,9 +189,9 @@ func createProducts(ctx context.Context, svc *services, shopID int64) (map[strin
 		if spec.stock != 0 {
 			stockLevel = spec.stock
 		}
-		photo, err := placeholder(i)
+		photo, err := productPhoto(spec.sku, i)
 		if err != nil {
-			return nil, fmt.Errorf("draw the photo of %s: %w", spec.sku, err)
+			return nil, fmt.Errorf("load the photo of %s: %w", spec.sku, err)
 		}
 		p, err := svc.product.Create(ctx, shopID, product.CreateInput{
 			CategoryID: cat, Title: spec.title, Description: spec.description,
