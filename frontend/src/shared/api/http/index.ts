@@ -52,16 +52,28 @@ export const multipart: AxiosRequestConfig = {
   formSerializer: { indexes: null },
 };
 
+// Minimum duration (ms) for requests so skeleton animations (skullet sweep)
+// have enough time to render smoothly without flickering or abrupt layout jumps.
+const MIN_SKELETON_DELAY_MS = 450;
+
 export const customInstance = <T>(
   config: CustomInstanceConfig,
   options?: AxiosRequestConfig,
 ): Promise<T> => {
   const controller = new AbortController();
+  const startTime = Date.now();
+
   const promise = AXIOS_INSTANCE({
     ...config,
     ...options,
     signal: options?.signal ?? config.signal ?? controller.signal,
-  }).then(({ data }) => data);
+  }).then(async ({ data }) => {
+    const elapsed = Date.now() - startTime;
+    if (elapsed < MIN_SKELETON_DELAY_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_SKELETON_DELAY_MS - elapsed));
+    }
+    return data;
+  });
 
   // react-query calls cancel() when a query is no longer needed.
   // @ts-expect-error - adding cancel to the promise
