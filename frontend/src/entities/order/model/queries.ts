@@ -1,4 +1,4 @@
-import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import { getOrders } from '@/shared/api';
 import type { GetOrdersParams } from '@/shared/api';
 import type { OrderStatusFilter } from './types';
@@ -7,17 +7,22 @@ const api = getOrders();
 
 export const orderKeys = {
   all: ['orders'] as const,
-  list: (params: GetOrdersParams) => [...orderKeys.all, 'list', params] as const,
+  list: (params: Omit<GetOrdersParams, 'page'>) => [...orderKeys.all, 'list', params] as const,
   detail: (id: number) => [...orderKeys.all, 'detail', id] as const,
   count: (status: OrderStatusFilter) => [...orderKeys.all, 'count', status] as const,
 };
 
-export function useOrders(params: GetOrdersParams) {
-  return useQuery({
+/** Pages of orders for infinite scroll; `params` are the filters, the page number is managed here. */
+export function useOrders(params: Omit<GetOrdersParams, 'page'>) {
+  return useInfiniteQuery({
     queryKey: orderKeys.list(params),
-    queryFn: ({ signal }) => api.getOrders(params, { signal }),
-    // Keeps the current page on screen while the next one loads.
-    placeholderData: keepPreviousData,
+    queryFn: ({ pageParam, signal }) => api.getOrders({ ...params, page: pageParam }, { signal }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page * last.page_size < last.total ? last.page + 1 : undefined),
+    select: (data) => ({
+      items: data.pages.flatMap((page) => page.items),
+      total: data.pages[0]?.total ?? 0,
+    }),
   });
 }
 

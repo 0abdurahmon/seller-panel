@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { useOrderCounts, useOrders, type OrderStatusFilter } from "@/entities/order";
 import { AdvanceOrderDialog } from "@/features/order/advance-order";
@@ -16,7 +16,7 @@ import {
   TabsTrigger,
 } from "@/shared/ui";
 import { OrderDetails } from "@/widgets/order-details";
-import { OrdersPagination, OrdersTable } from "@/widgets/orders-table";
+import { OrdersTable } from "@/widgets/orders-table";
 
 const PAGE_SIZE = 20;
 
@@ -39,22 +39,25 @@ function parsePositiveInt(value: string | null) {
   return value && Number.isInteger(n) && n >= 1 ? n : null;
 }
 
+function getScrollParent(node: HTMLElement) {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
+  }
+  return null;
+}
+
 export const OrdersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = parseStatus(searchParams.get("status"));
-  const page = parsePositiveInt(searchParams.get("page")) ?? 1;
   // The open order lives in the URL, so a link to an order works and Back closes it.
   const orderId = parsePositiveInt(searchParams.get("order"));
 
-  function updateParams(next: { status?: OrderStatusFilter; page?: number }) {
+  function changeStatus(next: OrderStatusFilter) {
     const params = new URLSearchParams(searchParams);
-    if (next.status !== undefined) {
-      if (next.status === "all") params.delete("status");
-      else params.set("status", next.status);
-    }
-    // Any new filter starts from the first page; only an explicit page change keeps one.
-    if (next.page && next.page > 1) params.set("page", String(next.page));
-    else params.delete("page");
+    if (next === "all") params.delete("status");
+    else params.set("status", next);
+    // Links from the earlier paged list may still carry ?page=.
+    params.delete("page");
     setSearchParams(params, { replace: true });
   }
 
@@ -74,11 +77,28 @@ export const OrdersPage = () => {
   }, [searchParams, setSearchParams]);
 
   const orders = useOrders({
-    page,
     page_size: PAGE_SIZE,
     ...(status === "all" ? {} : { status }),
   });
   const counts = useOrderCounts();
+
+  // The next page is requested while the sentinel is still 800px below the screen,
+  // so by the time the reader gets there the rows are already in.
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = orders;
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
+    // rootMargin only widens the root, so the root must be the element that actually scrolls.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void fetchNextPage();
+      },
+      { root: getScrollParent(node), rootMargin: "0px 0px 800px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -86,7 +106,12 @@ export const OrdersPage = () => {
       <CancelOrderDialog />
       <OrderDetails orderId={orderId} onClose={closeOrder} />
 
-      <Tabs value={status} onValueChange={(value) => updateParams({ status: value as OrderStatusFilter })}>
+      <Tabs
+        value={status}
+        onValueChange={(value) => changeStatus(value as OrderStatusFilter)}
+        // Stays at the top while the list scrolls, so the filters and the column titles are always in view.
+        className="sticky -top-3 z-20 -mt-6 bg-background pt-6 pb-3"
+      >
         <TabsList>
           {STATUS_TABS.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
@@ -114,14 +139,17 @@ export const OrdersPage = () => {
             status={status}
             onOpenOrder={openOrder}
           />
-          {orders.data && (
-            <OrdersPagination
-              page={orders.data.page}
-              pageSize={orders.data.page_size}
-              total={orders.data.total}
-              disabled={orders.isPlaceholderData}
-              onPageChange={(next) => updateParams({ page: next })}
-            />
+          {orders.isFetchNextPageError ? (
+            <div className="flex items-center justify-center gap-3 py-2 text-sm text-muted-foreground">
+              Не удалось загрузить следующие заказы.
+              <Button size="sm" variant="outline" onClick={() => void fetchNextPage()}>
+                Повторить
+              </Button>
+            </div>
+          ) : (
+            <div ref={sentinel} className="py-2 text-center text-sm text-muted-foreground">
+              {orders.isFetchingNextPage && "Загружаем ещё…"}
+            </div>
           )}
         </>
       )}
