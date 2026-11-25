@@ -34,7 +34,7 @@ func TestOpenAPIJSONDescribesTheImplementedAPI(t *testing.T) {
 		{"/products", "post"}, {"/products/{id}/archive", "post"}, {"/products/{id}/stock", "patch"},
 		{"/orders", "get"}, {"/orders/{id}/transition", "post"}, {"/balance", "get"}, {"/balance/entries", "get"},
 		{"/dev/simulate-order", "post"}, {"/auth/request-code", "post"}, {"/auth/verify", "post"},
-		{"/auth/telegram/link", "post"},
+		{"/auth/telegram/link", "post"}, {"/orders/events", "get"},
 		{"/dev/simulate-order", "post"},
 		{"/auth/request-code", "post"}, {"/auth/verify", "post"}, {"/auth/telegram/link", "post"},
 	} {

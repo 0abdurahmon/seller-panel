@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
+	"github.com/0abdurahmon/seller-panel/backend/internal/realtime"
 )
 
 type api struct {
@@ -34,11 +35,11 @@ func newAPIWith(t *testing.T, mem *memRepository, repo Repository) *api {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(repo, 10)
+	svc, err := NewService(repo, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewHandler(svc)
+	h := NewHandler(svc, realtime.NewHub(5, 16))
 	protect := auth.RequireAuth(tokens)
 	mux := http.NewServeMux()
 	mux.Handle("GET /orders", protect(http.HandlerFunc(h.List)))

@@ -43,12 +43,17 @@ func (s *Service) Simulate(ctx context.Context, shopID int64) (Order, error) {
 		})
 	}
 	buyer := fakeBuyers[s.intn(len(fakeBuyers))]
-	return s.repo.Create(ctx, shopID, NewOrder{
+	o, err := s.repo.Create(ctx, shopID, NewOrder{
 		BuyerName:       buyer.name,
 		BuyerPhone:      buyer.phone,
 		DeliveryAddress: buyer.address,
 		Items:           items,
 	}, s.now())
+	if err != nil {
+		return Order{}, err
+	}
+	s.publishCreated(shopID, o)
+	return o, nil
 }
 
 func randomIntn(n int) int {

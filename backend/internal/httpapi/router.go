@@ -88,6 +88,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /balance", protected(d.Balance.Summary))
 	mux.Handle("GET /balance/entries", protected(d.Balance.Entries))
 	mux.Handle("GET /orders", protected(d.Order.List))
+	mux.Handle("GET /orders/events", protected(d.Order.Events))
 	mux.Handle("GET /orders/{id}", protected(d.Order.Get))
 	mux.Handle("POST /orders/{id}/transition", protected(d.Order.Transition))
 	mux.Handle("GET /dashboard/summary", protected(d.Dashboard.Summary))

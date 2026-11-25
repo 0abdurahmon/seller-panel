@@ -5,19 +5,44 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/auth"
 	"github.com/0abdurahmon/seller-panel/backend/internal/httpx"
+	"github.com/0abdurahmon/seller-panel/backend/internal/realtime"
 )
+
+// streamRetryAfter is how long a client waits before opening another stream once the shop has too many.
+const streamRetryAfter = 5 * time.Second
 
 // Handler serves the order endpoints. The shop comes from the token only.
 type Handler struct {
 	svc *Service
+	hub *realtime.Hub
 }
 
-// NewHandler returns the HTTP handler for orders.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+// NewHandler returns the HTTP handler for orders. hub serves GET /orders/events.
+func NewHandler(svc *Service, hub *realtime.Hub) *Handler {
+	return &Handler{svc: svc, hub: hub}
+}
+
+// Events handles GET /orders/events, a stream of order.created and order.status_changed for the shop.
+func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
+	p, ok := auth.MustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	sub, err := h.hub.Subscribe(p.ShopID)
+	if errors.Is(err, realtime.ErrTooManyStreams) {
+		httpx.WriteRateLimited(w, streamRetryAfter)
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "something went wrong")
+		return
+	}
+	defer sub.Close()
+	realtime.Stream(w, r, sub, p.Expires)
 }
 
 // List handles GET /orders?status=&page=&page_size=.

@@ -41,5 +41,6 @@ func (s *Service) Place(ctx context.Context, shopID int64, n NewOrder) (Order, e
 	if err != nil {
 		return Order{}, err
 	}
+	s.publishCreated(shopID, o)
 	return withLists(o), nil
 }
