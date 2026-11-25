@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -98,7 +99,10 @@ func (h *Handler) RequestCode(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
+	httpx.WriteJSON(w, http.StatusAccepted, CodeSentResponse{
+		Status:     "sent",
+		RetryAfter: int(math.Ceil(h.svc.CodeCooldown().Seconds())),
+	})
 }
 
 // Verify handles POST /auth/verify, which trades a sign-in code for a token.

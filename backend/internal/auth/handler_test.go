@@ -49,7 +49,11 @@ func TestRequestCodeAcceptsLinkedAndExplainsUnlinked(t *testing.T) {
 	repo.chats[sellerID] = linkedChat
 
 	rec := postJSON(t, h.RequestCode, RequestCodeRequest{Email: "seller@example.com"}, nil)
-	if rec.Code != http.StatusAccepted || rec.Body.String() != `{"status":"sent"}`+"\n" {
+	var sent CodeSentResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusAccepted || sent != (CodeSentResponse{Status: "sent", RetryAfter: 60}) {
 		t.Fatalf("linked: %d %s", rec.Code, rec.Body.String())
 	}
 	assertError(t, postJSON(t, h.RequestCode, RequestCodeRequest{Email: "nobody@example.com"}, nil),

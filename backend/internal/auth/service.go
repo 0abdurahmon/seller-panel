@@ -206,6 +206,9 @@ type CooldownError struct{ RetryAfter time.Duration }
 
 func (e *CooldownError) Error() string { return "a sign-in code was requested recently" }
 
+// CodeCooldown is the time a seller waits between two sign-in codes.
+func (s *Service) CodeCooldown() time.Duration { return s.codeCooldown }
+
 func (s *Service) RequestCode(ctx context.Context, email string) error {
 	if s.telegram == nil {
 		return ErrTelegramUnavailable

@@ -54,7 +54,7 @@ The rate is written as nginx writes it: a number, then `r/s` (per second) or `r/
 | sign-in code asked again during the cooldown | `429` with `Retry-After` set to the seconds left | `rate_limited` |
 | wrong sign-in code past the limit, or an expired code | `401` | `invalid_code` |
 
-The cooldown answers `429` so the caller knows the request was refused and when it can ask again. The frontend should show the wait from `Retry-After`.
+A code that is sent answers `202` with `retry_after`, the cooldown in seconds, so the screen can count down at once. The cooldown answers `429` with `Retry-After` so the caller knows the request was refused and when it can ask again, for example after a reload.
 
 ## Where each limit applies
 

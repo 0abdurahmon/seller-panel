@@ -891,11 +891,14 @@ components:
 
     Accepted:
       type: object
-      required: [status]
+      required: [status, retry_after]
       properties:
         status:
           type: string
           enum: [sent]
+        retry_after:
+          type: integer
+          description: Seconds until the seller can ask for another code (`RATE_LIMIT_CODE_COOLDOWN`, 60 by default)
 
     TelegramLink:
       type: object
