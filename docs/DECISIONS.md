@@ -173,3 +173,10 @@ Record every important decision here: what you chose, what else you considered, 
 - Scope for now: one backend instance, which matches D10. Moving to several instances means replacing the in-process hub with Postgres `LISTEN/NOTIFY` behind the same interface; the endpoint and the events stay the same.
 - Later, not in this decision: a Telegram message for each `order.created` to a seller who linked a chat (D10). It subscribes to the same hub and is its own issue.
 - Considered: polling every few seconds (simplest, but slower and more requests), WebSocket (two-way channel nobody needs), `LISTEN/NOTIFY` from the start (more moving parts for one instance).
+
+## D19 — Telegram alert for each new order
+- When a buyer's order is created, the seller's linked Telegram chat (D10) gets one message: order number, buyer name, total, and a reminder to open the panel. Nothing is sent for other events or for sellers without a linked chat.
+- The alert is a second publisher next to the realtime hub (D18). `Publish` only puts the alert on a queue of 100, so a slow Telegram never delays the request that created the order. One worker sends the queue in order. A full queue drops the alert and logs it.
+- No retries. A failed send is logged with the order number and not sent again, because a retry after a timeout could send the same message twice and the seller can always see the order in the panel.
+- The message contains the buyer's name and total, which the seller already sees in the panel. The buyer's phone and address are not sent.
+- Only one backend instance sends alerts (D10 polling). With several instances, the queue would live in each and alerts would double; the same switch to a shared bus as D18 solves both.
