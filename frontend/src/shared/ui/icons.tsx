@@ -121,6 +121,15 @@ function MinusIcon(props: IconProps) {
   )
 }
 
+/** A circular spinner arc for loading indicators. */
+function LoaderIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </IconBase>
+  )
+}
+
 export {
   CheckIcon,
   ChevronDownIcon,
@@ -128,6 +137,7 @@ export {
   ChevronRightIcon,
   ChevronUpIcon,
   CloseIcon,
+  LoaderIcon,
   MenuIcon,
   MinusIcon,
   MoreHorizontalIcon,

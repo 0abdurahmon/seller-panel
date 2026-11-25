@@ -28,7 +28,7 @@
  */
 
 /**
- * The fields of `CreateProductRequest` as form fields, plus the images.
+ * The fields of a new product and its images.
  */
 export interface CreateProductForm {
   /** @minimum 1 */
@@ -37,9 +37,10 @@ export interface CreateProductForm {
   description?: string;
   /**
      * Images (jpeg, png or webp, 5 MB each). The first one is the cover.
+     * @minItems 1
      * @maxItems 5
      */
-  photos?: (Blob | File)[];
+  photos: (Blob | File)[];
   /**
      * @minimum 1
      * @maximum 1000000000000

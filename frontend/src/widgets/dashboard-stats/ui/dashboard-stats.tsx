@@ -19,7 +19,7 @@ export const DashboardStats = ({ summary }: { summary: DashboardSummary }) => {
         value={waiting}
         hint={waiting > 0 ? 'Новые, принятые и собранные' : 'Всё обработано'}
         icon={<Clock />}
-        to={waiting > 0 ? '/orders' : undefined}
+        to={waiting > 0 ? '/orders?status=waiting' : undefined}
       />
       <StatCard
         label="Выручка за 7 дней"

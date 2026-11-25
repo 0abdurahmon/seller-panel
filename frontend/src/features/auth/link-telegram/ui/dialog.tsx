@@ -8,12 +8,12 @@ import {
   AlertDescription,
   Button,
   CheckIcon,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaFooter,
+  CredenzaHeader,
+  CredenzaTitle,
   Input,
   Spinner,
 } from '@/shared/ui';
@@ -60,15 +60,15 @@ export const LinkTelegramDialog = () => {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Привязка Telegram</DialogTitle>
-          <DialogDescription>
+    <Credenza open={open} onOpenChange={setOpen}>
+      <CredenzaContent>
+        <CredenzaHeader>
+          <CredenzaTitle>Привязка Telegram</CredenzaTitle>
+          <CredenzaDescription>
             Откройте ссылку в Telegram и нажмите Start, чтобы получать коды для входа. Повторная
             привязка заменит предыдущий чат.
-          </DialogDescription>
-        </DialogHeader>
+          </CredenzaDescription>
+        </CredenzaHeader>
 
         {link.isPending && (
           <div className="flex items-center gap-2.5 py-2 text-sm text-muted-foreground">
@@ -123,13 +123,13 @@ export const LinkTelegramDialog = () => {
         )}
 
         {link.isError && (
-          <DialogFooter>
+          <CredenzaFooter>
             <Button type="button" variant="secondary" onClick={() => link.mutate()}>
               Попробовать снова
             </Button>
-          </DialogFooter>
+          </CredenzaFooter>
         )}
-      </DialogContent>
-    </Dialog>
+      </CredenzaContent>
+    </Credenza>
   );
 };

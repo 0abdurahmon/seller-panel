@@ -70,9 +70,9 @@ const postAuthRegister = (
       options);
     }
   /**
- * Always answers `202` with the same body, so the API does not reveal which emails exist.
- * Nothing is sent for unknown emails, sellers without a linked chat, or a code requested less
- * than 60 seconds ago. The code is valid for 5 minutes.
+ * `202` when a code is sent. `409 telegram_not_linked` when the email is unknown or its seller has
+ * no linked chat, so no code can be sent. A code requested less than 60 seconds ago is not sent again
+ * and still answers `202`. The code is valid for 5 minutes.
  * @summary Send a sign-in code to the seller's linked Telegram chat
  */
 const postAuthRequestCode = (

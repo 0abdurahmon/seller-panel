@@ -26,11 +26,11 @@ export function MenuLink({
       aria-current={isActive ? 'page' : undefined}
       aria-label={badge ? `${item.label}: ${badge}` : undefined}
       className={cn(
-        'relative font-medium text-sm flex items-center justify-start py-3 rounded-xl transition-colors duration-200 overflow-hidden whitespace-nowrap w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/30',
+        'relative z-10 font-medium text-sm flex items-center justify-start py-3 rounded-xl overflow-hidden whitespace-nowrap w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/30',
         collapsed ? 'px-3.5' : 'px-3.5 gap-x-3',
         isActive
-          ? 'bg-primary text-primary-foreground dark:bg-sidebar-accent dark:text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          ? 'text-primary-foreground dark:text-sidebar-accent-foreground'
+          : 'text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground',
       )}
     >
       <ItemIcon

@@ -1,24 +1,64 @@
 import { keepPreviousData, useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import { getOrders } from '@/shared/api';
-import type { GetOrdersParams } from '@/shared/api';
+import type { GetOrdersParams, OrderStatus } from '@/shared/api';
 import type { OrderStatusFilter } from './types';
 
 const api = getOrders();
 
+const WAITING_STATUSES: OrderStatus[] = ['new', 'accepted', 'packed'];
+
 export const orderKeys = {
   all: ['orders'] as const,
-  list: (params: Omit<GetOrdersParams, 'page'>) => [...orderKeys.all, 'list', params] as const,
+  list: (params: Omit<GetOrdersParams, 'page' | 'status'> & { status?: OrderStatusFilter }) =>
+    [...orderKeys.all, 'list', params] as const,
   detail: (id: number) => [...orderKeys.all, 'detail', id] as const,
-  count: (status: OrderStatusFilter) => [...orderKeys.all, 'count', status] as const,
+  count: (status: Exclude<OrderStatusFilter, 'waiting'>) =>
+    [...orderKeys.all, 'count', status] as const,
 };
 
 /** Pages of orders for infinite scroll; `params` are the filters, the page number is managed here. */
-export function useOrders(params: Omit<GetOrdersParams, 'page'>) {
+export function useOrders(
+  params: Omit<GetOrdersParams, 'page' | 'status'> & { status?: OrderStatusFilter },
+) {
+  const { status, ...rest } = params;
+
   return useInfiniteQuery({
     queryKey: orderKeys.list(params),
-    queryFn: ({ pageParam, signal }) => api.getOrders({ ...params, page: pageParam }, { signal }),
+    queryFn: async ({ pageParam, signal }) => {
+      if (status === 'waiting') {
+        const pages = await Promise.all(
+          WAITING_STATUSES.map((s) =>
+            api.getOrders({ ...rest, page: pageParam, status: s }, { signal }),
+          ),
+        );
+        const items = pages
+          .flatMap((p) => p.items)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id - a.id,
+          );
+        const hasMore = pages.some((p) => p.page * p.page_size < p.total);
+        const total = pages.reduce((sum, p) => sum + p.total, 0);
+        return {
+          items,
+          page: pageParam,
+          page_size: rest.page_size ?? 20,
+          total,
+          hasMore,
+        };
+      }
+
+      const res = await api.getOrders(
+        { ...rest, page: pageParam, ...(status && status !== 'all' ? { status } : {}) },
+        { signal },
+      );
+      return {
+        ...res,
+        hasMore: res.page * res.page_size < res.total,
+      };
+    },
     initialPageParam: 1,
-    getNextPageParam: (last) => (last.page * last.page_size < last.total ? last.page + 1 : undefined),
+    getNextPageParam: (last) => (last.hasMore ? last.page + 1 : undefined),
     select: (data) => ({
       items: data.pages.flatMap((page) => page.items),
       total: data.pages[0]?.total ?? 0,
@@ -35,7 +75,7 @@ export function useOrder(id: number | null) {
   });
 }
 
-const COUNTED: OrderStatusFilter[] = [
+const COUNTED: Exclude<OrderStatusFilter, 'waiting'>[] = [
   'all',
   'new',
   'accepted',
@@ -54,7 +94,15 @@ export function useOrderCounts(): Partial<Record<OrderStatusFilter, number>> {
         api.getOrders({ page_size: 1, ...(status === 'all' ? {} : { status }) }, { signal }),
       placeholderData: keepPreviousData,
     })),
-    combine: (results) =>
-      Object.fromEntries(COUNTED.map((status, i) => [status, results[i].data?.total])),
+    combine: (results) => {
+      const counts: Partial<Record<OrderStatusFilter, number>> = Object.fromEntries(
+        COUNTED.map((status, i) => [status, results[i].data?.total]),
+      );
+      const waitingLoaded = WAITING_STATUSES.every((s) => counts[s] !== undefined);
+      if (waitingLoaded) {
+        counts.waiting = WAITING_STATUSES.reduce((sum, s) => sum + (counts[s] ?? 0), 0);
+      }
+      return counts;
+    },
   });
 }

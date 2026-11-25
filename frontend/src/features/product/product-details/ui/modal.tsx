@@ -10,11 +10,11 @@ import {
 } from "@/entities/product";
 import { formatDateTime, formatPrice } from "@/shared/lib";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaHeader,
+  CredenzaTitle,
 } from "@/shared/ui";
 import { useProductDetails } from "../model/modal.store";
 
@@ -74,23 +74,23 @@ export const ProductDetailsModal = () => {
   const { product, close } = useProductDetails();
 
   return (
-    <Dialog open={product !== null} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-2xl!">
+    <Credenza open={product !== null} onOpenChange={(open) => !open && close()}>
+      <CredenzaContent className="max-w-2xl!">
         {product && (
           <>
-            <DialogHeader>
+            <CredenzaHeader>
               <div className="flex items-center gap-4">
                 <ProductImage product={product} className="size-16 rounded-2xl" />
                 <div className="min-w-0 space-y-1">
-                  <DialogTitle>{product.title}</DialogTitle>
-                  <DialogDescription>Артикул: {product.sku}</DialogDescription>
+                  <CredenzaTitle>{product.title}</CredenzaTitle>
+                  <CredenzaDescription>Артикул: {product.sku}</CredenzaDescription>
                 </div>
               </div>
-            </DialogHeader>
+            </CredenzaHeader>
             <ProductDetails product={product} />
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </CredenzaContent>
+    </Credenza>
   );
 };

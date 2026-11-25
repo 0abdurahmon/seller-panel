@@ -53,6 +53,24 @@ const getOrders = (
       options);
     }
   /**
+ * Server-sent events (`text/event-stream`). Each event has an `event:` name and one `data:` line of JSON:
+ * - `order.created`: an order summary, the same shape as an item of `GET /orders`.
+ * - `order.status_changed`: a `StatusChange`.
+ *
+ * A comment line `: ping` arrives every 25 seconds. Nothing is replayed, so after a reconnect reload
+ * `GET /orders`. The stream ends when the token expires; open it again with a fresh token.
+ * At most 5 streams per shop, the next one gets `429 rate_limited` with `Retry-After`.
+ * @summary Stream new orders and status changes of the shop
+ */
+const getOrdersEvents = (
+
+ options?: SecondParameter<typeof customInstance<string>>,) => {
+      return customInstance<string>(
+      {url: `/orders/events`, method: 'GET'
+    },
+      options);
+    }
+  /**
  * @summary Get one order with its items and status history
  */
 const getOrdersId = (
@@ -85,7 +103,8 @@ const postOrdersIdTransition = (
     },
       options);
     }
-  return {getOrders,getOrdersId,postOrdersIdTransition}};
+  return {getOrders,getOrdersEvents,getOrdersId,postOrdersIdTransition}};
 export type GetOrdersResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getOrders>['getOrders']>>>
+export type GetOrdersEventsResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getOrders>['getOrdersEvents']>>>
 export type GetOrdersIdResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getOrders>['getOrdersId']>>>
 export type PostOrdersIdTransitionResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getOrders>['postOrdersIdTransition']>>>

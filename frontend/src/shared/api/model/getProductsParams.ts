@@ -36,6 +36,7 @@ export type GetProductsParams = {
    * @maxLength 100
    */
   q?: string;
+  /** Products of this category and of all its subcategories */
   category?: number;
   status?: ProductStatus;
   /** @minimum 1 */

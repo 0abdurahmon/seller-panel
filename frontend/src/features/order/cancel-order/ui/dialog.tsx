@@ -9,12 +9,12 @@ import {
   Alert,
   AlertDescription,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Credenza,
+  CredenzaContent,
+  CredenzaDescription,
+  CredenzaFooter,
+  CredenzaHeader,
+  CredenzaTitle,
   Field,
   FieldError,
   FieldLabel,
@@ -59,20 +59,20 @@ export const CancelOrderDialog = () => {
   }
 
   return (
-    <Dialog
+    <Credenza
       open={order !== null}
       onOpenChange={(open) => !open && !mutation.isPending && handleClose()}
     >
-      <DialogContent className="max-w-md!" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Отменить заказ {order?.number}?</DialogTitle>
-          <DialogDescription>
+      <CredenzaContent className="max-w-md!" showCloseButton={false}>
+        <CredenzaHeader>
+          <CredenzaTitle>Отменить заказ {order?.number}?</CredenzaTitle>
+          <CredenzaDescription>
             {order && holdsStock(order.status)
               ? "Зарезервированный товар вернётся на склад. "
               : "Заказ ещё не резервировал товар. "}
             Причина сохранится в истории заказа.
-          </DialogDescription>
-        </DialogHeader>
+          </CredenzaDescription>
+        </CredenzaHeader>
 
         <form
           noValidate
@@ -104,7 +104,7 @@ export const CancelOrderDialog = () => {
             </Alert>
           )}
 
-          <DialogFooter>
+          <CredenzaFooter>
             <Button
               type="button"
               variant="ghost"
@@ -117,9 +117,9 @@ export const CancelOrderDialog = () => {
               {mutation.isPending && <Spinner />}
               Отменить заказ
             </Button>
-          </DialogFooter>
+          </CredenzaFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </CredenzaContent>
+    </Credenza>
   );
 };

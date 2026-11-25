@@ -57,7 +57,7 @@ const getShop = (
  * Two request formats:
  * - `application/json`: the fields only, the logo does not change.
  * - `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`
- *   (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.
+ *   (jpeg, png or webp, 5 MB). Without it the logo stays. A logo can be replaced, not removed.
  *
  * The profile and the logo are saved together: when anything fails nothing changes and no file stays on
  * the server; the old logo file is deleted once the new one is saved. The image type is checked from the file

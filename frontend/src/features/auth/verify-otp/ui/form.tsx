@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -16,15 +16,14 @@ import {
   Button,
   Field,
   FieldError,
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
   Spinner,
 } from '@/shared/ui';
 import { verifyOtpSchema, type VerifyOtpValues } from '../model/schema';
+import { AnimatedOtp } from './animated-otp';
 
 const api = getAuth();
 const RESEND_COOLDOWN_SECONDS = 60;
+const VERIFIED_REDIRECT_DELAY_MS = 1200;
 
 interface VerifyOtpFormProps {
   email: string;
@@ -34,6 +33,16 @@ export const VerifyOtpForm = ({ email }: VerifyOtpFormProps) => {
   const session = useSession();
   const navigate = useNavigate();
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [verified, setVerified] = useState(false);
+  const redirectTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -51,8 +60,15 @@ export const VerifyOtpForm = ({ email }: VerifyOtpFormProps) => {
   const verify = useMutation({
     mutationFn: (values: VerifyRequest) => api.postAuthVerify(values),
     onSuccess: ({ token }) => {
-      session.start(token);
-      navigate('/', { replace: true });
+      setVerified(true);
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      redirectTimerRef.current = window.setTimeout(
+        () => {
+          session.start(token);
+          navigate('/', { replace: true });
+        },
+        reducedMotion ? 350 : VERIFIED_REDIRECT_DELAY_MS,
+      );
     },
   });
 
@@ -66,6 +82,7 @@ export const VerifyOtpForm = ({ email }: VerifyOtpFormProps) => {
   });
 
   const onSubmit = (values: VerifyOtpValues) => {
+    if (verified) return;
     verify.mutate({ email, code: values.code });
   };
 
@@ -78,28 +95,20 @@ export const VerifyOtpForm = ({ email }: VerifyOtpFormProps) => {
         control={form.control}
         render={({ field }) => (
           <Field data-invalid={!!errors.code} className="flex flex-col items-center gap-2">
-            <InputOTP
+            <AnimatedOtp
               id="otp-input"
               autoFocus
-              maxLength={6}
               value={field.value}
-              onChange={(value) => {
-                field.onChange(value);
-                if (value.length === 6) {
-                  verify.mutate({ email, code: value });
+              verified={verified}
+              disabled={verify.isPending}
+              invalid={!!errors.code}
+              onChange={(digits) => {
+                field.onChange(digits);
+                if (digits.length === 6 && !verify.isPending && !verified) {
+                  verify.mutate({ email, code: digits });
                 }
               }}
-              aria-invalid={!!errors.code}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} className="size-12 text-lg" />
-                <InputOTPSlot index={1} className="size-12 text-lg" />
-                <InputOTPSlot index={2} className="size-12 text-lg" />
-                <InputOTPSlot index={3} className="size-12 text-lg" />
-                <InputOTPSlot index={4} className="size-12 text-lg" />
-                <InputOTPSlot index={5} className="size-12 text-lg" />
-              </InputOTPGroup>
-            </InputOTP>
+            />
             <FieldError errors={[errors.code]} />
           </Field>
         )}
@@ -113,20 +122,22 @@ export const VerifyOtpForm = ({ email }: VerifyOtpFormProps) => {
         </Alert>
       )}
 
-      <Button type="submit" size="lg" className="w-full" disabled={verify.isPending}>
-        {verify.isPending && <Spinner />}
-        Подтвердить
-      </Button>
+      {verify.isPending && (
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
+          <span>Проверяем код…</span>
+        </div>
+      )}
 
-      <div className="-mt-2 text-center">
+      <div className="text-center">
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          disabled={cooldown > 0 || resend.isPending}
+          disabled={cooldown > 0 || resend.isPending || verified}
           onClick={() => resend.mutate({ email })}
         >
-          {resend.isPending && <Spinner />}
+          {resend.isPending && <Spinner data-icon="inline-start" />}
           {cooldown > 0 ? `Отправить код повторно (${cooldown} с)` : 'Отправить код повторно'}
         </Button>
       </div>
