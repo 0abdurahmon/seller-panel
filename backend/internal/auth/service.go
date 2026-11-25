@@ -33,6 +33,7 @@ const (
 type Telegram interface {
 	BotUsername() string
 	SendMessage(ctx context.Context, chatID int64, text string) error
+	SendHTML(ctx context.Context, chatID int64, text, buttonText, buttonURL string) error
 }
 
 // Service holds the auth rules: validation, password hashing, sign-in codes and token issue.
@@ -243,9 +244,10 @@ func (s *Service) RequestCode(ctx context.Context, email string) error {
 	}); err != nil {
 		return err
 	}
-	return s.telegram.SendMessage(ctx, chatID, fmt.Sprintf(
-		"Your sign-in code is %s. It expires in %d minutes. If you did not ask for it, ignore this message.",
-		code, int(codeTTL.Minutes())))
+	// The code is in <code> so Telegram shows it as tap-to-copy.
+	return s.telegram.SendHTML(ctx, chatID, fmt.Sprintf(
+		"Your sign-in code is <code>%s</code>. It expires in %d minutes. If you did not ask for it, ignore this message.",
+		code, int(codeTTL.Minutes())), "", "")
 }
 
 // VerifyCode checks a sign-in code and returns a token. A code is single use and

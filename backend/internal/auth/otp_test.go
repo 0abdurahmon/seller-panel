@@ -29,6 +29,10 @@ func (f *fakeTelegram) SendMessage(_ context.Context, chatID int64, text string)
 	return nil
 }
 
+func (f *fakeTelegram) SendHTML(ctx context.Context, chatID int64, text, _, _ string) error {
+	return f.SendMessage(ctx, chatID, text)
+}
+
 func (f *fakeTelegram) messages() []sentMessage {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -97,6 +101,9 @@ func TestRequestCodeSendsSixDigitsToLinkedChat(t *testing.T) {
 		t.Fatalf("messages = %+v", msgs)
 	}
 	code := f.tg.lastCode(t)
+	if !strings.Contains(msgs[0].text, "<code>"+code+"</code>") {
+		t.Fatalf("code is not tap-to-copy: %q", msgs[0].text)
+	}
 	stored, _ := f.repo.FindLoginCode(context.Background(), f.seller)
 	if stored.CodeHash != hashSecret(code) {
 		t.Fatal("stored hash does not match the code sent")
