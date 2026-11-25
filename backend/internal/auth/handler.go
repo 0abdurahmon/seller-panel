@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
 	"math"
 	"net/http"
 	"strings"
@@ -82,7 +83,7 @@ func (h *Handler) LinkTelegram(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, res)
 }
 
-// RequestCode handles POST /auth/request-code. It answers the same for every email.
+// RequestCode handles POST /auth/request-code.
 func (h *Handler) RequestCode(w http.ResponseWriter, r *http.Request) {
 	var req RequestCodeRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
@@ -146,9 +147,13 @@ func writeAuthError(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusUnauthorized, "invalid_code", "the code is wrong or has expired")
 	case errors.Is(err, ErrTelegramNotLinked):
 		httpx.WriteError(w, http.StatusConflict, "telegram_not_linked", "no Telegram chat is linked to this account, so no code can be sent")
+	case errors.Is(err, ErrCodeNotSent):
+		slog.Error("sign-in code not sent", "error", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "telegram_send_failed", "Telegram did not accept the message; open the bot, press Start and try again")
 	case errors.Is(err, ErrTelegramUnavailable):
 		httpx.WriteError(w, http.StatusServiceUnavailable, "telegram_unavailable", "sign-in by Telegram code is not set up on this server")
 	default:
+		slog.Error("auth request failed", "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "something went wrong")
 	}
 }

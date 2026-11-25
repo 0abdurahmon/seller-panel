@@ -96,7 +96,9 @@ paths:
         `202` when a code is sent. `409 telegram_not_linked` when the email is unknown or its seller has
         no linked chat, so no code can be sent. A code requested less than 60 seconds ago (the cooldown,
         `RATE_LIMIT_CODE_COOLDOWN`) is not sent: `429 rate_limited` with `Retry-After` gives the seconds left.
-        The code is valid for 5 minutes.
+        The code is valid for 5 minutes. When Telegram does not accept the message (for example the seller
+        never opened the bot or blocked it) the answer is `503 telegram_send_failed`, no code is kept and the
+        seller can ask again at once. These rules also hold for requests sent in parallel.
       security: []
       requestBody:
         required: true
@@ -122,7 +124,13 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '503':
-          $ref: '#/components/responses/TelegramUnavailable'
+          description: |
+            Sign-in by Telegram code is not set up on this server (`telegram_unavailable`), or Telegram did not
+            accept the message (`telegram_send_failed`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/verify:
     post:

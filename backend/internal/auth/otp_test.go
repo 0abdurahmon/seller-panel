@@ -18,6 +18,7 @@ type sentMessage struct {
 type fakeTelegram struct {
 	mu   sync.Mutex
 	sent []sentMessage
+	fail error
 }
 
 func (f *fakeTelegram) BotUsername() string { return "seller_panel_bot" }
@@ -25,6 +26,9 @@ func (f *fakeTelegram) BotUsername() string { return "seller_panel_bot" }
 func (f *fakeTelegram) SendMessage(_ context.Context, chatID int64, text string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.fail != nil {
+		return f.fail
+	}
 	f.sent = append(f.sent, sentMessage{chatID: chatID, text: text})
 	return nil
 }
@@ -190,6 +194,51 @@ func TestVerifyCodeLocksAfterMaxAttempts(t *testing.T) {
 	}
 	if _, err := f.svc.VerifyCode(ctx, f.email, code); !errors.Is(err, ErrInvalidCode) {
 		t.Fatalf("right code after lockout: err = %v, want ErrInvalidCode", err)
+	}
+}
+
+func TestAnExhaustedCodeStillHoldsTheCooldown(t *testing.T) {
+	f := newOTPFixture(t)
+	ctx := context.Background()
+	if err := f.svc.RequestCode(ctx, f.email); err != nil {
+		t.Fatal(err)
+	}
+	wrong := "000000"
+	if f.tg.lastCode(t) == wrong {
+		wrong = "111111"
+	}
+	for i := 0; i < codeMaxAttempts+3; i++ {
+		if _, err := f.svc.VerifyCode(ctx, f.email, wrong); !errors.Is(err, ErrInvalidCode) {
+			t.Fatalf("wrong code %d: err = %v", i+1, err)
+		}
+	}
+	var cooldown *CooldownError
+	if err := f.svc.RequestCode(ctx, f.email); !errors.As(err, &cooldown) {
+		t.Fatalf("request after the tries ran out: err = %v, want CooldownError", err)
+	}
+	f.advance(codeCooldown)
+	if err := f.svc.RequestCode(ctx, f.email); err != nil {
+		t.Fatalf("request after the cooldown: %v", err)
+	}
+	if _, err := f.svc.VerifyCode(ctx, f.email, f.tg.lastCode(t)); err != nil {
+		t.Fatalf("new code: %v", err)
+	}
+}
+
+func TestAFailedSendLeavesNoCodeBehind(t *testing.T) {
+	f := newOTPFixture(t)
+	ctx := context.Background()
+	f.tg.fail = errors.New("bot was blocked by the user")
+	err := f.svc.RequestCode(ctx, f.email)
+	if !errors.Is(err, ErrCodeNotSent) || !errors.Is(err, f.tg.fail) {
+		t.Fatalf("err = %v, want ErrCodeNotSent with the cause", err)
+	}
+	if _, err := f.repo.FindLoginCode(ctx, f.seller); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("code after a failed send: err = %v, want ErrNotFound", err)
+	}
+	f.tg.fail = nil
+	if err := f.svc.RequestCode(ctx, f.email); err != nil {
+		t.Fatalf("retry right away: %v", err)
 	}
 }
 

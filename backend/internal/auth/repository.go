@@ -35,8 +35,12 @@ type Repository interface {
 	LinkTelegram(ctx context.Context, tokenHash string, chatID int64, now time.Time) (sellerID int64, err error)
 
 	FindLoginCode(ctx context.Context, sellerID int64) (LoginCode, error)
-	// SaveLoginCode replaces the seller's code and resets its attempts.
-	SaveLoginCode(ctx context.Context, sellerID int64, code LoginCode) error
-	IncrementLoginAttempts(ctx context.Context, sellerID int64) error
-	DeleteLoginCode(ctx context.Context, sellerID int64) error
+	// SaveLoginCode stores a code with no attempts. It replaces the seller's code only if that one
+	// was created at or before replaceBefore, and reports whether the new code was stored.
+	SaveLoginCode(ctx context.Context, sellerID int64, code LoginCode, replaceBefore time.Time) (bool, error)
+	// ClaimLoginAttempt counts a try against a live code with tries left and returns its hash,
+	// or ErrNotFound. The count and the check are one step, so parallel tries cannot pass the limit.
+	ClaimLoginAttempt(ctx context.Context, sellerID int64, maxAttempts int, now time.Time) (codeHash string, err error)
+	// DeleteLoginCode removes the code with this hash and reports whether this call removed it.
+	DeleteLoginCode(ctx context.Context, sellerID int64, codeHash string) (bool, error)
 }
