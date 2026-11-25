@@ -151,6 +151,9 @@ func (s *Service) Archive(ctx context.Context, shopID, id int64) (Product, error
 
 func (s *Service) List(ctx context.Context, shopID int64, f ListFilter) (Page, error) {
 	f.Query = strings.TrimSpace(f.Query)
+	if !utf8.ValidString(f.Query) || strings.ContainsRune(f.Query, 0) {
+		return Page{}, invalid("q must be valid text")
+	}
 	if utf8.RuneCountInString(f.Query) > maxQueryLen {
 		return Page{}, invalid("q must be at most %d characters", maxQueryLen)
 	}

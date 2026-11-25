@@ -12,6 +12,8 @@ info:
 
     **Conventions.**
     - JSON with `snake_case` fields. Ids are integers. Money is an integer in so'm, never a float.
+    - Text must be valid UTF-8 without a NUL character: a JSON body with one is `400 invalid_body`, a form
+      field or the search `q` is `400 validation_error`.
     - Errors are `{"code": "...", "message": "..."}`, also for unknown routes (`404 not_found`)
       and wrong methods (`405 method_not_allowed`, with an `Allow` header).
     - Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.
