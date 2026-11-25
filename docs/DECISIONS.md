@@ -159,3 +159,16 @@ Record every important decision here: what you chose, what else you considered, 
 - A sweeper that deleted image files nothing refers to was tried and removed: it cleaned up the leftovers of a crash between writing a file and saving its row, but it deletes files on a timer, and a mistake in it would delete live images. A leftover is a few hundred kilobytes, so they stay. If disk use ever matters, a manual command that lists them first is safer than a timer.
 - The setting `RATE_LIMIT_UPLOADS_PER_MINUTE` is now `RATE_LIMIT_IMAGES_PER_MINUTE`: there is no upload endpoint any more, it limits the requests that save an image. Rename it in a local `.env` if it was set.
 
+
+## D18 — Real-time order changes
+- Sellers get new orders and status changes as they happen. Transport: Server-Sent Events, `GET /orders/events`, `text/event-stream`, authenticated like every protected route. Events: `order.created` (the order summary, as in `GET /orders`) and `order.status_changed` (id, number, status, `status_changed_at`). Events carry only data of the caller's shop.
+- Fetch, not `EventSource`: the browser's `EventSource` cannot send an `Authorization` header, and a token in the URL would end up in logs. The frontend reads the stream with `fetch` and a `ReadableStream`.
+- Publish after commit: the order service publishes an event only after `InTx` succeeds, so a rolled-back change is never announced. The publisher is an interface declared in `order`, implemented by an in-process hub in `internal/realtime`. Feature packages do not import each other's concrete types.
+- Hub: one subscriber list per shop. Each subscriber has a small buffer. A subscriber whose buffer is full is dropped and its stream closed, so one slow client cannot block a publish. The client then reconnects and refetches the list; nothing is replayed, so no event log is kept.
+- Heartbeat: a comment line every 25 seconds keeps proxies from closing an idle stream.
+- Limits: at most 5 open streams per shop; the sixth gets `429 rate_limited`. The stream ends when the token expires, and the client reconnects with a fresh token. The stream counts once against the per-shop limiter, when it opens.
+- nginx: the `/api/orders/events` location turns off `proxy_buffering`, disables gzip and sets a read timeout longer than the heartbeat.
+- Why SSE and not polling or WebSocket: it is the fastest option that fits the need. The server pushes, the client only reads, and SSE reconnects by itself. Polling would wait up to a polling interval. WebSocket adds a library and an origin check for a direction nobody uses.
+- Scope for now: one backend instance, which matches D10. Moving to several instances means replacing the in-process hub with Postgres `LISTEN/NOTIFY` behind the same interface; the endpoint and the events stay the same.
+- Later, not in this decision: a Telegram message for each `order.created` to a seller who linked a chat (D10). It subscribes to the same hub and is its own issue.
+- Considered: polling every few seconds (simplest, but slower and more requests), WebSocket (two-way channel nobody needs), `LISTEN/NOTIFY` from the start (more moving parts for one instance).
