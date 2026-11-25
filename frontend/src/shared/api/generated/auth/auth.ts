@@ -20,16 +20,20 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
  *
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  Accepted,
   LoginRequest,
   RegisterRequest,
-  TokenResponse
+  RequestCodeRequest,
+  TelegramLink,
+  TokenResponse,
+  VerifyRequest
 } from '../../model';
 
 import { customInstance } from '../../http/index';
@@ -65,6 +69,52 @@ const postAuthRegister = (
     },
       options);
     }
-  return {postAuthLogin,postAuthRegister}};
+  /**
+ * Always answers `202` with the same body, so the API does not reveal which emails exist.
+ * Nothing is sent for unknown emails, sellers without a linked chat, or a code requested less
+ * than 60 seconds ago. The code is valid for 5 minutes.
+ * @summary Send a sign-in code to the seller's linked Telegram chat
+ */
+const postAuthRequestCode = (
+    requestCodeRequest: RequestCodeRequest,
+ options?: SecondParameter<typeof customInstance<Accepted>>,) => {
+      return customInstance<Accepted>(
+      {url: `/auth/request-code`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: requestCodeRequest
+    },
+      options);
+    }
+  /**
+ * Open the returned `url` in Telegram and press Start. The link is valid for 10 minutes and works once.
+ * Afterwards the seller gets sign-in codes in that chat. Re-linking replaces the chat.
+ * @summary Create a one-time link that connects the seller's Telegram chat
+ */
+const postAuthTelegramLink = (
+
+ options?: SecondParameter<typeof customInstance<TelegramLink>>,) => {
+      return customInstance<TelegramLink>(
+      {url: `/auth/telegram/link`, method: 'POST'
+    },
+      options);
+    }
+  /**
+ * A code works once and stops working after 5 wrong attempts.
+ * @summary Exchange a Telegram sign-in code for a token
+ */
+const postAuthVerify = (
+    verifyRequest: VerifyRequest,
+ options?: SecondParameter<typeof customInstance<TokenResponse>>,) => {
+      return customInstance<TokenResponse>(
+      {url: `/auth/verify`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: verifyRequest
+    },
+      options);
+    }
+  return {postAuthLogin,postAuthRegister,postAuthRequestCode,postAuthTelegramLink,postAuthVerify}};
 export type PostAuthLoginResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthLogin']>>>
 export type PostAuthRegisterResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthRegister']>>>
+export type PostAuthRequestCodeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthRequestCode']>>>
+export type PostAuthTelegramLinkResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthTelegramLink']>>>
+export type PostAuthVerifyResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getAuth>['postAuthVerify']>>>

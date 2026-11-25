@@ -20,7 +20,7 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
  *
@@ -64,9 +64,12 @@ const getProducts = (
  *   (jpeg, png or webp, 5 MB each). The first image is the cover.
  *
  * The product and its photos are saved together: when anything fails (a bad field, a file that is not an
- * image, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP
- * and scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts
- * against the same per shop limit as uploads (20 a minute by default); a JSON request does not.
+ * image, a taken SKU) nothing is created and no file stays on the server. The image type is checked from
+ * the file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),
+ * scaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.
+ * The files are public: a photo URL opens in a browser without a token, nginx serves it straight from the
+ * uploads volume. A request with images counts against a per shop limit of 20 a minute by default
+ * (`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.
  * @summary Create a product in the current shop, with its photos
  */
 const postProducts = (

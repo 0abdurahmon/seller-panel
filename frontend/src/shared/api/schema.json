@@ -64,6 +64,16 @@
         },
         "description": "Not found, or not owned by the current shop"
       },
+      "TelegramUnavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Sign-in by Telegram code is not set up on this server (`telegram_unavailable`)"
+      },
       "TooManyRequests": {
         "content": {
           "application/json": {
@@ -90,7 +100,7 @@
             }
           }
         },
-        "description": "Missing or invalid token"
+        "description": "Missing, invalid or expired token, or the seller and shop in it no longer exist (sign in again)"
       },
       "ValidationError": {
         "content": {
@@ -104,6 +114,20 @@
       }
     },
     "schemas": {
+      "Accepted": {
+        "properties": {
+          "status": {
+            "enum": [
+              "sent"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
       "Balance": {
         "properties": {
           "available": {
@@ -734,6 +758,18 @@
         ],
         "type": "object"
       },
+      "RequestCodeRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
       "Shop": {
         "properties": {
           "contact_phone": {
@@ -750,6 +786,7 @@
             "type": "integer"
           },
           "logo_url": {
+            "description": "URL of the stored logo, `null` when there is none. Set with `PUT /shop` (multipart).",
             "maxLength": 2048,
             "nullable": true,
             "type": "string"
@@ -771,7 +808,8 @@
         ],
         "type": "object"
       },
-      "ShopUpdate": {
+      "ShopForm": {
+        "description": "The fields of `ShopUpdate` as form fields, plus the logo.",
         "properties": {
           "contact_phone": {
             "description": "7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it.",
@@ -781,9 +819,38 @@
             "maxLength": 2000,
             "type": "string"
           },
-          "logo_url": {
-            "description": "http or https URL. Empty clears it.",
-            "maxLength": 2048,
+          "logo": {
+            "description": "A new logo image (jpeg, png or webp, 5 MB). It replaces the current one.",
+            "format": "binary",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "pickup_address": {
+            "maxLength": 300,
+            "type": "string"
+          },
+          "remove_logo": {
+            "description": "`true` removes the logo. Not together with `logo`.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ShopUpdate": {
+        "properties": {
+          "contact_phone": {
+            "description": "7–15 digits with an optional leading +. Spaces, dashes and brackets are removed. Empty clears it.",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
             "type": "string"
           },
           "name": {
@@ -824,6 +891,24 @@
         "required": [
           "stock",
           "expected_stock"
+        ],
+        "type": "object"
+      },
+      "TelegramLink": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "example": "https://t.me/seller_panel_bot?start=Qx1bH3lVt0a5Wk8oP2yZcA",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
         ],
         "type": "object"
       },
@@ -994,35 +1079,21 @@
         ],
         "type": "object"
       },
-      "UploadedImage": {
+      "VerifyRequest": {
         "properties": {
-          "content_type": {
-            "enum": [
-              "image/webp"
-            ],
+          "code": {
+            "example": "491806",
+            "pattern": "^[0-9]{6}$",
             "type": "string"
           },
-          "height": {
-            "type": "integer"
-          },
-          "size": {
-            "description": "Bytes of the stored file",
-            "type": "integer"
-          },
-          "url": {
-            "example": "/api/uploads/12/3f2a9c4e8b1d4f6a9e0c7b5d2a1f8e34.webp",
+          "email": {
+            "format": "email",
             "type": "string"
-          },
-          "width": {
-            "type": "integer"
           }
         },
         "required": [
-          "url",
-          "content_type",
-          "size",
-          "width",
-          "height"
+          "email",
+          "code"
         ],
         "type": "object"
       }
@@ -1036,7 +1107,7 @@
     }
   },
   "info": {
-    "description": "Seller Panel API: sellers sign up with email and password, manage their shop and products,\nprocess orders, see their balance, and see the dashboard.\n\n**Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as\n`Authorization: Bearer \u003ctoken\u003e`. Every other endpoint needs it, and a seller only ever sees\nthe data of their own shop.\n\n**Conventions.**\n- JSON with `snake_case` fields. Ids are integers. Money is an integer in so'm, never a float.\n- Errors are `{\"code\": \"...\", \"message\": \"...\"}`, also for unknown routes (`404 not_found`)\n  and wrong methods (`405 method_not_allowed`, with an `Allow` header).\n- Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.\n  A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer is a 400.\n- An optional value that is not set is `null` when its column can be null (for example `logo_url`),\n  and `\"\"` for text that always has a value (for example a product `description`).\n- Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,\n  per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.\n\n**Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.\n`POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker\nCompose default); otherwise it answers 404 like any unknown route.\n",
+    "description": "Seller Panel API: sellers sign up with email and password, manage their shop and products,\nprocess orders, see their balance, and see the dashboard.\n\n**Auth.** `POST /auth/register` or `POST /auth/login` returns a JWT. Send it as\n`Authorization: Bearer \u003ctoken\u003e`. Every other endpoint needs it, and a seller only ever sees\nthe data of their own shop.\n\n**Conventions.**\n- JSON with `snake_case` fields. Ids are integers. Money is an integer in so'm, never a float.\n- Errors are `{\"code\": \"...\", \"message\": \"...\"}`, also for unknown routes (`404 not_found`)\n  and wrong methods (`405 method_not_allowed`, with an `Allow` header).\n- Lists take `page` and `page_size` (default 20) and return `items`, `page`, `page_size`, `total`.\n  A `page_size` above 100 is lowered to 100 and a `page` below 1 becomes 1; a value that is not an integer is a 400.\n- An optional value that is not set is `null` when its column can be null (for example `logo_url`),\n  and `\"\"` for text that always has a value (for example a product `description`).\n- Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,\n  per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.\n\n**Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.\n`POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker\nCompose default); otherwise it answers 404 like any unknown route.\n",
     "title": "Seller Panel API",
     "version": "0.1.0"
   },
@@ -1131,6 +1202,122 @@
         },
         "security": [],
         "summary": "Create a seller with their shop and return a token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/request-code": {
+      "post": {
+        "description": "Always answers `202` with the same body, so the API does not reveal which emails exist.\nNothing is sent for unknown emails, sellers without a linked chat, or a code requested less\nthan 60 seconds ago. The code is valid for 5 minutes.\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "description": "Request accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/TelegramUnavailable"
+          }
+        },
+        "security": [],
+        "summary": "Send a sign-in code to the seller's linked Telegram chat",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/telegram/link": {
+      "post": {
+        "description": "Open the returned `url` in Telegram and press Start. The link is valid for 10 minutes and works once.\nAfterwards the seller gets sign-in codes in that chat. Re-linking replaces the chat.\n",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLink"
+                }
+              }
+            },
+            "description": "Link created"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/TelegramUnavailable"
+          }
+        },
+        "summary": "Create a one-time link that connects the seller's Telegram chat",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "description": "A code works once and stops working after 5 wrong attempts.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Token for the seller"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Code wrong, expired, used or locked (`invalid_code`)"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [],
+        "summary": "Exchange a Telegram sign-in code for a token",
         "tags": [
           "Auth"
         ]
@@ -1497,7 +1684,7 @@
         ]
       },
       "post": {
-        "description": "A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).\n\nTwo request formats:\n- `application/json`: the fields only, a product without photos.\n- `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`\n  (jpeg, png or webp, 5 MB each). The first image is the cover.\n\nThe product and its photos are saved together: when anything fails (a bad field, a file that is not an\nimage, a taken SKU) nothing is created and no file stays on the server. Images are converted to WebP\nand scaled to at most 2048 px, see `POST /uploads` for the details. A request with images counts\nagainst the same per shop limit as uploads (20 a minute by default); a JSON request does not.\n",
+        "description": "A new product always starts as a `draft`; its status is changed afterwards (`status` of `PUT /products/{id}`, `POST /products/{id}/archive`).\n\nTwo request formats:\n- `application/json`: the fields only, a product without photos.\n- `multipart/form-data`: the same fields as form fields plus up to 5 images in the field `photos`\n  (jpeg, png or webp, 5 MB each). The first image is the cover.\n\nThe product and its photos are saved together: when anything fails (a bad field, a file that is not an\nimage, a taken SKU) nothing is created and no file stays on the server. The image type is checked from\nthe file content, not from its name or `Content-Type`; each image is turned upright (EXIF orientation),\nscaled to at most 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped.\nThe files are public: a photo URL opens in a browser without a token, nginx serves it straight from the\nuploads volume. A request with images counts against a per shop limit of 20 a minute by default\n(`RATE_LIMIT_IMAGES_PER_MINUTE`); a JSON request does not.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1857,12 +2044,22 @@
         ]
       },
       "put": {
-        "description": "Replaces all editable fields. An empty optional field clears the stored value.\nThe shop is taken from the token, never from the request.\n",
+        "description": "Replaces all editable fields. An empty optional field clears the stored value.\nThe shop is taken from the token, never from the request.\n\nTwo request formats:\n- `application/json`: the fields only, the logo does not change.\n- `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`\n  (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.\n\nThe profile and the logo are saved together: when anything fails nothing changes and no file stays on\nthe server; the old logo file is deleted once the new one is saved. The image type is checked from the file\ncontent, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most\n2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:\nthe `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.\nA request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_IMAGES_PER_MINUTE`);\na JSON request does not. `logo_url` is not an input, the server writes it.\n",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ShopUpdate"
+              }
+            },
+            "multipart/form-data": {
+              "encoding": {
+                "logo": {
+                  "contentType": "image/jpeg, image/png, image/webp"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ShopForm"
               }
             }
           },
@@ -1877,56 +2074,7 @@
                 }
               }
             },
-            "description": "The updated shop"
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        },
-        "summary": "Replace the shop profile",
-        "tags": [
-          "Shop"
-        ]
-      }
-    },
-    "/uploads": {
-      "post": {
-        "description": "`multipart/form-data` with one image in the field `file`: jpeg, png or webp, at most 5 MB and 20 megapixels.\nThe type is checked from the file content, not from its name or `Content-Type`.\nThe image is turned upright (EXIF orientation), scaled down to at most 2048 px on the longest side,\nand re-encoded as WebP, so all metadata (EXIF, GPS) is dropped. The stored name is random.\nUse the returned `url` in `photos` of a product (the shop `logo_url` takes it too). Opening the `url` in a\nbrowser needs no token: nginx serves the files straight from the uploads volume, the API does not.\nLimited per shop (20 uploads a minute by default); when the server is processing many images\nat once the answer is 503 `busy` with `Retry-After`.\n",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "properties": {
-                  "file": {
-                    "format": "binary",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "file"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UploadedImage"
-                }
-              }
-            },
-            "description": "The stored image"
+            "description": "The updated shop, `logo_url` is the URL of the stored logo or `null`"
           },
           "400": {
             "content": {
@@ -1936,10 +2084,13 @@
                 }
               }
             },
-            "description": "No `file` field, empty file, a file that is not a decodable image, or more than 20 megapixels (`validation_error`); a broken multipart body (`invalid_body`)"
+            "description": "Invalid field, an unknown or repeated form field, `logo` together with `remove_logo`, an empty file or a\nfile that is not a decodable image (`validation_error`); a body that is not valid JSON or multipart\n(`invalid_body`)\n"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "413": {
             "content": {
@@ -1949,7 +2100,7 @@
                 }
               }
             },
-            "description": "The file is larger than 5 MB (`file_too_large`)"
+            "description": "The logo is larger than 5 MB (`file_too_large`)"
           },
           "415": {
             "content": {
@@ -1959,7 +2110,7 @@
                 }
               }
             },
-            "description": "The request is not `multipart/form-data`, or the file is not jpeg, png or webp (`unsupported_media_type`)"
+            "description": "The logo is not jpeg, png or webp (`unsupported_media_type`)"
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
@@ -1982,9 +2133,9 @@
             }
           }
         },
-        "summary": "Upload an image, it is stored as WebP",
+        "summary": "Replace the shop profile and change the logo",
         "tags": [
-          "Uploads"
+          "Shop"
         ]
       }
     }

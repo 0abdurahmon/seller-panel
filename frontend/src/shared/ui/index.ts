@@ -1,4 +1,5 @@
 export * from './alert';
+export * from './animated-number';
 export * from './avatar';
 export * from './badge';
 export * from './breadcrumb';
@@ -16,6 +17,7 @@ export * from './input-group';
 export * from './label';
 export * from './logo';
 export * from './password-input';
+export * from './progress';
 export * from './select';
 export * from './separator';
 export * from './sheet';

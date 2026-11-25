@@ -1,16 +1,75 @@
-import { Category } from "iconsax-reactjs";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/ui";
+import { Link } from "react-router";
+import { Skeleton } from "skullet/react";
+import { useDashboardSummary } from "@/entities/dashboard";
+import { getApiErrorMessage, type DashboardSummary } from "@/shared/api";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+  Button,
+} from "@/shared/ui";
+import { DashboardStats } from "@/widgets/dashboard-stats";
+import { TopProducts } from "@/widgets/top-products";
+
+// Stands in for the real numbers while loading, so skullet can measure the layout.
+// Lengths are close to real numbers on purpose; skullet later remembers the real shape.
+const SAMPLE: DashboardSummary = {
+  today_orders: 12,
+  waiting_for_action: 5,
+  revenue_7d: 18_000_000,
+  revenue_30d: 64_000_000,
+  top_products: Array.from({ length: 5 }, (_, i) => ({
+    product_id: -1 - i,
+    title: "Смартфон Galaxy A55 8/256",
+    quantity_sold: 10,
+    revenue: 1_000_000,
+  })),
+};
+
+function DashboardContent({ summary }: { summary: DashboardSummary }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <DashboardStats summary={summary} />
+        <p className="text-xs text-muted-foreground">
+          Выручка до вычета комиссии 10%. Сколько осталось вам, показывает{" "}
+          <Button variant="link" className="h-auto p-0 text-xs" nativeButton={false} render={<Link to="/balance" />}>
+            Баланс
+          </Button>
+          .
+        </p>
+      </div>
+      <TopProducts products={summary.top_products} />
+    </div>
+  );
+}
 
 export const DashboardPage = () => {
+  const summary = useDashboardSummary();
+
+  if (summary.isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Не удалось загрузить сводку</AlertTitle>
+        <AlertDescription>{getApiErrorMessage(summary.error)}</AlertDescription>
+        <AlertAction>
+          <Button size="sm" variant="outline" onClick={() => summary.refetch()}>
+            Повторить
+          </Button>
+        </AlertAction>
+      </Alert>
+    );
+  }
+
   return (
-    <Empty className="rounded-3xl border border-dashed border-border bg-card">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Category className="text-primary" />
-        </EmptyMedia>
-        <EmptyTitle>Дашборд скоро появится</EmptyTitle>
-        <EmptyDescription>Здесь будут заказы за сегодня, выручка и топ товаров.</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <Skeleton
+      id="dashboard"
+      label="Загрузка сводки"
+      data={summary.data ?? null}
+      sample={SAMPLE}
+    >
+      {(data) => <DashboardContent summary={data} />}
+    </Skeleton>
   );
 };

@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { cn } from 'cn';
+import { useDashboardSummary } from '@/entities/dashboard';
 import { bottomMenuItems, mainMenuItems } from '@/shared/config';
 import { Logo, LogoMark } from '@/shared/ui';
 import { MenuLink } from './menu-link';
@@ -13,6 +14,9 @@ export function AsideNav({
   /** Called when a link is followed, so the phone menu can close. */
   onNavigate?: () => void;
 }) {
+  // Shares the dashboard's cached summary, so it costs no extra request.
+  const waiting = useDashboardSummary().data?.waiting_for_action;
+
   return (
     <>
       <Link
@@ -29,7 +33,13 @@ export function AsideNav({
       <nav aria-label="Основное меню" className="flex flex-1 flex-col">
         <ul className="space-y-1">
           {mainMenuItems.map((item) => (
-            <MenuLink key={item.href} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+            <MenuLink
+              key={item.href}
+              item={item}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              badge={item.href === '/orders' ? waiting : undefined}
+            />
           ))}
         </ul>
         <ul className="mt-auto space-y-1">

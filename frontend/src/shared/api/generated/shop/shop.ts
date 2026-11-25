@@ -20,7 +20,7 @@
  * - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
  *   per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
  *
- * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard, image uploads.
+ * **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
  * `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker
  * Compose default); otherwise it answers 404 like any unknown route.
  *
@@ -28,6 +28,7 @@
  */
 import type {
   Shop,
+  ShopForm,
   ShopUpdate
 } from '../../model';
 
@@ -52,15 +53,27 @@ const getShop = (
   /**
  * Replaces all editable fields. An empty optional field clears the stored value.
  * The shop is taken from the token, never from the request.
- * @summary Replace the shop profile
+ *
+ * Two request formats:
+ * - `application/json`: the fields only, the logo does not change.
+ * - `multipart/form-data`: the same fields as form fields, plus a logo image in the field `logo`
+ *   (jpeg, png or webp, 5 MB) or `remove_logo=true` to clear it. Without either the logo stays.
+ *
+ * The profile and the logo are saved together: when anything fails nothing changes and no file stays on
+ * the server; the old logo file is deleted once the new one is saved. The image type is checked from the file
+ * content, not from its name or `Content-Type`; it is turned upright (EXIF orientation), scaled to at most
+ * 2048 px on the longest side and stored as WebP, so all metadata (EXIF, GPS) is dropped. The file is public:
+ * the `logo_url` opens in a browser without a token, nginx serves it straight from the uploads volume.
+ * A request with a logo counts against a per shop limit of 20 a minute by default (`RATE_LIMIT_IMAGES_PER_MINUTE`);
+ * a JSON request does not. `logo_url` is not an input, the server writes it.
+ * @summary Replace the shop profile and change the logo
  */
 const putShop = (
-    shopUpdate: ShopUpdate,
+    putShopBody: ShopUpdate | ShopForm,
  options?: SecondParameter<typeof customInstance<Shop>>,) => {
       return customInstance<Shop>(
       {url: `/shop`, method: 'PUT',
-      headers: {'Content-Type': 'application/json', },
-      data: shopUpdate
+      data: putShopBody
     },
       options);
     }
