@@ -3,8 +3,12 @@ package seed
 import (
 	"context"
 	"fmt"
-	"image/png"
+	goimage "image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,6 +95,38 @@ func TestThePlanIsConsistent(t *testing.T) {
 	}
 }
 
+func TestEveryPhotoBelongsToAProductAndHasASource(t *testing.T) {
+	sources, err := os.ReadFile("photos/SOURCES.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	known := map[string]bool{}
+	for _, p := range products {
+		known[p.sku+".jpg"] = true
+	}
+	files, err := photos.ReadDir("photos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if !known[f.Name()] {
+			t.Errorf("%s belongs to no product", f.Name())
+		}
+		if !strings.Contains(string(sources), f.Name()) {
+			t.Errorf("%s has no entry in SOURCES.md", f.Name())
+		}
+	}
+	for i, p := range products {
+		data, err := productPhoto(p.sku, i)
+		if err != nil {
+			t.Fatalf("%s: %v", p.sku, err)
+		}
+		if _, _, err := goimage.DecodeConfig(strings.NewReader(string(data))); err != nil {
+			t.Errorf("%s: not an image: %v", p.sku, err)
+		}
+	}
+}
+
 func TestStepsFollowTheStatusMachine(t *testing.T) {
 	cases := []struct {
 		plan plannedOrder
@@ -171,7 +207,7 @@ func scalar[T any](t *testing.T, pool *pgxpool.Pool, sql string, args ...any) T 
 type countingPhotos struct{ saved int }
 
 func (p *countingPhotos) Save(_ context.Context, shopID int64, image io.Reader) (string, error) {
-	if _, err := png.Decode(image); err != nil {
+	if _, _, err := goimage.Decode(image); err != nil {
 		return "", err
 	}
 	p.saved++

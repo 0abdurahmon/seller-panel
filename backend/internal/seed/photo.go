@@ -2,10 +2,13 @@ package seed
 
 import (
 	"bytes"
+	"embed"
+	"errors"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io/fs"
 )
 
 const photoSide = 600
@@ -18,7 +21,19 @@ var photoColors = []color.RGBA{
 	{R: 0xc9, G: 0xa2, B: 0x4b, A: 0xff},
 }
 
-// placeholder draws a one colour PNG, so every demo product has a photo without shipping image files.
+//go:embed photos/*.jpg
+var photos embed.FS
+
+// productPhoto returns the picture of a demo product (sources in photos/SOURCES.md), or a one colour image
+// for a product that has none.
+func productPhoto(sku string, n int) ([]byte, error) {
+	data, err := photos.ReadFile("photos/" + sku + ".jpg")
+	if errors.Is(err, fs.ErrNotExist) {
+		return placeholder(n)
+	}
+	return data, err
+}
+
 func placeholder(n int) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, photoSide, photoSide))
 	draw.Draw(img, img.Bounds(), image.NewUniform(photoColors[n%len(photoColors)]), image.Point{}, draw.Src)
