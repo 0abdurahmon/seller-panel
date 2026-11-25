@@ -174,6 +174,7 @@ cp .env.example .env
 | `RATE_LIMIT_LOGIN_ATTEMPTS`, `RATE_LIMIT_LOGIN_WINDOW` | `5`, `15m` | Attempts allowed per IP and email in the window before `429`, for login, code requests and code checks (see [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md)) |
 | `RATE_LIMIT_CODE_COOLDOWN`, `RATE_LIMIT_CODE_ATTEMPTS` | `60s`, `5` | Time between two sign-in codes for a seller (a request inside it gets `429` with `Retry-After`), and wrong codes allowed before the code stops working |
 | `RATE_LIMIT_STREAMS_PER_SHOP` | `5` | Open order event streams (`GET /orders/events`) per shop; more get `429` |
+| `MAX_REQUESTS_IN_FLIGHT` | `200` | Requests the backend serves at once, at least 1; more get `503 busy` with `Retry-After` at once. `/health` and the order event stream do not count |
 | `RATE_LIMIT_NGINX_API_RATE`, `RATE_LIMIT_NGINX_API_BURST` | `10r/s`, `30` | nginx limit per client IP on `/api/` (see [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md)) |
 | `RATE_LIMIT_NGINX_AUTH_RATE`, `RATE_LIMIT_NGINX_AUTH_BURST` | `10r/m`, `5` | nginx limit per client IP on `/api/auth/` |
 | `RATE_LIMIT_NGINX_FILES_RATE`, `RATE_LIMIT_NGINX_FILES_BURST` | `50r/s`, `100` | nginx limit per client IP on uploaded images |

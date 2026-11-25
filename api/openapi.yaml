@@ -23,6 +23,9 @@ info:
       and `""` for text that always has a value (for example a product `description`).
     - Any endpoint can answer `429 rate_limited` with a `Retry-After` header (seconds): per IP at the proxy,
       per shop on protected routes, and 5 failed logins per IP and email in 15 minutes.
+    - Any endpoint except `/health` and `/orders/events` can answer `503 busy` with `Retry-After: 1` when the
+      server is already serving as many requests as it allows (`MAX_REQUESTS_IN_FLIGHT`, default 200). The
+      request was not processed, so it can be sent again.
 
     **Status.** Implemented: auth, shop, categories, products, stock, balance, orders, dashboard.
     `POST /dev/simulate-order` exists only when the backend runs with `APP_ENV=development` (the Docker

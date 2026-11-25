@@ -125,6 +125,7 @@ func NewApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*App, e
 		ShopChecker:  authSvc.OwnsShop,
 		DevEndpoints: cfg.Env == config.EnvDevelopment,
 		Spec:         spec,
+		MaxInFlight:  cfg.MaxRequestsInFlight,
 	})
 	application := &App{Handler: httpx.Logging(logger)(router), closer: uploadRepo}
 	if bot != nil {

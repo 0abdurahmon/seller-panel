@@ -37,6 +37,9 @@ type Deps struct {
 	ShopChecker  auth.ShopChecker
 	DevEndpoints bool
 	Spec         http.Handler
+
+	// MaxInFlight is how many requests are served at once, 0 means no limit.
+	MaxInFlight int
 }
 
 // NewRouter registers all routes. Protected routes go behind auth.RequireAuth.
@@ -98,7 +101,16 @@ func NewRouter(d Deps) http.Handler {
 	if d.DevEndpoints {
 		mux.Handle("POST /dev/simulate-order", protected(d.Order.Simulate))
 	}
-	return httpx.JSONErrors(mux)
+	router := httpx.JSONErrors(mux)
+	if d.MaxInFlight > 0 {
+		router = httpx.LimitInFlight(d.MaxInFlight, neverShed)(router)
+	}
+	return router
+}
+
+// The health check has to answer under load, and a stream stays open for hours under its own per shop limit.
+func neverShed(r *http.Request) bool {
+	return r.URL.Path == "/health" || r.URL.Path == "/orders/events"
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

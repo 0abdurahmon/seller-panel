@@ -3,9 +3,11 @@
 package e2e
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/0abdurahmon/seller-panel/backend/internal/config"
 )
@@ -74,4 +76,54 @@ func TestProtectedRoutesAreLimitedPerShop(t *testing.T) {
 	s.expect(s.do(http.MethodGet, "/products", b.token, nil), http.StatusOK, "")
 	s.expect(s.do(http.MethodGet, "/health", "", nil), http.StatusOK, "")
 	s.expect(s.login(a.email, a.password), http.StatusOK, "")
+}
+
+func TestABusyServerShedsRequests(t *testing.T) {
+	s := newServer(t, func(c *config.Config) { c.MaxRequestsInFlight = 1 })
+	sel := s.register()
+
+	body, send := io.Pipe()
+	req, err := http.NewRequest(http.MethodPost, s.url+"/auth/login", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slow := make(chan error, 1)
+	go func() {
+		res, err := http.DefaultClient.Do(req)
+		if err == nil {
+			err = res.Body.Close()
+		}
+		slow <- err
+	}()
+	t.Cleanup(func() { _ = send.Close() })
+	if _, err := io.WriteString(send, `{"email":`); err != nil {
+		t.Fatal(err)
+	}
+
+	var shed response
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		shed = s.do(http.MethodGet, "/categories", sel.token, nil)
+		if shed.status != http.StatusOK || time.Now().After(deadline) {
+			break
+		}
+	}
+	s.expect(shed, http.StatusServiceUnavailable, "busy")
+	if got := shed.header.Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After = %q, want 1", got)
+	}
+
+	s.expect(s.do(http.MethodGet, "/health", "", nil), http.StatusOK, "")
+	stream, _, cancel := s.openStream(sel.token)
+	defer cancel()
+	if stream.StatusCode != http.StatusOK {
+		t.Fatalf("stream status = %d, want 200 while the server is busy", stream.StatusCode)
+	}
+
+	if err := send.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-slow; err != nil {
+		t.Fatal(err)
+	}
+	s.expect(s.do(http.MethodGet, "/categories", sel.token, nil), http.StatusOK, "")
 }

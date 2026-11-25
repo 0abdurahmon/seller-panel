@@ -106,7 +106,8 @@ The contract is `api/openapi.yaml` (D3). These conventions apply to every endpoi
 | `400` | Invalid JSON (`code: invalid_body`) or invalid input (`code: validation_error`) |
 | `401` | Missing or invalid token |
 | `404` | Not found, or belongs to another shop |
-| `413`, `415`, `503` | Uploads only: `file_too_large`, `unsupported_media_type`, `busy` (with `Retry-After`) |
+| `413`, `415` | Uploads only: `file_too_large`, `unsupported_media_type` |
+| `503` | `busy` (with `Retry-After`): too many images being processed, or too many requests in progress (D22) |
 | Unknown route, wrong method | JSON too: `404 not_found` and `405 method_not_allowed` with an `Allow` header (`httpx.JSONErrors` wraps the router) |
 | Empty values | Follow the column: a nullable column that is not set is `null` (`logo_url`, `contact_phone`, `pickup_address`), a `NOT NULL DEFAULT ''` text is `""` (product `description`). Lists are `[]`, never `null` |
 | Times | UTC in RFC 3339 (`2026-11-24T07:56:00Z`). Repositories call `.UTC()` when they scan a `timestamptz` |

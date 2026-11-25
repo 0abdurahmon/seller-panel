@@ -54,6 +54,8 @@ func TestLoadRejectsBadRateLimitSettings(t *testing.T) {
 		"negative cooldown":   {"RATE_LIMIT_CODE_COOLDOWN": "-1s"},
 		"cooldown not a time": {"RATE_LIMIT_CODE_COOLDOWN": "minute"},
 		"zero streams":        {"RATE_LIMIT_STREAMS_PER_SHOP": "0"},
+		"zero in flight":      {"MAX_REQUESTS_IN_FLIGHT": "0"},
+		"in flight not a num": {"MAX_REQUESTS_IN_FLIGHT": "many"},
 	}
 	for name, env := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -64,6 +66,18 @@ func TestLoadRejectsBadRateLimitSettings(t *testing.T) {
 				t.Fatal("bad settings accepted")
 			}
 		})
+	}
+}
+
+func TestLoadMaxRequestsInFlight(t *testing.T) {
+	cfg, err := Load()
+	if err != nil || cfg.MaxRequestsInFlight != 200 {
+		t.Fatalf("default = %d, %v; want 200", cfg.MaxRequestsInFlight, err)
+	}
+	t.Setenv("MAX_REQUESTS_IN_FLIGHT", "1")
+	cfg, err = Load()
+	if err != nil || cfg.MaxRequestsInFlight != 1 {
+		t.Fatalf("from the environment = %d, %v; want 1", cfg.MaxRequestsInFlight, err)
 	}
 }
 

@@ -193,3 +193,8 @@ Record every important decision here: what you chose, what else you considered, 
 - A list `page` is at most 1 000 000 on products, as on orders and balance entries; a larger one is `400 validation_error`. A huge page overflowed the SQL offset and answered `500`.
 - A cancel reason is at most 500 characters, counted after trimming. It is checked in the order service; there is no database constraint, so reasons saved earlier stay.
 - `DATABASE_URL` may carry the pool settings (`pool_max_conns` and the other `pool_*` parameters). The pool reads them; they are cut from the URL the migrations use, because PostgreSQL refuses them.
+
+## D22 — Overload and server timeouts
+- One backend process serves at most `MAX_REQUESTS_IN_FLIGHT` requests at once (default 200). The next one is answered at once with `503 busy` and `Retry-After: 1`, so work does not queue for seconds behind the database pool. `/health` is exempt because it must answer under load, `/orders/events` because a stream stays open and has its own per shop limit.
+- The server gives a client 5 seconds for the headers and 1 minute for the whole request, and closes an idle connection after 2 minutes. There is no write timeout: it would cut the event streams. The read timeout does not, `net/http` removes the read deadline once the request is read.
+- Considered: a per request timeout (`http.TimeoutHandler` buffers the answer and breaks streaming), queueing with a short wait (the queue is the problem being removed).
