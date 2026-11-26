@@ -22,6 +22,7 @@ import { ActivateProductMenuItem } from "@/features/product/activate-product";
 import { ArchiveProductMenuItem } from "@/features/product/archive-product";
 import { EditProductMenuItem } from "@/features/product/edit-product";
 import { useProductDetails } from "@/features/product/product-details";
+import { RestockProductButton } from "@/features/product/restock-product";
 import { formatDateTime, formatPrice } from "@/shared/lib";
 import {
   Button,
@@ -84,11 +85,17 @@ function ProductActions({ product }: { product: Product }) {
 
   return (
     // Clicks inside the menu (it is portaled, but React events still bubble) must not open the row's details.
-    <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+    <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+      <RestockProductButton product={product} />
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" size="icon-sm" aria-label={`Действия: ${product.title}`} />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:bg-foreground/10 dark:hover:bg-foreground/15 [&_svg:not([class*='size-'])]:size-5"
+              aria-label={`Действия: ${product.title}`}
+            />
           }
         >
           <MoreVerticalIcon />

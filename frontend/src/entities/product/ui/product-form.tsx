@@ -9,6 +9,7 @@ import {
   FieldError,
   FieldLabel,
   Input,
+  NumberStepper,
   PriceInput,
   Select,
   SelectContent,
@@ -142,7 +143,11 @@ export const ProductForm = ({
         render={({ field }) => (
           <Field data-invalid={!!errorOf("title")}>
             <FieldLabel>Название</FieldLabel>
-            <Input {...field} aria-invalid={!!errorOf("title")} />
+            <Input
+              {...field}
+              placeholder="Например, Смартфон Galaxy A55 8/256"
+              aria-invalid={!!errorOf("title")}
+            />
             <FieldError errors={[errorOf("title")]} />
           </Field>
         )}
@@ -153,23 +158,28 @@ export const ProductForm = ({
         render={({ field }) => (
           <Field data-invalid={!!errorOf("description")}>
             <FieldLabel>Описание</FieldLabel>
-            <Textarea {...field} aria-invalid={!!errorOf("description")} />
+            <Textarea
+              {...field}
+              placeholder="Характеристики, комплектация и особенности товара"
+              aria-invalid={!!errorOf("description")}
+            />
             <FieldError errors={[errorOf("description")]} />
           </Field>
         )}
       />
-      <div className="grid grid-cols-2 gap-3">
+      <div className={withStock ? "grid grid-cols-12 gap-3" : "grid grid-cols-2 gap-3"}>
         <Controller
           name="price"
           control={form.control}
           render={({ field }) => (
-            <Field data-invalid={!!errorOf("price")}>
+            <Field className={withStock ? "col-span-5" : undefined} data-invalid={!!errorOf("price")}>
               <FieldLabel>Цена, сум</FieldLabel>
               <PriceInput
                 name={field.name}
                 value={field.value}
                 onBlur={field.onBlur}
                 getInputRef={field.ref}
+                placeholder="1 500 000"
                 onValueChange={(values) => field.onChange(values.value)}
                 aria-invalid={!!errorOf("price")}
               />
@@ -181,34 +191,39 @@ export const ProductForm = ({
           name="sku"
           control={form.control}
           render={({ field }) => (
-            <Field data-invalid={!!errorOf("sku")}>
+            <Field className={withStock ? "col-span-4" : undefined} data-invalid={!!errorOf("sku")}>
               <FieldLabel>Артикул (SKU)</FieldLabel>
-              <Input {...field} aria-invalid={!!errorOf("sku")} />
+              <Input {...field} placeholder="PH-A55-256" aria-invalid={!!errorOf("sku")} />
               <FieldError errors={[errorOf("sku")]} />
             </Field>
           )}
         />
+        {withStock && (
+          <Controller
+            name="stock"
+            control={form.control}
+            render={({ field }) => {
+              const parsed = Number.parseInt(field.value || "0", 10);
+              const numericValue = Number.isNaN(parsed) ? 0 : parsed;
+              return (
+                <Field className="col-span-3" data-invalid={!!errorOf("stock")}>
+                  <FieldLabel>Остаток</FieldLabel>
+                  <NumberStepper
+                    value={numericValue}
+                    onChange={(next) => field.onChange(String(next))}
+                    min={0}
+                    max={1_000_000}
+                    decrementLabel="Уменьшить остаток"
+                    incrementLabel="Увеличить остаток"
+                    aria-invalid={!!errorOf("stock")}
+                  />
+                  <FieldError errors={[errorOf("stock")]} />
+                </Field>
+              );
+            }}
+          />
+        )}
       </div>
-      {withStock && (
-        <Controller
-          name="stock"
-          control={form.control}
-          render={({ field }) => (
-            <Field data-invalid={!!errorOf("stock")}>
-              <FieldLabel>Остаток</FieldLabel>
-              <PriceInput
-                name={field.name}
-                value={field.value}
-                onBlur={field.onBlur}
-                getInputRef={field.ref}
-                onValueChange={(values) => field.onChange(values.value)}
-                aria-invalid={!!errorOf("stock")}
-              />
-              <FieldError errors={[errorOf("stock")]} />
-            </Field>
-          )}
-        />
-      )}
 
       {errorMessage && (
         <Alert variant="destructive">
@@ -216,7 +231,7 @@ export const ProductForm = ({
         </Alert>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="lg" onClick={onCancel}>
           Отмена
         </Button>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cn } from "cn";
 import { SearchNormal1 } from "iconsax-reactjs";
 import {
   Button,
@@ -19,9 +20,11 @@ const MAX_LENGTH = 100;
 export const ProductSearch = ({
   value,
   onChange,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) => {
   const [text, setText] = useState(value);
   const [lastValue, setLastValue] = useState(value);
@@ -42,7 +45,7 @@ export const ProductSearch = ({
   }
 
   return (
-    <InputGroup className="sm:w-72">
+    <InputGroup className={cn("sm:w-72", className)}>
       <InputGroupAddon>
         <SearchNormal1 />
       </InputGroupAddon>

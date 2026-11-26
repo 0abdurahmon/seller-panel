@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
-import { Link, useMatches } from 'react-router';
+import { Link, useMatch, useMatches, useSearchParams } from 'react-router';
 import { useShop } from '@/entities/shop';
+import { ProductSearch } from '@/features/product/filter-products';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -64,6 +65,18 @@ export const Header = ({ leading }: { leading?: ReactNode }) => {
   const crumbs = useCrumbs();
   const title = crumbs[crumbs.length - 1]?.title;
   const { data: shop } = useShop();
+  const isProductsPage = Boolean(useMatch('/products'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const q = searchParams.get('q') ?? '';
+
+  const handleProductSearch = (next: string) => {
+    if (next === q) return;
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set('q', next);
+    else params.delete('q');
+    params.delete('page');
+    setSearchParams(params, { replace: true });
+  };
 
   return (
     <div className="flex items-center gap-3">
@@ -72,6 +85,13 @@ export const Header = ({ leading }: { leading?: ReactNode }) => {
         <h1 className="text-base font-medium md:text-2xl md:font-semibold">{title}</h1>
         <PageBreadcrumb crumbs={crumbs} shopName={shop?.name ?? 'Мой магазин'} />
       </div>
+      {isProductsPage && (
+        <ProductSearch
+          className="w-40 sm:w-64 md:w-72"
+          value={q}
+          onChange={handleProductSearch}
+        />
+      )}
       <UserMenu />
     </div>
   );
