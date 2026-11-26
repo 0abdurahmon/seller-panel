@@ -121,6 +121,15 @@ function MinusIcon(props: IconProps) {
   )
 }
 
+/** A plain plus sign. */
+function PlusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 12h14M12 5v14" />
+    </IconBase>
+  )
+}
+
 /** A circular spinner arc for loading indicators. */
 function LoaderIcon(props: IconProps) {
   return (
@@ -142,4 +151,5 @@ export {
   MinusIcon,
   MoreHorizontalIcon,
   MoreVerticalIcon,
+  PlusIcon,
 }

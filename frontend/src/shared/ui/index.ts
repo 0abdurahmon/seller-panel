@@ -19,6 +19,7 @@ export * from './input-group';
 export * from './input-otp';
 export * from './label';
 export * from './logo';
+export * from './number-stepper';
 export * from './password-input';
 export * from './phone-input';
 export * from './price-input';

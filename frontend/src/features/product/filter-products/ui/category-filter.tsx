@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { useCategoryOptions } from "@/entities/category";
 import {
   Select,
@@ -14,9 +15,11 @@ const ALL = "all";
 export const CategoryFilter = ({
   value,
   onChange,
+  className,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
+  className?: string;
 }) => {
   const { options, status } = useCategoryOptions();
   const items = [{ value: ALL, label: "Все категории" }, ...options];
@@ -28,7 +31,7 @@ export const CategoryFilter = ({
       onValueChange={(next) => onChange(!next || next === ALL ? null : Number(next))}
       disabled={status !== "success"}
     >
-      <SelectTrigger className="w-full sm:w-56" aria-label="Категория">
+      <SelectTrigger className={cn("w-full sm:w-56", className)} aria-label="Категория">
         <SelectValue
           placeholder={status === "error" ? "Категории не загрузились" : "Загрузка…"}
         />

@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { useOrderCounts, useOrders, type OrderStatusFilter } from "@/entities/order";
 import { AdvanceOrderDialog } from "@/features/order/advance-order";
 import { CancelOrderDialog } from "@/features/order/cancel-order";
+import { OrderFiltersButton, type OrderPeriodFilter } from "@/features/order/filter-orders";
 import { getApiErrorMessage } from "@/shared/api";
 import {
   Alert,
@@ -36,6 +37,25 @@ function parseStatus(value: string | null): OrderStatusFilter {
   return STATUS_TABS.some((tab) => tab.value === value) ? (value as OrderStatusFilter) : "all";
 }
 
+const PERIOD_FILTERS: OrderPeriodFilter[] = ["all", "today", "7d", "30d"];
+
+function parsePeriod(value: string | null): OrderPeriodFilter {
+  return PERIOD_FILTERS.includes(value as OrderPeriodFilter) ? (value as OrderPeriodFilter) : "all";
+}
+
+function matchesPeriod(createdAt: string, period: OrderPeriodFilter) {
+  if (period === "all") return true;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return true;
+  const now = new Date();
+  if (period === "today") {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return created >= startOfDay;
+  }
+  const days = period === "7d" ? 7 : 30;
+  return created >= now.getTime() - days * 86_400_000;
+}
+
 function parsePositiveInt(value: string | null) {
   const n = Number(value);
   return value && Number.isInteger(n) && n >= 1 ? n : null;
@@ -51,6 +71,7 @@ function getScrollParent(node: HTMLElement) {
 export const OrdersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = parseStatus(searchParams.get("status"));
+  const period = parsePeriod(searchParams.get("period"));
   // The open order lives in the URL, so a link to an order works and Back closes it.
   const orderId = parsePositiveInt(searchParams.get("order"));
 
@@ -59,6 +80,21 @@ export const OrdersPage = () => {
     if (next === "all") params.delete("status");
     else params.set("status", next);
     // Links from the earlier paged list may still carry ?page=.
+    params.delete("page");
+    setSearchParams(params, { replace: true });
+  }
+
+  function changePeriod(next: OrderPeriodFilter) {
+    const params = new URLSearchParams(searchParams);
+    if (next === "all") params.delete("period");
+    else params.set("period", next);
+    setSearchParams(params, { replace: true });
+  }
+
+  function resetFilters() {
+    const params = new URLSearchParams(searchParams);
+    params.delete("status");
+    params.delete("period");
     params.delete("page");
     setSearchParams(params, { replace: true });
   }
@@ -130,25 +166,35 @@ export const OrdersPage = () => {
       <OrderDetails orderId={orderId} onClose={closeOrder} />
 
       <div ref={stickySentinel} className="-mb-6 h-px" aria-hidden />
-      <Tabs
-        value={status === "waiting" ? "" : status}
-        onValueChange={(value) => changeStatus(value as OrderStatusFilter)}
-        // Stays at the top while the list scrolls, so the filters and the column titles are always in view.
+      <div
         className={cn(
-          "sticky -top-3 z-20 -mx-5 -mt-6 border-b bg-background px-5 py-3 transition-[box-shadow,border-color] duration-200",
+          "sticky -top-3 z-20 -mx-5 -mt-6 flex flex-wrap items-center justify-between gap-4 border-b bg-background px-5 py-3 transition-[box-shadow,border-color] duration-200",
           isTabsStuck
             ? "border-border/60 shadow-lg shadow-foreground/5"
             : "border-transparent",
         )}
       >
-        <TabsList>
-          {STATUS_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label} <TabsCount count={counts[tab.value]} />
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+        <Tabs
+          value={status === "waiting" ? "" : status}
+          onValueChange={(value) => changeStatus(value as OrderStatusFilter)}
+        >
+          <TabsList>
+            {STATUS_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label} <TabsCount count={counts[tab.value]} />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <OrderFiltersButton
+          status={status}
+          period={period}
+          onStatusChange={changeStatus}
+          onPeriodChange={changePeriod}
+          onReset={resetFilters}
+        />
+      </div>
 
       {/* Only when there is nothing to show: a failed next page or background refetch keeps the loaded rows. */}
       {orders.isError && !orders.data ? (
@@ -164,7 +210,11 @@ export const OrdersPage = () => {
       ) : (
         <>
           <OrdersTable
-            orders={orders.data?.items}
+            orders={
+              orders.data?.items && period !== "all"
+                ? orders.data.items.filter((item) => matchesPeriod(item.created_at, period))
+                : orders.data?.items
+            }
             isLoading={orders.isPending}
             loadingMore={loadingMore}
             status={status}
